@@ -1,97 +1,99 @@
-# Banquier
+# 🏦 Banquier
 
-Application de bureau pour gérer et analyser vos relevés bancaires, construite avec Electron, React et SQLite.
+> **Vos relevés bancaires enfin sous contrôle — localement, intelligemment, sans abonnement.**
 
-## Fonctionnalités
+Banquier est une application de bureau qui importe vos relevés (CSV, PDF), les catégorise automatiquement par IA, et vous donne une vision claire de vos finances. Tout tourne sur votre machine. Vos données ne quittent jamais votre disque.
 
-- **Import** de relevés au format CSV et PDF
-- **Catégorisation** automatique des transactions via IA (OpenRouter) ou manuelle
-- **Règles** de catégorisation automatiques par pattern
-- **Dashboard** avec graphiques de dépenses/revenus et tendances mensuelles
-- **Chat financier** : posez des questions sur vos finances à un conseiller IA
-- **Stockage local** : toutes les données restent sur votre machine (SQLite)
-- **Multi-comptes** avec support multi-devises
+---
 
-## Stack technique
+## Pourquoi Banquier ?
 
-| Couche | Technologie |
-|--------|-------------|
-| Shell  | Electron 31 |
-| UI     | React 18 + TypeScript |
-| Build  | electron-vite + Vite 5 |
-| Base de données | SQLite (node-sqlite3-wasm) |
-| IA     | OpenRouter API (streaming + tool calls) |
-| Parsing | PapaParse (CSV), pdf-parse (PDF) |
-| Graphiques | Recharts |
+Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elles revendent vos données, augmentent leurs tarifs, ou ferment. Banquier prend le contre-pied : **open source, 100 % local, zéro abonnement**.
 
-## Prérequis
+- Vos relevés restent sur votre machine (SQLite dans `AppData`)
+- Aucun compte à créer, aucun serveur tiers
+- L'IA est optionnelle et vous choisissez votre modèle
 
-- Node.js 20+
-- npm 10+
+---
 
-## Installation
+## Ce que ça fait
 
-```bash
-npm install
+| Fonctionnalité | Détail |
+|---|---|
+| 📥 **Import** | CSV et PDF depuis n'importe quelle banque française |
+| 🤖 **Catégorisation IA** | OpenRouter classe vos transactions en un clic |
+| 📋 **Règles automatiques** | "AMAZON → Shopping" pour ne jamais recatégoriser deux fois |
+| 📊 **Dashboard** | Dépenses, revenus, tendances mois par mois |
+| 💬 **Chat financier** | Posez des questions en langage naturel sur vos finances |
+| 🏦 **Multi-comptes** | Courant, épargne, multi-devises |
+| 🔒 **Vie privée** | Données 100 % locales, rien dans le cloud |
+
+---
+
+## Stack
+
+```
+Electron 31 · React 18 · TypeScript · SQLite (WASM) · Vite · OpenRouter
 ```
 
-## Développement
+---
+
+## Démarrage rapide
 
 ```bash
+# Installer les dépendances
+npm install
+
+# Lancer en mode développement
 npm run dev
 ```
 
-## Build
+### Build Windows
 
 ```bash
-# Build uniquement
-npm run build
-
-# Installeur Windows (.exe via NSIS)
-npm run build:win
-
-# Dossier non packagé (pour tester rapidement)
-npm run build:win:dir
+npm run build:win        # installeur .exe (NSIS)
+npm run build:win:dir    # dossier non packagé (test rapide)
 ```
 
-## Configuration IA
+---
 
-L'application utilise [OpenRouter](https://openrouter.ai) pour les fonctionnalités d'IA (catégorisation automatique et chat financier).
+## Configurer l'IA (optionnel)
 
-1. Créez un compte sur openrouter.ai et générez une clé API
-2. Dans l'application, allez dans **Paramètres**
-3. Renseignez votre clé API et choisissez un modèle (ex. `anthropic/claude-sonnet-4-5`)
+L'IA tourne via [OpenRouter](https://openrouter.ai) — un seul accès pour des dizaines de modèles (Claude, GPT-4, Mistral…).
 
-La clé est stockée localement via `electron-store` et ne quitte jamais votre machine (sauf lors des appels à l'API OpenRouter).
+1. Créez un compte sur **openrouter.ai** et générez une clé API
+2. Dans Banquier : **Paramètres → Clé API**
+3. Choisissez votre modèle (recommandé : `anthropic/claude-sonnet-4-5`)
 
-## Données & vie privée
+Sans clé API, tout le reste de l'application fonctionne normalement.
 
-- La base de données SQLite est stockée dans le dossier `userData` d'Electron (ex. `%APPDATA%\banquier` sur Windows)
-- Aucune donnée n'est envoyée à un serveur tiers, à l'exception des appels à l'API OpenRouter si la fonctionnalité IA est utilisée
-- Le repo git ne contient aucune donnée bancaire ni clé API
-
-## Structure du projet
-
-```
-src/
-├── main/           # Processus principal Electron
-│   ├── database.ts # Modèle SQLite (comptes, transactions, catégories)
-│   ├── ipc.ts      # Handlers IPC exposés au renderer
-│   ├── llm.ts      # Intégration OpenRouter (streaming, tool calls, catégorisation)
-│   └── parsers/    # Parseurs CSV et PDF
-├── preload/        # Bridge contextIsolation
-├── renderer/       # Interface React
-│   └── src/
-│       ├── pages/  # Dashboard, Transactions, Import, Chat, Catégories, Règles, Paramètres
-│       └── components/
-└── shared/         # Types TypeScript partagés main ↔ renderer
-```
+---
 
 ## Proxy d'entreprise
-
-Si vous êtes derrière un proxy, définissez la variable d'environnement `HTTPS_PROXY` (ou `HTTP_PROXY`) avant de lancer l'application. Les appels OpenRouter passeront automatiquement par le proxy.
 
 ```bash
 set HTTPS_PROXY=http://proxy.entreprise.com:8080
 npm run dev
 ```
+
+Les appels OpenRouter passent automatiquement par le proxy.
+
+---
+
+## Structure du projet
+
+```
+src/
+├── main/           # Processus Electron
+│   ├── database.ts # SQLite — comptes, transactions, catégories
+│   ├── ipc.ts      # API IPC exposée au renderer
+│   ├── llm.ts      # Streaming, tool calls, catégorisation par lot
+│   └── parsers/    # CSV (PapaParse) · PDF (pdf-parse)
+├── preload/        # Bridge contextIsolation
+├── renderer/       # React — Dashboard, Import, Chat, Transactions…
+└── shared/types.ts # Types partagés main ↔ renderer
+```
+
+---
+
+*Fait pour ceux qui veulent comprendre où passe leur argent — sans payer pour ça.*
