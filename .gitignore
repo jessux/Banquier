@@ -3,5 +3,4 @@ dist
 out
 .claude
 scripts
-package-lock.json
 electron.vite.config.*.mjs
