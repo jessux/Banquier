@@ -236,10 +236,10 @@ export function registerIpcHandlers(): void {
     return startMobileServer(() => store.get('settings'))
   })
 
-  ipcMain.handle('stop-mobile-server', () => {
+  ipcMain.handle('stop-mobile-server', async () => {
     const settings = store.get('settings')
     store.set('settings', { ...settings, mobileServerEnabled: false })
-    stopMobileServer()
+    await stopMobileServer()
   })
 
   ipcMain.handle('get-mobile-server-status', () => ({

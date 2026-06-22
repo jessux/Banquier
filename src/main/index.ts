@@ -73,8 +73,9 @@ app.whenReady().then(async () => {
 })
 
 app.on('window-all-closed', () => {
-  stopMobileServer()
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  stopMobileServer().finally(() => {
+    if (process.platform !== 'darwin') {
+      app.quit()
+    }
+  })
 })

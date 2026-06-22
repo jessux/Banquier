@@ -90,6 +90,8 @@ export interface MobileServerInfo {
   url: string
   qrSvg: string
   port: number
+  upnpEnabled: boolean
+  externalUrl?: string
   running: true
 }
 
