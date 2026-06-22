@@ -92,7 +92,12 @@ const api = {
 
   // Export
   exportDb: () => ipcRenderer.invoke('export-db') as Promise<{ success: boolean }>,
-  exportCsv: () => ipcRenderer.invoke('export-csv') as Promise<{ success: boolean }>
+  exportCsv: () => ipcRenderer.invoke('export-csv') as Promise<{ success: boolean }>,
+
+  // Mobile server
+  startMobileServer: () => ipcRenderer.invoke('start-mobile-server'),
+  stopMobileServer: () => ipcRenderer.invoke('stop-mobile-server'),
+  getMobileServerStatus: () => ipcRenderer.invoke('get-mobile-server-status') as Promise<{ running: boolean }>
 }
 
 if (process.contextIsolated) {

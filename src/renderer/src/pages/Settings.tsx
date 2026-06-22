@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import type { Settings } from '../../../shared/types'
+import { useEffect, useRef, useState } from 'react'
+import type { Settings, MobileServerInfo } from '../../../shared/types'
 import type { Account } from '../../../shared/types'
 
 const CURRENCIES = ['EUR', 'USD', 'CHF', 'GBP', 'CAD']
@@ -17,11 +17,38 @@ export default function SettingsPage(): JSX.Element {
   const [accountSaved, setAccountSaved] = useState(false)
   const [showKey, setShowKey] = useState(false)
   const [exportStatus, setExportStatus] = useState<'idle' | 'ok' | 'err'>('idle')
+  const [mobileServer, setMobileServer] = useState<MobileServerInfo | null>(null)
+  const [mobileLoading, setMobileLoading] = useState(false)
+  const [urlCopied, setUrlCopied] = useState(false)
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     window.api.getSettings().then(setSettings)
     window.api.getAccounts().then(setAccounts)
   }, [])
+
+  const toggleMobileServer = async (): Promise<void> => {
+    setMobileLoading(true)
+    try {
+      if (mobileServer) {
+        await window.api.stopMobileServer()
+        setMobileServer(null)
+      } else {
+        const info = await window.api.startMobileServer()
+        setMobileServer(info as MobileServerInfo)
+      }
+    } finally {
+      setMobileLoading(false)
+    }
+  }
+
+  const copyUrl = (): void => {
+    if (!mobileServer) return
+    navigator.clipboard.writeText(mobileServer.url)
+    setUrlCopied(true)
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
+    copyTimeoutRef.current = setTimeout(() => setUrlCopied(false), 2000)
+  }
 
   const save = async (): Promise<void> => {
     await window.api.saveSettings(settings)
@@ -113,6 +140,76 @@ export default function SettingsPage(): JSX.Element {
         <button className="btn btn-primary" onClick={save}>
           {saved ? '✓ Sauvegardé' : 'Sauvegarder'}
         </button>
+      </div>
+
+      {/* Accès mobile */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+          <div>
+            <h3 style={{ marginBottom: 4 }}>Accès mobile</h3>
+            <p className="text-muted text-sm">
+              Consultez votre tableau de bord depuis votre téléphone sur le même réseau Wi-Fi.
+            </p>
+          </div>
+          <button
+            className={`btn ${mobileServer ? 'btn-secondary' : 'btn-primary'}`}
+            style={{ flexShrink: 0, marginLeft: 16 }}
+            onClick={toggleMobileServer}
+            disabled={mobileLoading}
+          >
+            {mobileLoading ? '...' : mobileServer ? 'Désactiver' : 'Activer'}
+          </button>
+        </div>
+
+        {mobileServer && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
+              {/* QR code */}
+              <div
+                style={{
+                  flexShrink: 0,
+                  background: '#fff',
+                  borderRadius: 8,
+                  padding: 8,
+                  border: '1px solid var(--border)',
+                  width: 120,
+                  height: 120,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                dangerouslySetInnerHTML={{ __html: mobileServer.qrSvg }}
+              />
+              {/* URL + instructions */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p className="text-sm" style={{ marginBottom: 8, fontWeight: 500 }}>
+                  Scannez le QR code ou ouvrez cette URL sur votre téléphone :
+                </p>
+                <div
+                  style={{
+                    background: 'var(--bg)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 6,
+                    padding: '6px 10px',
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    wordBreak: 'break-all',
+                    marginBottom: 8,
+                    color: 'var(--text-muted)'
+                  }}
+                >
+                  {mobileServer.url}
+                </div>
+                <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={copyUrl}>
+                  {urlCopied ? '✓ Copié' : 'Copier le lien'}
+                </button>
+                <p className="text-muted text-sm" style={{ marginTop: 8 }}>
+                  Accès en lecture seule · Session unique · Se renouvelle au redémarrage
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Export */}

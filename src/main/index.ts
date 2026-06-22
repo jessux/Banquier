@@ -1,8 +1,11 @@
 import { app, shell, BrowserWindow } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import Store from 'electron-store'
 import { initDatabase } from './database'
 import { registerIpcHandlers } from './ipc'
+import { startMobileServer, stopMobileServer } from './mobile-server'
+import type { Settings } from '../shared/types'
 
 // Configure Chromium proxy and SSL for net.fetch (used in llm.ts).
 // Must be called before app.whenReady().
@@ -47,7 +50,7 @@ function createWindow(): void {
   }
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.banquier.app')
 
   app.on('browser-window-created', (_, window) => {
@@ -58,12 +61,19 @@ app.whenReady().then(() => {
   registerIpcHandlers()
   createWindow()
 
+  const store = new Store<{ settings: Settings }>()
+  const settings = store.get('settings') as Settings | undefined
+  if (settings?.mobileServerEnabled) {
+    startMobileServer(() => store.get('settings') as Settings).catch(console.error)
+  }
+
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
 app.on('window-all-closed', () => {
+  stopMobileServer()
   if (process.platform !== 'darwin') {
     app.quit()
   }
