@@ -13,6 +13,7 @@ import {
   buildChatMessages,
   categorizeBatch
 } from './llm'
+import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
 import type { Settings, CsvMapping, ChatMessage, TransactionFilters } from '../shared/types'
 
 interface StoreSchema {
@@ -227,6 +228,23 @@ export function registerIpcHandlers(): void {
       return result.canceled ? null : result.filePaths[0]
     }
   )
+
+  // --- Mobile Server ---
+  ipcMain.handle('start-mobile-server', async () => {
+    const settings = store.get('settings')
+    store.set('settings', { ...settings, mobileServerEnabled: true })
+    return startMobileServer(() => store.get('settings'))
+  })
+
+  ipcMain.handle('stop-mobile-server', () => {
+    const settings = store.get('settings')
+    store.set('settings', { ...settings, mobileServerEnabled: false })
+    stopMobileServer()
+  })
+
+  ipcMain.handle('get-mobile-server-status', () => ({
+    running: isMobileServerRunning()
+  }))
 
   // --- Export ---
   ipcMain.handle('export-db', async () => {

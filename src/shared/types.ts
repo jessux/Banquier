@@ -83,6 +83,14 @@ export interface Settings {
   openrouterModel: string
   currency: string
   locale: string
+  mobileServerEnabled?: boolean
+}
+
+export interface MobileServerInfo {
+  url: string
+  qrSvg: string
+  port: number
+  running: true
 }
 
 export interface ChatMessage {
