@@ -15,6 +15,7 @@
   "dependencies": {
     "electron-store": "^8.2.0",
     "https-proxy-agent": "^7.0.5",
+    "nat-upnp": "^1.1.1",
     "node-fetch": "^2.7.0",
     "node-sqlite3-wasm": "^0.8.18",
     "papaparse": "^5.4.1",
@@ -30,6 +31,7 @@
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/tsconfig": "^1.0.1",
     "@electron-toolkit/utils": "^3.0.0",
+    "@types/nat-upnp": "^1.1.5",
     "@types/node": "^20.14.8",
     "@types/node-fetch": "^2.6.11",
     "@types/papaparse": "^5.3.14",

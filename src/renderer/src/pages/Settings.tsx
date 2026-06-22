@@ -44,7 +44,8 @@ export default function SettingsPage(): JSX.Element {
 
   const copyUrl = (): void => {
     if (!mobileServer) return
-    navigator.clipboard.writeText(mobileServer.url)
+    const urlToCopy = mobileServer.externalUrl ?? mobileServer.url
+    navigator.clipboard.writeText(urlToCopy)
     setUrlCopied(true)
     if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current)
     copyTimeoutRef.current = setTimeout(() => setUrlCopied(false), 2000)
@@ -148,7 +149,7 @@ export default function SettingsPage(): JSX.Element {
           <div>
             <h3 style={{ marginBottom: 4 }}>Accès mobile</h3>
             <p className="text-muted text-sm">
-              Consultez votre tableau de bord depuis votre téléphone sur le même réseau Wi-Fi.
+              Consultez votre tableau de bord depuis votre téléphone. UPnP ouvre automatiquement le port sur votre box pour un accès en 4G.
             </p>
           </div>
           <button
@@ -157,14 +158,32 @@ export default function SettingsPage(): JSX.Element {
             onClick={toggleMobileServer}
             disabled={mobileLoading}
           >
-            {mobileLoading ? '...' : mobileServer ? 'Désactiver' : 'Activer'}
+            {mobileLoading ? 'Démarrage...' : mobileServer ? 'Désactiver' : 'Activer'}
           </button>
         </div>
 
         {mobileServer && (
           <div style={{ marginTop: 16 }}>
+            {/* Statut UPnP */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '4px 10px',
+              borderRadius: 20,
+              fontSize: 12,
+              fontWeight: 600,
+              marginBottom: 14,
+              background: mobileServer.upnpEnabled ? 'rgba(16,185,129,0.12)' : 'rgba(100,116,139,0.12)',
+              color: mobileServer.upnpEnabled ? '#059669' : 'var(--text-muted)',
+              border: `1px solid ${mobileServer.upnpEnabled ? 'rgba(16,185,129,0.3)' : 'var(--border)'}`
+            }}>
+              <span style={{ fontSize: 8 }}>{mobileServer.upnpEnabled ? '●' : '●'}</span>
+              {mobileServer.upnpEnabled ? 'UPnP actif — accessible en 4G' : 'Wi-Fi uniquement — UPnP non disponible'}
+            </div>
+
             <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-              {/* QR code */}
+              {/* QR code (pointe vers l'URL externe si UPnP, locale sinon) */}
               <div
                 style={{
                   flexShrink: 0,
@@ -180,11 +199,36 @@ export default function SettingsPage(): JSX.Element {
                 }}
                 dangerouslySetInnerHTML={{ __html: mobileServer.qrSvg }}
               />
-              {/* URL + instructions */}
+              {/* URLs + instructions */}
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p className="text-sm" style={{ marginBottom: 8, fontWeight: 500 }}>
-                  Scannez le QR code ou ouvrez cette URL sur votre téléphone :
+                  {mobileServer.upnpEnabled
+                    ? 'Scannez le QR code ou ouvrez l\'URL externe (4G) :'
+                    : 'Scannez le QR code ou ouvrez cette URL sur le même réseau :'}
                 </p>
+
+                {mobileServer.upnpEnabled && mobileServer.externalUrl && (
+                  <>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>URL externe (4G)</div>
+                    <div
+                      style={{
+                        background: 'var(--bg)',
+                        border: '1px solid rgba(16,185,129,0.4)',
+                        borderRadius: 6,
+                        padding: '6px 10px',
+                        fontFamily: 'monospace',
+                        fontSize: 11,
+                        wordBreak: 'break-all',
+                        marginBottom: 8,
+                        color: 'var(--text-muted)'
+                      }}
+                    >
+                      {mobileServer.externalUrl}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>URL locale (Wi-Fi)</div>
+                  </>
+                )}
+
                 <div
                   style={{
                     background: 'var(--bg)',
@@ -200,6 +244,7 @@ export default function SettingsPage(): JSX.Element {
                 >
                   {mobileServer.url}
                 </div>
+
                 <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={copyUrl}>
                   {urlCopied ? '✓ Copié' : 'Copier le lien'}
                 </button>

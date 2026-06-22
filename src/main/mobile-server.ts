@@ -2,6 +2,7 @@ import http from 'http'
 import os from 'os'
 import crypto from 'crypto'
 import QRCode from 'qrcode'
+import natUpnp from 'nat-upnp'
 import * as db from './database'
 import type { Settings } from '../shared/types'
 
@@ -9,12 +10,16 @@ export interface MobileServerInfo {
   url: string
   qrSvg: string
   port: number
+  upnpEnabled: boolean
+  externalUrl?: string
   running: true
 }
 
 let server: http.Server | null = null
 let currentToken = ''
 let currentPort = 0
+let upnpClient: natUpnp.Client | null = null
+let upnpMappedPort = 0
 
 function getLocalIp(): string {
   const nets = os.networkInterfaces()
@@ -26,6 +31,71 @@ function getLocalIp(): string {
     }
   }
   return '127.0.0.1'
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('UPnP timeout')), ms))
+  ])
+}
+
+async function tryUpnpMapping(localPort: number): Promise<string | null> {
+  try {
+    const client = natUpnp.createClient()
+    upnpClient = client
+
+    await withTimeout(
+      new Promise<void>((resolve, reject) => {
+        client.portMapping(
+          {
+            public: localPort,
+            private: localPort,
+            protocol: 'TCP',
+            description: 'Banquier Mobile Server',
+            ttl: 0
+          },
+          (err) => (err ? reject(err) : resolve())
+        )
+      }),
+      6000
+    )
+
+    upnpMappedPort = localPort
+
+    const externalIp = await withTimeout(
+      new Promise<string>((resolve, reject) => {
+        client.externalIp((err, ip) => (err ? reject(new Error(String(err))) : resolve(ip)))
+      }),
+      6000
+    )
+
+    return externalIp
+  } catch {
+    if (upnpClient) {
+      try { upnpClient.destroy() } catch { /* ignore */ }
+      upnpClient = null
+    }
+    upnpMappedPort = 0
+    return null
+  }
+}
+
+async function removeUpnpMapping(): Promise<void> {
+  if (!upnpClient || !upnpMappedPort) return
+  const port = upnpMappedPort
+  const client = upnpClient
+  upnpClient = null
+  upnpMappedPort = 0
+  try {
+    await new Promise<void>((resolve) => {
+      client.portUnmapping({ public: port, protocol: 'TCP' } as natUpnp.PortMappingOptions, () =>
+        resolve()
+      )
+    })
+  } finally {
+    try { client.destroy() } catch { /* ignore */ }
+  }
 }
 
 function sendJson(res: http.ServerResponse, status: number, data: unknown): void {
@@ -89,7 +159,7 @@ function handleRequest(
 }
 
 export async function startMobileServer(getSettings: () => Settings): Promise<MobileServerInfo> {
-  if (server) stopMobileServer()
+  if (server) await stopMobileServer()
 
   currentToken = crypto.randomBytes(16).toString('hex')
 
@@ -101,16 +171,32 @@ export async function startMobileServer(getSettings: () => Settings): Promise<Mo
   })
 
   currentPort = (server.address() as { port: number }).port
-  const ip = getLocalIp()
-  const url = `http://${ip}:${currentPort}?token=${currentToken}`
-  const qrSvg = await QRCode.toString(url, { type: 'svg', margin: 1 })
+  const localIp = getLocalIp()
+  const localUrl = `http://${localIp}:${currentPort}?token=${currentToken}`
 
-  return { url, qrSvg, port: currentPort, running: true }
+  const externalIp = await tryUpnpMapping(currentPort)
+  const upnpEnabled = externalIp !== null
+  const externalUrl = upnpEnabled
+    ? `http://${externalIp}:${currentPort}?token=${currentToken}`
+    : undefined
+
+  const qrUrl = externalUrl ?? localUrl
+  const qrSvg = await QRCode.toString(qrUrl, { type: 'svg', margin: 1 })
+
+  return {
+    url: localUrl,
+    externalUrl,
+    qrSvg,
+    port: currentPort,
+    upnpEnabled,
+    running: true
+  }
 }
 
-export function stopMobileServer(): void {
+export async function stopMobileServer(): Promise<void> {
+  await removeUpnpMapping()
   if (server) {
-    server.close()
+    await new Promise<void>((resolve) => server!.close(() => resolve()))
     server = null
     currentToken = ''
     currentPort = 0
@@ -172,7 +258,7 @@ h1{font-size:17px;font-weight:700}
 <script>
 var T='${accessToken}';
 function g(p){var s=p.includes('?')?'&':'?';return fetch(location.origin+p+s+'token='+T).then(function(r){if(!r.ok)throw new Error('Accès non autorisé ('+r.status+')');return r.json()})}
-function fc(n,c,l){try{return new Intl.NumberFormat(l||'fr-FR',{style:'currency',currency:c||'EUR',maximumFractionDigits:0}).format(n)}catch(e){return n.toFixed(0)+' '+(c||'€')}}
+function fc(n,c,l){try{return new Intl.NumberFormat(l||'fr-FR',{style:'currency',currency:c||'EUR',maximumFractionDigits:0}).format(n)}catch(e){return n.toFixed(0)+' '+(c||'€')}}
 function fd(d){return new Date(d).toLocaleDateString('fr-FR',{day:'numeric',month:'short'})}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function render(d,ts){
@@ -197,7 +283,7 @@ function render(d,ts){
     '</div>'+
     (catHtml?'<div class="sec"><div class="sec-title">Top catégories</div>'+catHtml+'</div>':'')+
     '<div class="sec"><div class="sec-title">Transactions récentes</div>'+(txHtml||'<div class="empty">Aucune transaction</div>')+'</div>'+
-    '<div class="ft">Banquier · Lecture seule · Réseau local</div>'+
+    '<div class="ft">Banquier · Lecture seule · Session sécurisée</div>'+
     '</div>'
 }
 Promise.all([g('/api/dashboard'),g('/api/transactions?limit=25')]).then(function(r){render(r[0],r[1])}).catch(function(e){
