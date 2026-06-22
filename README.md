@@ -57,6 +57,35 @@ npm run build:win:dir    # dossier non packagé (test rapide)
 
 ---
 
+## Sauvegarder et restaurer vos données
+
+Toutes vos données sont dans un seul fichier SQLite. Banquier vous donne deux façons de les exporter depuis **Paramètres → Export**.
+
+### Export SQLite (sauvegarde complète)
+
+Exporte une copie exacte de la base : transactions, catégories, règles, comptes. Fichier produit : `banquier-backup-YYYY-MM-DD.db`.
+
+**Restaurer une sauvegarde** — l'import de `.db` n'est pas encore dans l'interface. Pour restaurer manuellement :
+
+1. Quittez Banquier
+2. Remplacez le fichier `banquier.db` dans le dossier `userData` par votre sauvegarde :
+   ```
+   %APPDATA%\banquier\banquier.db   ← Windows
+   ```
+3. Relancez l'application
+
+### Export CSV (transactions uniquement)
+
+Exporte toutes vos transactions dans un fichier `transactions-YYYY-MM-DD.csv` — pratique pour ouvrir dans Excel ou migrer vers un autre outil.
+
+> **Emplacement de la base de données**
+> ```
+> Windows : %APPDATA%\banquier\banquier.db
+> ```
+> Vous pouvez copier ce fichier à tout moment (application fermée) pour faire une sauvegarde manuelle.
+
+---
+
 ## Configurer l'IA (optionnel)
 
 L'IA tourne via [OpenRouter](https://openrouter.ai) — un seul accès pour des dizaines de modèles (Claude, GPT-4, Mistral…).
