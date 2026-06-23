@@ -3,7 +3,7 @@
   "version": "1.2.0",
   "description": "Application de gestion de relevés bancaires",
   "main": "./out/main/index.js",
-  "author": "",
+  "author": "jessux <jessux@users.noreply.github.com>",
   "private": true,
   "scripts": {
     "start": "electron-vite preview",
