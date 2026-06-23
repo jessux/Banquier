@@ -17,19 +17,66 @@ export function previewCsv(filePath: string): CsvPreview {
   // Strip BOM if present
   if (content.charCodeAt(0) === 0xFEFF) content = content.slice(1)
 
+  // Detect the delimiter ourselves: Papa's auto-detection is fooled by decimal
+  // commas in preamble lines (e.g. "Solde au … 239,43 €") and picks ',' for a
+  // ';'-delimited Crédit Agricole export.
+  const detectedDelimiter = detectDelimiter(content)
+
   const result = Papa.parse<string[]>(content, {
     header: false,
     skipEmptyLines: true,
-    preview: 10
+    delimiter: detectedDelimiter,
+    preview: 25
   })
 
   const rows = result.data as string[][]
-  if (rows.length === 0) return { headers: [], rows: [], detectedDelimiter: ',' }
+  if (rows.length === 0) return { headers: [], rows: [], detectedDelimiter }
 
-  const detectedDelimiter = (result.meta as { delimiter?: string }).delimiter || ','
-  const headers = rows[0]
-  const dataRows = rows.slice(1)
+  // Banks like Crédit Agricole prepend a preamble (title, account, solde…)
+  // before the real header row, so locate the header instead of assuming row 0.
+  const headerRow = findHeaderRow(rows)
+  const headers = rows[headerRow]
+  const dataRows = rows.slice(headerRow + 1)
   return { headers, rows: dataRows, detectedDelimiter }
+}
+
+// Pick the delimiter that occurs most across the first lines. Robust against
+// decimal commas inside fields, unlike content-sampling heuristics.
+function detectDelimiter(content: string): string {
+  const candidates = [';', ',', '\t', '|']
+  const lines = content.split(/\r?\n/).filter((l) => l.trim()).slice(0, 30)
+  let best = ','
+  let bestScore = -1
+  for (const d of candidates) {
+    let total = 0
+    for (const line of lines) total += line.split(d).length - 1
+    if (total > bestScore) {
+      bestScore = total
+      best = d
+    }
+  }
+  return best
+}
+
+// Locate the real header row, skipping any preamble lines some banks prepend.
+// A header is a row that names a date column alongside a description/amount column.
+function findHeaderRow(rows: string[][]): number {
+  for (let i = 0; i < Math.min(rows.length, 25); i++) {
+    const cells = rows[i].map((c) => c.toLowerCase().trim())
+    const hasDate = cells.some((c) => c === 'date' || c.startsWith('date '))
+    const hasMoney = cells.some(
+      (c) =>
+        c.includes('montant') ||
+        c.includes('débit') ||
+        c.includes('debit') ||
+        c.includes('crédit') ||
+        c.includes('credit') ||
+        c.includes('libell') ||
+        c.includes('opér')
+    )
+    if (hasDate && hasMoney) return i
+  }
+  return 0
 }
 
 function parseDate(raw: string, format: string): string {
@@ -82,12 +129,13 @@ export function parseCsvToTransactions(
   const result = Papa.parse<string[]>(content, {
     header: false,
     skipEmptyLines: true,
-    delimiter: mapping.delimiter || ','
+    delimiter: mapping.delimiter || detectDelimiter(content)
   })
 
   const rows = result.data as string[][]
-  const dataRows = rows.slice(1 + (mapping.skipRows || 0))
-  const headers = rows[0]
+  const headerRow = findHeaderRow(rows)
+  const headers = rows[headerRow]
+  const dataRows = rows.slice(headerRow + 1 + (mapping.skipRows || 0))
 
   const colIndex = (name: string): number => headers.indexOf(name)
   const dateIdx = colIndex(mapping.dateCol)
@@ -104,7 +152,8 @@ export function parseCsvToTransactions(
     if (!rawDate) continue
 
     const date = parseDate(rawDate, mapping.dateFormat)
-    const description = (row[descIdx] || '').trim()
+    // CA descriptions are multi-line quoted fields padded with blank lines — collapse to one line.
+    const description = (row[descIdx] || '').replace(/\s+/g, ' ').trim()
 
     let amount: number
     if (amountIdx >= 0) {
