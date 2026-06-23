@@ -4,3 +4,5 @@ out
 .claude
 scripts
 electron.vite.config.*.mjs
+
+*.tsbuildinfo
