@@ -1,0 +1,77 @@
+name: Build Installers
+
+# Construit les exécutables Windows / macOS / Linux et les attache à une release.
+# Appelé par le workflow Release Please après création d'une release, ou
+# déclenché manuellement (workflow_dispatch) pour (re)générer les binaires
+# d'un tag existant.
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag de la release sur laquelle attacher les binaires
+        required: true
+        type: string
+      ref:
+        description: 'Ref git à compiler (défaut : le tag)'
+        required: false
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag de la release sur laquelle attacher les binaires
+        required: true
+        type: string
+      ref:
+        description: 'Ref git à compiler (défaut : le tag)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: win
+            files: dist/*.exe
+          - os: macos-latest
+            platform: mac
+            files: dist/*.dmg
+          - os: ubuntu-latest
+            platform: linux
+            files: |
+              dist/*.AppImage
+              dist/*.deb
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || inputs.tag }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Package installer
+        run: npx --no-install electron-builder --${{ matrix.platform }} --publish never
+        env:
+          # Builds non signés : on désactive la découverte de certificat macOS.
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag }}
+          files: ${{ matrix.files }}
