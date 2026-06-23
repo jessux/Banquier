@@ -259,18 +259,22 @@ export function getImports(): Import[] {
 
 // --- Stats ---
 
-export function getMonthlyStats(months = 6): MonthlyStats[] {
+export function getMonthlyStats(months = 6, anchorEnd?: string): MonthlyStats[] {
+  // Fenêtre de `months` mois calendaires se terminant au mois de `anchorEnd`
+  // (par défaut le mois courant). Permet de décaler la tendance selon le filtre.
+  const anchor = anchorEnd ?? new Date().toISOString().slice(0, 10)
   return db.all(
     `SELECT
       strftime('%Y-%m', date) AS month,
       SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) AS total_debit,
       SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS total_credit
     FROM transactions
-    WHERE date >= date('now', '-' || ? || ' months')
+    WHERE date >= date(?, 'start of month', '-' || ? || ' months')
+      AND date <= date(?, 'start of month', '+1 month', '-1 day')
       AND is_internal = 0
     GROUP BY month
     ORDER BY month ASC`,
-    [months]
+    [anchor, months - 1, anchor]
   ) as MonthlyStats[]
 }
 
@@ -370,13 +374,41 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
   const previous = periodStats(prevStart, prevEnd)
   const countRow = db.get('SELECT COUNT(*) AS n FROM transactions') as { n: number } | undefined
 
+  // Tendance calée sur le filtre : fenêtre d'au moins 6 mois se terminant au
+  // mois de fin de la période, élargie pour couvrir toute la période filtrée.
+  const monthSpan = (fromISO: string, toISO: string): number => {
+    const f = new Date(fromISO), t = new Date(toISO)
+    return (t.getFullYear() - f.getFullYear()) * 12 + (t.getMonth() - f.getMonth()) + 1
+  }
+  let trendMonths = 6
+  let trendAnchor: string | undefined
+  let trendHighlightStart: string | null = null
+  let trendHighlightEnd: string | null = null
+  if (startDate) {
+    trendMonths = Math.max(6, monthSpan(effectiveStart, effectiveEnd))
+    trendAnchor = effectiveEnd
+    trendHighlightStart = effectiveStart.slice(0, 7)
+    trendHighlightEnd = effectiveEnd.slice(0, 7)
+  } else {
+    // « Tout » : la tendance couvre tout l'historique (sans surlignage,
+    // puisque l'intégralité du graphique correspond à la période).
+    const firstRow = db.get(
+      `SELECT MIN(date) AS d FROM transactions WHERE is_internal = 0 ${exclClause}`,
+      exclParams
+    ) as { d: string | null } | undefined
+    if (firstRow?.d) trendMonths = Math.max(6, monthSpan(firstRow.d, effectiveEnd))
+    trendAnchor = effectiveEnd
+  }
+
   return {
     periodDebit: current.total_debit,
     periodCredit: current.total_credit,
     previousPeriodDebit: previous.total_debit,
     totalTransactions: countRow?.n ?? 0,
     topCategories: getCategoryStatsGrouped(effectiveStart, effectiveEnd, excludeCategories),
-    monthlyTrend: getMonthlyStats(6)
+    monthlyTrend: getMonthlyStats(trendMonths, trendAnchor),
+    trendHighlightStart,
+    trendHighlightEnd
   }
 }
 

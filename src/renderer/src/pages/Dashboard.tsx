@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceArea
 } from 'recharts'
 import type { DashboardSummary, CategoryStatsGrouped } from '../../../shared/types'
 
@@ -56,6 +56,11 @@ function periodDates(p: Period, customStart?: string, customEnd?: string, monthO
     case 'tout': return {}
     case 'custom': return { startDate: customStart, endDate: customEnd }
   }
+}
+
+function monthTick(monthKey: string): string {
+  const [y, m] = monthKey.split('-')
+  return `${m}/${y.slice(2)}`
 }
 
 function monthLabel(offset: number): string {
@@ -283,10 +288,30 @@ export default function Dashboard(): JSX.Element {
   const variationColor = summary.periodDebit > summary.previousPeriodDebit ? '#ef4444' : '#22c55e'
 
   const trendData = summary.monthlyTrend.map((m) => ({
-    name: m.month.slice(5),
+    month: m.month,
     Dépenses: Math.round(m.total_debit),
     Revenus: Math.round(m.total_credit)
   }))
+
+  // Bande « période observée » : on borne le surlignage aux mois réellement
+  // présents dans la tendance (un mois sans transaction n'est pas tracé).
+  const trendKeys = trendData.map((d) => d.month)
+  const inWindow = (k: string | null): boolean => !!k && k >= trendKeys[0] && k <= trendKeys[trendKeys.length - 1]
+  const hlStart = inWindow(summary.trendHighlightStart)
+    ? trendKeys.find((k) => k >= summary.trendHighlightStart!)
+    : undefined
+  const hlEnd = inWindow(summary.trendHighlightEnd)
+    ? [...trendKeys].reverse().find((k) => k <= summary.trendHighlightEnd!)
+    : undefined
+  const showHighlight = trendKeys.length > 0 && hlStart !== undefined && hlEnd !== undefined
+
+  const trendSpan = trendKeys.length
+    ? (() => {
+        const [ys, ms] = trendKeys[0].split('-').map(Number)
+        const [ye, me] = trendKeys[trendKeys.length - 1].split('-').map(Number)
+        return (ye - ys) * 12 + (me - ms) + 1
+      })()
+    : 6
 
   const pieData = summary.topCategories.slice(0, 5).map((c) => ({
     name: c.category,
@@ -334,7 +359,15 @@ export default function Dashboard(): JSX.Element {
 
       <div className="grid-2" style={{ marginBottom: 24 }}>
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 16 }}>Tendance sur 6 mois</div>
+          <div className="flex justify-between" style={{ alignItems: 'baseline', marginBottom: 16 }}>
+            <div className="card-title">Tendance sur {trendSpan} mois</div>
+            {showHighlight && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#94a3b8' }}>
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: '#6366f1', opacity: 0.25, border: '1px solid #6366f1' }} />
+                Période observée
+              </div>
+            )}
+          </div>
           <ResponsiveContainer width="100%" height={220}>
             <AreaChart data={trendData}>
               <defs>
@@ -348,10 +381,18 @@ export default function Dashboard(): JSX.Element {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#2e3147" />
-              <XAxis dataKey="name" stroke="#94a3b8" tick={{ fontSize: 11 }} />
+              <XAxis dataKey="month" stroke="#94a3b8" tick={{ fontSize: 11 }} tickFormatter={monthTick} />
               <YAxis stroke="#94a3b8" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v}€`} />
-              <Tooltip {...tooltipStyle} formatter={(v: number) => formatEur(v)} />
+              <Tooltip {...tooltipStyle} formatter={(v: number) => formatEur(v)} labelFormatter={monthTick} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
+              {showHighlight && (
+                <ReferenceArea
+                  x1={hlStart} x2={hlEnd}
+                  fill="#6366f1" fillOpacity={0.12}
+                  stroke="#6366f1" strokeOpacity={0.4} strokeDasharray="3 3"
+                  ifOverflow="extendDomain"
+                />
+              )}
               <Area type="monotone" dataKey="Dépenses" stroke="#ef4444" fill="url(#depGrad)" strokeWidth={2} />
               <Area type="monotone" dataKey="Revenus" stroke="#22c55e" fill="url(#revGrad)" strokeWidth={2} />
             </AreaChart>
