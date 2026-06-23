@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.2.0](https://github.com/jessux/Banquier/compare/banquier-v1.1.0...banquier-v1.2.0) (2026-06-23)
+
+
+### Nouvelles fonctionnalités
+
+* recherche et filtre par catégorie dans les règles automatiques ([6d12283](https://github.com/jessux/Banquier/commit/6d122834fc5cd1c0b50c8d9fd81e523c2d8b3b44))
+* tendance du dashboard calée sur la période filtrée ([04ec80f](https://github.com/jessux/Banquier/commit/04ec80f6f167ac6f8be9b2baf93e3a1d2252fc03))
+
+
+### Corrections de bugs
+
+* détection robuste du délimiteur et de l'en-tête des CSV bancaires ([49c1d2a](https://github.com/jessux/Banquier/commit/49c1d2ae6e1e86bebb060eabfc957c2806debade))
+
 ## [1.1.0](https://github.com/jessux/Banquier/compare/banquier-v1.0.0...banquier-v1.1.0) (2026-06-22)
 
 
