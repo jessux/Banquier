@@ -27,6 +27,8 @@ export default function Rules(): JSX.Element {
   const [newRule, setNewRule] = useState<NewRule>({ pattern: '', category: '' })
   const [toast, setToast] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
+  const [search, setSearch] = useState('')
+  const [filterCat, setFilterCat] = useState('')
   const patternInputRef = useRef<HTMLInputElement>(null)
   const newPatternRef = useRef<HTMLInputElement>(null)
 
@@ -103,6 +105,19 @@ export default function Rules(): JSX.Element {
 
   const allCats = [...new Set([...COMMON_CATEGORIES, ...categories])].sort()
 
+  // Catégories réellement présentes dans les règles, pour le filtre.
+  const ruleCategories = [...new Set(rules.map((r) => r.category))].sort()
+
+  // On conserve l'index d'origine (l'ordre = priorité des règles).
+  const q = search.trim().toLowerCase()
+  const filteredRules = rules
+    .map((rule, idx) => ({ rule, idx }))
+    .filter(({ rule }) => {
+      const matchesSearch = !q || rule.pattern.toLowerCase().includes(q) || rule.category.toLowerCase().includes(q)
+      const matchesCat = !filterCat || rule.category === filterCat
+      return matchesSearch && matchesCat
+    })
+
   return (
     <div>
       <div className="page-header">
@@ -120,6 +135,47 @@ export default function Rules(): JSX.Element {
       <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
         Les règles sont appliquées automatiquement à chaque import. L'ordre est important — la première règle qui correspond est utilisée.
       </p>
+
+      {!loading && rules.length > 0 && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: 13, pointerEvents: 'none' }}>🔍</span>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Rechercher un pattern ou une catégorie…"
+              style={{ width: '100%', paddingLeft: 34, fontSize: 13 }}
+            />
+          </div>
+          <select
+            value={filterCat}
+            onChange={(e) => setFilterCat(e.target.value)}
+            style={{
+              padding: '8px 12px', borderRadius: 8, border: '1px solid #2e3147',
+              background: '#1a1d27', color: filterCat ? '#e2e8f0' : '#94a3b8', fontSize: 13, cursor: 'pointer'
+            }}
+          >
+            <option value="">Toutes les catégories</option>
+            {ruleCategories.map((cat) => (
+              <option key={cat} value={cat}>{cat}</option>
+            ))}
+          </select>
+          {(search || filterCat) && (
+            <>
+              <span className="text-muted text-sm" style={{ whiteSpace: 'nowrap' }}>
+                {filteredRules.length} / {rules.length}
+              </span>
+              <button
+                className="btn btn-secondary"
+                style={{ padding: '6px 12px', fontSize: 12 }}
+                onClick={() => { setSearch(''); setFilterCat('') }}
+              >
+                Réinitialiser
+              </button>
+            </>
+          )}
+        </div>
+      )}
 
       {adding && (
         <div style={{
@@ -170,6 +226,11 @@ export default function Rules(): JSX.Element {
           <p>Aucune règle définie.</p>
           <p className="text-muted text-sm">Créez des règles pour catégoriser automatiquement les transactions lors de l'import.</p>
         </div>
+      ) : filteredRules.length === 0 ? (
+        <div className="empty-state">
+          <p>Aucune règle ne correspond.</p>
+          <p className="text-muted text-sm">Modifiez votre recherche ou le filtre par catégorie.</p>
+        </div>
       ) : (
         <div className="table-wrapper">
           <table>
@@ -182,7 +243,7 @@ export default function Rules(): JSX.Element {
               </tr>
             </thead>
             <tbody>
-              {rules.map((rule, idx) => (
+              {filteredRules.map(({ rule, idx }) => (
                 <tr key={rule.id}>
                   <td style={{ textAlign: 'center', color: '#64748b', fontSize: 12 }}>{idx + 1}</td>
                   <td>
