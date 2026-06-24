@@ -92,7 +92,7 @@ L'IA tourne via [OpenRouter](https://openrouter.ai) — un seul accès pour des 
 
 1. Créez un compte sur **openrouter.ai** et générez une clé API
 2. Dans Banquier : **Paramètres → Clé API**
-3. Choisissez votre modèle (recommandé : `anthropic/claude-sonnet-4-5`)
+3. Choisissez votre modèle (recommandé (gratuit): `openrouter/free`)
 
 Sans clé API, tout le reste de l'application fonctionne normalement.
 

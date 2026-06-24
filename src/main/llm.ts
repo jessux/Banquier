@@ -46,7 +46,7 @@ async function streamCompletion(
     headers: openRouterHeaders(settings.openrouterApiKey),
     agent: getAgent(),
     body: JSON.stringify({
-      model: settings.openrouterModel || 'anthropic/claude-sonnet-4-5',
+      model: settings.openrouterModel || 'openrouter/free',
       messages,
       tools: FINANCIAL_TOOLS,
       stream: true
@@ -117,7 +117,7 @@ export async function callOpenRouterOnce(
     headers: openRouterHeaders(settings.openrouterApiKey),
     agent: getAgent(),
     body: JSON.stringify({
-      model: settings.openrouterModel || 'anthropic/claude-sonnet-4-5',
+      model: settings.openrouterModel || 'openrouter/free',
       messages,
       stream: false
     })

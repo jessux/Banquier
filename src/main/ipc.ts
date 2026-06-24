@@ -23,7 +23,7 @@ const store = new Store<StoreSchema>({
   defaults: {
     settings: {
       openrouterApiKey: '',
-      openrouterModel: 'anthropic/claude-sonnet-4-5',
+      openrouterModel: 'openrouter/free',
       currency: 'EUR',
       locale: 'fr-FR'
     }

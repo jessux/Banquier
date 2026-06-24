@@ -7,7 +7,7 @@ const CURRENCIES = ['EUR', 'USD', 'CHF', 'GBP', 'CAD']
 export default function SettingsPage(): JSX.Element {
   const [settings, setSettings] = useState<Settings>({
     openrouterApiKey: '',
-    openrouterModel: 'anthropic/claude-sonnet-4-5',
+    openrouterModel: 'openrouter/free',
     currency: 'EUR',
     locale: 'fr-FR'
   })
@@ -107,10 +107,10 @@ export default function SettingsPage(): JSX.Element {
           <input
             value={settings.openrouterModel}
             onChange={(e) => setSettings({ ...settings, openrouterModel: e.target.value })}
-            placeholder="ex: anthropic/claude-sonnet-4-5"
+            placeholder="ex: openrouter/free"
           />
           <p className="text-muted text-sm" style={{ marginTop: 4 }}>
-            Modèles disponibles : anthropic/claude-sonnet-4-5, openai/gpt-4o, google/gemini-flash-1.5
+            Modèles disponibles : openrouter/free, anthropic/claude-sonnet-4-6, openai/gpt-4o, google/gemini-flash-1.5
           </p>
         </div>
       </div>
