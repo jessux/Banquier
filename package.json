@@ -1,6 +1,6 @@
 {
   "name": "banquier",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Application de gestion de relevés bancaires",
   "main": "./out/main/index.js",
   "author": "jessux <jessux@users.noreply.github.com>",
@@ -61,7 +61,10 @@
       "target": [
         {
           "target": "dmg",
-          "arch": ["x64", "arm64"]
+          "arch": [
+            "x64",
+            "arm64"
+          ]
         }
       ],
       "category": "public.app-category.finance"

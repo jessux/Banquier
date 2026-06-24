@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/jessux/Banquier/compare/banquier-v1.2.0...banquier-v1.3.0) (2026-06-24)
+
+
+### Nouvelles fonctionnalités
+
+* onglet Récurrences et outils d'analyse IA ([611d489](https://github.com/jessux/Banquier/commit/611d489105e6236455b5daed0296e377ada382bd))
+
 ## [1.2.0](https://github.com/jessux/Banquier/compare/banquier-v1.1.0...banquier-v1.2.0) (2026-06-23)
 
 
