@@ -365,6 +365,11 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
   let prevStart: string
   let prevEnd: string
 
+  const exclClause = excludeCategories?.length
+    ? `AND (category IS NULL OR category NOT IN (${excludeCategories.map(() => '?').join(',')}))`
+    : ''
+  const exclParams: unknown[] = excludeCategories?.length ? excludeCategories : []
+
   if (startDate) {
     effectiveStart = startDate
     const start = new Date(startDate)
@@ -375,17 +380,18 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
     prevEnd = pe.toISOString().slice(0, 10)
     prevStart = ps.toISOString().slice(0, 10)
   } else {
-    effectiveStart = today.toISOString().slice(0, 7) + '-01'
+    // « Tout » : pas de date de début → on couvre tout l'historique en
+    // calant le début sur la transaction la plus ancienne.
+    const firstRow = db.get(
+      `SELECT MIN(date) AS d FROM transactions WHERE is_internal = 0 ${exclClause}`,
+      exclParams
+    ) as { d: string | null } | undefined
+    effectiveStart = firstRow?.d ?? today.toISOString().slice(0, 7) + '-01'
     const pmFirst = new Date(today.getFullYear(), today.getMonth() - 1, 1)
     const pmLast = new Date(today.getFullYear(), today.getMonth(), 0)
     prevStart = pmFirst.toISOString().slice(0, 10)
     prevEnd = pmLast.toISOString().slice(0, 10)
   }
-
-  const exclClause = excludeCategories?.length
-    ? `AND (category IS NULL OR category NOT IN (${excludeCategories.map(() => '?').join(',')}))`
-    : ''
-  const exclParams: unknown[] = excludeCategories?.length ? excludeCategories : []
 
   const periodStats = (s: string, e: string): { total_debit: number; total_credit: number } => {
     const row = db.get(
@@ -420,11 +426,7 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
   } else {
     // « Tout » : la tendance couvre tout l'historique (sans surlignage,
     // puisque l'intégralité du graphique correspond à la période).
-    const firstRow = db.get(
-      `SELECT MIN(date) AS d FROM transactions WHERE is_internal = 0 ${exclClause}`,
-      exclParams
-    ) as { d: string | null } | undefined
-    if (firstRow?.d) trendMonths = Math.max(6, monthSpan(firstRow.d, effectiveEnd))
+    trendMonths = Math.max(6, monthSpan(effectiveStart, effectiveEnd))
     trendAnchor = effectiveEnd
   }
 
