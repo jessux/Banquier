@@ -13,7 +13,9 @@ import type {
   CategoryStatsGrouped,
   DashboardSummary,
   Settings,
-  ChatMessage
+  ChatThread,
+  StoredChatMessage,
+  RecurringSummary
 } from '../shared/types'
 
 declare global {
@@ -47,8 +49,14 @@ declare global {
       getMonthlyStats: (months?: number) => Promise<MonthlyStats[]>
       getCategoryStats: (startDate?: string, endDate?: string) => Promise<CategoryStats[]>
       getDashboardSummary: (startDate?: string, endDate?: string, excludeCategories?: string[]) => Promise<DashboardSummary>
+      getRecurringExpenses: (startDate?: string, endDate?: string) => Promise<RecurringSummary>
       categorizeAi: (onlyUncategorized: boolean, onProgress: (done: number, total: number) => void) => Promise<{ updated: number }>
-      chat: (messages: ChatMessage[], onChunk: (chunk: string) => void, onToolCall?: (name: string) => void) => Promise<void>
+      chatThreadsList: () => Promise<ChatThread[]>
+      chatThreadCreate: () => Promise<ChatThread>
+      chatThreadMessages: (threadId: number) => Promise<StoredChatMessage[]>
+      chatThreadRename: (id: number, title: string) => Promise<void>
+      chatThreadDelete: (id: number) => Promise<void>
+      chat: (threadId: number, content: string, onChunk: (chunk: string) => void, onToolCall?: (name: string) => void) => Promise<void>
       onChatDone: (cb: () => void) => void
       getSettings: () => Promise<Settings>
       saveSettings: (settings: Partial<Settings>) => Promise<void>

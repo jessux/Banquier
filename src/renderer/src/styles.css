@@ -306,10 +306,91 @@ tbody td {
 }
 
 /* Chat */
+.chat-layout {
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 48px);
+  max-height: 100%;
+}
+
+.thread-sidebar {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-right: 1px solid var(--border);
+  padding-right: 12px;
+  overflow: hidden;
+}
+
+.thread-new-btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.thread-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.thread-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  color: var(--text2);
+  border: 1px solid transparent;
+}
+
+.thread-item:hover {
+  background: var(--bg2);
+}
+
+.thread-item.active {
+  background: var(--bg2);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.thread-title {
+  flex: 1;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thread-delete {
+  background: none;
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.thread-item:hover .thread-delete {
+  opacity: 1;
+}
+
+.thread-delete:hover {
+  color: var(--red);
+}
+
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 48px);
+  flex: 1;
+  min-width: 0;
+  height: 100%;
   max-height: 100%;
 }
 

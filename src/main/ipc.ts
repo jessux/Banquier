@@ -6,15 +6,14 @@ import * as db from './database'
 import { previewCsv, parseCsvToTransactions } from './parsers/csv'
 import { extractPdfText, buildPdfParsePrompt, parseLlmJsonResponse } from './parsers/pdf'
 import {
-  callOpenRouterStream,
   callOpenRouterOnce,
-  callOpenRouterWithTools,
+  runFinancialChat,
   buildFinancialSystemPrompt,
   buildChatMessages,
   categorizeBatch
 } from './llm'
 import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
-import type { Settings, CsvMapping, ChatMessage, TransactionFilters } from '../shared/types'
+import type { Settings, CsvMapping, TransactionFilters } from '../shared/types'
 
 interface StoreSchema {
   settings: Settings
@@ -131,6 +130,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('get-dashboard-summary', (_, startDate?: string, endDate?: string, excludeCategories?: string[]) =>
     db.getDashboardSummary(startDate, endDate, excludeCategories)
   )
+  ipcMain.handle('get-recurring-expenses', (_, startDate?: string, endDate?: string) =>
+    db.getRecurringExpenses(startDate, endDate)
+  )
 
   // --- AI Categorization ---
   ipcMain.handle('categorize-ai', async (event, onlyUncategorized: boolean) => {
@@ -180,12 +182,26 @@ export function registerIpcHandlers(): void {
     return { updated }
   })
 
+  // --- Chat threads (mémoire conversationnelle) ---
+  ipcMain.handle('chat-threads-list', () => db.getChatThreads())
+  ipcMain.handle('chat-thread-create', () => db.createChatThread())
+  ipcMain.handle('chat-thread-messages', (_, threadId: number) => db.getChatMessages(threadId))
+  ipcMain.handle('chat-thread-rename', (_, id: number, title: string) => db.renameChatThread(id, title))
+  ipcMain.handle('chat-thread-delete', (_, id: number) => db.deleteChatThread(id))
+
   // --- LLM Chat ---
-  ipcMain.handle('chat', async (event, messages: ChatMessage[]) => {
+  ipcMain.handle('chat', async (event, threadId: number, content: string) => {
     const settings = store.get('settings')
+
+    // Persiste le message utilisateur et (au besoin) titre la conversation.
+    db.addChatMessage(threadId, 'user', content)
+    db.autoTitleChatThread(threadId, content)
+
+    // Reconstruit l'historique complet du thread depuis la base.
+    const history = db.getChatMessages(threadId)
     const summary = db.getDashboardSummary()
     const systemPrompt = buildFinancialSystemPrompt(summary, settings.currency)
-    const initialMessages = buildChatMessages(messages, systemPrompt)
+    const initialMessages = buildChatMessages(history, systemPrompt)
 
     const toolExecutors = {
       getTransactions: (filters: Record<string, unknown>) =>
@@ -195,16 +211,40 @@ export function registerIpcHandlers(): void {
       getMonthlyStats: (months?: number) =>
         db.getMonthlyStats(months),
       getAccounts: () =>
-        db.getAccounts()
+        db.getAccounts(),
+      getTopMerchants: (startDate?: string, endDate?: string, limit?: number) =>
+        db.getTopMerchants(startDate, endDate, limit),
+      getLargestTransactions: (startDate?: string, endDate?: string, limit?: number, direction?: 'debit' | 'credit') =>
+        db.getLargestTransactions(startDate, endDate, limit, direction),
+      comparePeriods: (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
+        db.comparePeriods(aStart, aEnd, bStart, bEnd),
+      getUncategorized: (startDate?: string, endDate?: string, limit?: number) =>
+        db.getUncategorized(startDate, endDate, limit),
+      getNetBalance: (startDate?: string, endDate?: string) =>
+        db.getNetBalance(startDate, endDate)
     }
 
-    const resolvedMessages = await callOpenRouterWithTools(initialMessages, settings, toolExecutors, (name) => {
-      event.sender.send('chat-tool-call', name)
-    })
+    const collectedTools: string[] = []
+    let finalText = ''
+    try {
+      finalText = await runFinancialChat(
+        initialMessages,
+        settings,
+        toolExecutors,
+        (chunk) => event.sender.send('chat-chunk', chunk),
+        (name) => {
+          collectedTools.push(name)
+          event.sender.send('chat-tool-call', name)
+        }
+      )
+    } catch (e) {
+      const errMsg = `\n\n*Erreur : ${String(e)}*`
+      event.sender.send('chat-chunk', errMsg)
+      finalText += errMsg
+    }
 
-    await callOpenRouterStream(resolvedMessages, settings, (chunk) => {
-      event.sender.send('chat-chunk', chunk)
-    })
+    // Persiste la réponse de l'assistant (avec les outils utilisés).
+    db.addChatMessage(threadId, 'assistant', finalText, collectedTools)
     event.sender.send('chat-done')
   })
 

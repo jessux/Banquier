@@ -11,7 +11,17 @@ import type {
   MonthlyStats,
   CategoryStats,
   CategoryStatsGrouped,
-  DashboardSummary
+  DashboardSummary,
+  ChatThread,
+  StoredChatMessage,
+  MerchantStats,
+  PeriodComparison,
+  PeriodComparisonRow,
+  UncategorizedSummary,
+  NetBalance,
+  RecurringFrequency,
+  RecurringExpense,
+  RecurringSummary
 } from '../shared/types'
 
 let db: Database
@@ -76,6 +86,24 @@ function createTables(): void {
       pattern  TEXT NOT NULL UNIQUE,
       category TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS chat_threads (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      title      TEXT NOT NULL DEFAULT 'Nouvelle conversation',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_messages (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      thread_id  INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+      role       TEXT NOT NULL,
+      content    TEXT NOT NULL,
+      tool_calls TEXT,
+      created_at TEXT NOT NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id);
   `)
 }
 
@@ -578,6 +606,355 @@ export function exportTransactionsToCsv(): string {
   ].join(';'))
 
   return '﻿' + [header, ...lines].join('\r\n')
+}
+
+// --- Analyse avancée (outils IA) ---
+
+const MERCHANT_NOISE =
+  /\b(CB|CARTE|PAIEMENT|PAIMT|ACHAT|RETRAIT|DU|LE|FACTURE|FACT|PRLV|PRELEVEMENT|PRELVT|VIR|VIREMENT|SEPA|REF|MANDAT|ID|EUR)\b/g
+
+function normalizeMerchant(desc: string): string {
+  const cleaned = desc
+    .toUpperCase()
+    .replace(/[0-9]+([./-][0-9]+)*/g, ' ') // dates, montants, références numériques
+    .replace(MERCHANT_NOISE, ' ')
+    .replace(/[^A-ZÀ-Ü ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .slice(0, 4)
+    .join(' ')
+  return cleaned || desc.trim().slice(0, 30).toUpperCase()
+}
+
+export function getTopMerchants(startDate?: string, endDate?: string, limit = 15): MerchantStats[] {
+  const conditions = ['amount < 0', 'is_internal = 0']
+  const params: unknown[] = []
+  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+
+  const rows = db.all(
+    `SELECT description, amount FROM transactions WHERE ${conditions.join(' AND ')}`,
+    params
+  ) as { description: string; amount: number }[]
+
+  const map = new Map<string, { total: number; count: number }>()
+  for (const r of rows) {
+    const key = normalizeMerchant(r.description)
+    const entry = map.get(key) ?? { total: 0, count: 0 }
+    entry.total += Math.abs(r.amount)
+    entry.count += 1
+    map.set(key, entry)
+  }
+
+  return Array.from(map.entries())
+    .map(([merchant, v]) => ({ merchant, total: v.total, count: v.count }))
+    .sort((a, b) => b.total - a.total)
+    .slice(0, Math.min(limit, 50))
+}
+
+export function getLargestTransactions(
+  startDate?: string,
+  endDate?: string,
+  limit = 10,
+  direction: 'debit' | 'credit' = 'debit'
+): Transaction[] {
+  const conditions = ['is_internal = 0', direction === 'credit' ? 'amount > 0' : 'amount < 0']
+  const params: unknown[] = []
+  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+
+  return db.all(
+    `SELECT * FROM transactions WHERE ${conditions.join(' AND ')}
+     ORDER BY ABS(amount) DESC LIMIT ${Math.min(limit, 50)}`,
+    params
+  ) as Transaction[]
+}
+
+export function comparePeriods(
+  aStart: string,
+  aEnd: string,
+  bStart: string,
+  bEnd: string
+): PeriodComparison {
+  const a = getCategoryStats(aStart, aEnd)
+  const b = getCategoryStats(bStart, bEnd)
+  const byCat = new Map<string, { totalA: number; totalB: number }>()
+
+  for (const s of a) {
+    const e = byCat.get(s.category) ?? { totalA: 0, totalB: 0 }
+    e.totalA += s.total
+    byCat.set(s.category, e)
+  }
+  for (const s of b) {
+    const e = byCat.get(s.category) ?? { totalA: 0, totalB: 0 }
+    e.totalB += s.total
+    byCat.set(s.category, e)
+  }
+
+  const categories: PeriodComparisonRow[] = Array.from(byCat.entries())
+    .map(([category, v]) => ({
+      category,
+      totalA: v.totalA,
+      totalB: v.totalB,
+      diff: v.totalB - v.totalA,
+      pct: v.totalA > 0 ? ((v.totalB - v.totalA) / v.totalA) * 100 : null
+    }))
+    .sort((x, y) => Math.abs(y.diff) - Math.abs(x.diff))
+
+  const sum = (rows: CategoryStats[]): number => rows.reduce((acc, r) => acc + r.total, 0)
+
+  return {
+    periodA: { startDate: aStart, endDate: aEnd, totalDebit: sum(a) },
+    periodB: { startDate: bStart, endDate: bEnd, totalDebit: sum(b) },
+    categories
+  }
+}
+
+export function getUncategorized(startDate?: string, endDate?: string, limit = 20): UncategorizedSummary {
+  const conditions = ['category IS NULL', 'is_internal = 0', 'amount < 0']
+  const params: unknown[] = []
+  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+  const where = `WHERE ${conditions.join(' AND ')}`
+
+  const agg = db.get(
+    `SELECT COUNT(*) AS count, COALESCE(SUM(ABS(amount)), 0) AS total FROM transactions ${where}`,
+    params
+  ) as { count: number; total: number }
+
+  const sample = db.all(
+    `SELECT * FROM transactions ${where} ORDER BY ABS(amount) DESC LIMIT ${Math.min(limit, 50)}`,
+    params
+  ) as Transaction[]
+
+  return { count: agg.count, total: agg.total, sample }
+}
+
+export function getNetBalance(startDate?: string, endDate?: string): NetBalance {
+  const conditions = ['is_internal = 0']
+  const params: unknown[] = []
+  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+
+  const row = db.get(
+    `SELECT
+      COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS total_credit,
+      COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) AS total_debit
+    FROM transactions WHERE ${conditions.join(' AND ')}`,
+    params
+  ) as { total_credit: number; total_debit: number }
+
+  return {
+    startDate: startDate ?? null,
+    endDate: endDate ?? null,
+    totalCredit: row.total_credit,
+    totalDebit: row.total_debit,
+    net: row.total_credit - row.total_debit
+  }
+}
+
+// --- Dépenses récurrentes (abonnements, prélèvements réguliers) ---
+
+const RECURRING_FREQUENCIES: { freq: RecurringFrequency; days: number; perMonth: number }[] = [
+  { freq: 'hebdomadaire', days: 7,   perMonth: 52 / 12 },
+  { freq: 'mensuel',      days: 30,  perMonth: 1 },
+  { freq: 'bimestriel',   days: 60,  perMonth: 1 / 2 },
+  { freq: 'trimestriel',  days: 91,  perMonth: 1 / 3 },
+  { freq: 'semestriel',   days: 182, perMonth: 1 / 6 },
+  { freq: 'annuel',       days: 365, perMonth: 1 / 12 }
+]
+
+/** Associe un intervalle médian (en jours) à la fréquence la plus proche, ou null si trop éloigné. */
+function classifyFrequency(medianDays: number): { freq: RecurringFrequency; perMonth: number } | null {
+  let best: { freq: RecurringFrequency; perMonth: number } | null = null
+  let bestErr = Infinity
+  for (const f of RECURRING_FREQUENCIES) {
+    const err = Math.abs(medianDays - f.days) / f.days
+    // tolérance de 25 % autour de la fréquence théorique
+    if (err <= 0.25 && err < bestErr) {
+      bestErr = err
+      best = { freq: f.freq, perMonth: f.perMonth }
+    }
+  }
+  return best
+}
+
+function mostCommonCategory(txs: Transaction[]): string | null {
+  const counts = new Map<string, number>()
+  for (const t of txs) {
+    if (!t.category) continue
+    counts.set(t.category, (counts.get(t.category) ?? 0) + 1)
+  }
+  let best: string | null = null
+  let bestN = 0
+  for (const [cat, n] of counts) {
+    if (n > bestN) { best = cat; bestN = n }
+  }
+  return best
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
+export function getRecurringExpenses(
+  startDate?: string,
+  endDate?: string
+): RecurringSummary {
+  const conditions = ['amount < 0', 'is_internal = 0']
+  const params: unknown[] = []
+  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+
+  const rows = db.all(
+    `SELECT * FROM transactions WHERE ${conditions.join(' AND ')} ORDER BY date ASC`,
+    params
+  ) as Transaction[]
+
+  // Regroupe par marchand normalisé.
+  const groups = new Map<string, Transaction[]>()
+  for (const r of rows) {
+    const key = normalizeMerchant(r.description)
+    if (!key) continue
+    const arr = groups.get(key)
+    if (arr) arr.push(r)
+    else groups.set(key, [r])
+  }
+
+  const items: RecurringExpense[] = []
+  const now = Date.now()
+
+  for (const [merchant, txs] of groups) {
+    // Au moins 3 occurrences pour confirmer une régularité.
+    if (txs.length < 3) continue
+
+    const times = txs.map((t) => new Date(t.date).getTime())
+    const intervals: number[] = []
+    for (let i = 1; i < times.length; i++) {
+      intervals.push((times[i] - times[i - 1]) / 86_400_000)
+    }
+    const med = median(intervals)
+    if (med <= 0) continue
+
+    const classified = classifyFrequency(med)
+    if (!classified) continue
+
+    // Vérifie la régularité : coefficient de variation des intervalles.
+    const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length
+    const variance = intervals.reduce((a, b) => a + (b - mean) ** 2, 0) / intervals.length
+    const cv = mean > 0 ? Math.sqrt(variance) / mean : 1
+    if (cv > 0.5) continue // intervalles trop irréguliers : ce n'est pas un abonnement
+
+    const amounts = txs.map((t) => Math.abs(t.amount))
+    const averageAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length
+    const last = txs[txs.length - 1]
+    const daysSinceLast = (now - new Date(last.date).getTime()) / 86_400_000
+    const active = daysSinceLast <= med * 2 // actif si dernière occurrence < 2 intervalles attendus
+
+    const monthlyEstimate = averageAmount * classified.perMonth
+
+    items.push({
+      merchant,
+      category: mostCommonCategory(txs),
+      frequency: classified.freq,
+      occurrences: txs.length,
+      averageAmount,
+      lastAmount: Math.abs(last.amount),
+      firstDate: txs[0].date,
+      lastDate: last.date,
+      intervalDays: Math.round(med),
+      monthlyEstimate,
+      yearlyEstimate: monthlyEstimate * 12,
+      active,
+      transactions: [...txs].reverse()
+    })
+  }
+
+  items.sort((a, b) => b.monthlyEstimate - a.monthlyEstimate)
+
+  const activeItems = items.filter((i) => i.active)
+  return {
+    items,
+    totalMonthlyActive: activeItems.reduce((acc, i) => acc + i.monthlyEstimate, 0),
+    totalYearlyActive: activeItems.reduce((acc, i) => acc + i.yearlyEstimate, 0)
+  }
+}
+
+// --- Chat threads (mémoire conversationnelle) ---
+
+const DEFAULT_THREAD_TITLE = 'Nouvelle conversation'
+
+function parseToolCalls(raw: string | null): string[] | undefined {
+  if (!raw) return undefined
+  try {
+    const arr = JSON.parse(raw)
+    return Array.isArray(arr) && arr.length > 0 ? arr : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function createChatThread(title = DEFAULT_THREAD_TITLE): ChatThread {
+  const now = new Date().toISOString()
+  const result = db.run(
+    'INSERT INTO chat_threads (title, created_at, updated_at) VALUES (?, ?, ?)',
+    [title, now, now]
+  )
+  return db.get('SELECT * FROM chat_threads WHERE id = ?', [result.lastInsertRowid]) as ChatThread
+}
+
+export function getChatThreads(): ChatThread[] {
+  return db.all('SELECT * FROM chat_threads ORDER BY updated_at DESC') as ChatThread[]
+}
+
+export function getChatMessages(threadId: number): StoredChatMessage[] {
+  const rows = db.all(
+    'SELECT * FROM chat_messages WHERE thread_id = ? ORDER BY id ASC',
+    [threadId]
+  ) as { id: number; thread_id: number; role: string; content: string; tool_calls: string | null; created_at: string }[]
+  return rows.map((r) => ({
+    id: r.id,
+    thread_id: r.thread_id,
+    role: r.role as 'user' | 'assistant',
+    content: r.content,
+    toolCalls: parseToolCalls(r.tool_calls),
+    created_at: r.created_at
+  }))
+}
+
+export function addChatMessage(
+  threadId: number,
+  role: 'user' | 'assistant',
+  content: string,
+  toolCalls?: string[]
+): void {
+  const now = new Date().toISOString()
+  db.run(
+    'INSERT INTO chat_messages (thread_id, role, content, tool_calls, created_at) VALUES (?, ?, ?, ?, ?)',
+    [threadId, role, content, toolCalls?.length ? JSON.stringify(toolCalls) : null, now]
+  )
+  db.run('UPDATE chat_threads SET updated_at = ? WHERE id = ?', [now, threadId])
+}
+
+export function autoTitleChatThread(threadId: number, firstUserMessage: string): void {
+  const thread = db.get('SELECT title FROM chat_threads WHERE id = ?', [threadId]) as
+    { title: string } | undefined
+  if (!thread || thread.title !== DEFAULT_THREAD_TITLE) return
+  const title = firstUserMessage.trim().replace(/\s+/g, ' ').slice(0, 50) || DEFAULT_THREAD_TITLE
+  db.run('UPDATE chat_threads SET title = ? WHERE id = ?', [title, threadId])
+}
+
+export function renameChatThread(id: number, title: string): void {
+  db.run('UPDATE chat_threads SET title = ? WHERE id = ?', [title.trim() || DEFAULT_THREAD_TITLE, id])
+}
+
+export function deleteChatThread(id: number): void {
+  db.run('DELETE FROM chat_messages WHERE thread_id = ?', [id])
+  db.run('DELETE FROM chat_threads WHERE id = ?', [id])
 }
 
 export function applyRulesToTransactions(transactionIds: number[]): number {

@@ -98,6 +98,99 @@ export interface MobileServerInfo {
 export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
+  toolCalls?: string[]
+}
+
+export interface ChatThread {
+  id: number
+  title: string
+  created_at: string
+  updated_at: string
+}
+
+export interface StoredChatMessage {
+  id: number
+  thread_id: number
+  role: 'user' | 'assistant'
+  content: string
+  toolCalls?: string[]
+  created_at: string
+}
+
+export interface MerchantStats {
+  merchant: string
+  total: number
+  count: number
+}
+
+export interface PeriodComparisonRow {
+  category: string
+  totalA: number
+  totalB: number
+  diff: number
+  pct: number | null
+}
+
+export interface PeriodComparison {
+  periodA: { startDate: string; endDate: string; totalDebit: number }
+  periodB: { startDate: string; endDate: string; totalDebit: number }
+  categories: PeriodComparisonRow[]
+}
+
+export interface UncategorizedSummary {
+  count: number
+  total: number
+  sample: Transaction[]
+}
+
+export interface NetBalance {
+  startDate: string | null
+  endDate: string | null
+  totalCredit: number
+  totalDebit: number
+  net: number
+}
+
+export type RecurringFrequency =
+  | 'hebdomadaire'
+  | 'mensuel'
+  | 'bimestriel'
+  | 'trimestriel'
+  | 'semestriel'
+  | 'annuel'
+
+export interface RecurringExpense {
+  /** Libellé marchand normalisé (regroupe les transactions). */
+  merchant: string
+  /** Catégorie majoritaire des transactions du groupe (null si non catégorisé). */
+  category: string | null
+  frequency: RecurringFrequency
+  /** Nombre d'occurrences détectées. */
+  occurrences: number
+  /** Montant moyen d'une occurrence (valeur absolue, en €). */
+  averageAmount: number
+  /** Montant de la dernière occurrence. */
+  lastAmount: number
+  firstDate: string
+  lastDate: string
+  /** Intervalle médian entre deux occurrences, en jours. */
+  intervalDays: number
+  /** Coût mensuel estimé (montant moyen ramené au mois selon la fréquence). */
+  monthlyEstimate: number
+  /** Coût annuel estimé. */
+  yearlyEstimate: number
+  /** true si la dernière occurrence est récente au regard de la fréquence (abonnement toujours actif). */
+  active: boolean
+  /** Transactions du groupe, de la plus récente à la plus ancienne. */
+  transactions: Transaction[]
+}
+
+export interface RecurringSummary {
+  items: RecurringExpense[]
+  /** Somme des coûts mensuels estimés des récurrences encore actives. */
+  totalMonthlyActive: number
+  /** Somme des coûts annuels estimés des récurrences encore actives. */
+  totalYearlyActive: number
 }
 
 export interface IpcApi {
@@ -120,6 +213,7 @@ export interface IpcApi {
   getMonthlyStats: (months?: number) => Promise<MonthlyStats[]>
   getCategoryStats: (startDate?: string, endDate?: string) => Promise<CategoryStats[]>
   getDashboardSummary: (startDate?: string, endDate?: string, excludeCategories?: string[]) => Promise<DashboardSummary>
+  getRecurringExpenses: (startDate?: string, endDate?: string) => Promise<RecurringSummary>
 
   // Category management
   getCategoryTree: () => Promise<Category[]>

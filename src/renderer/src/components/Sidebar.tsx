@@ -9,6 +9,7 @@ interface NavItem {
 const navItems: NavItem[] = [
   { id: 'dashboard', label: 'Tableau de bord', icon: '📊' },
   { id: 'transactions', label: 'Transactions', icon: '📋' },
+  { id: 'recurring', label: 'Récurrences', icon: '🔁' },
   { id: 'categories', label: 'Catégories', icon: '🏷️' },
   { id: 'rules', label: 'Règles auto', icon: '⚡' },
   { id: 'chat', label: 'Analyser avec IA', icon: '🤖' },

@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   TransactionFilters,
   CsvMapping,
-  ChatMessage,
   Settings
 } from '../shared/types'
 
@@ -55,6 +54,8 @@ const api = {
     ipcRenderer.invoke('get-category-stats', startDate, endDate),
   getDashboardSummary: (startDate?: string, endDate?: string, excludeCategories?: string[]) =>
     ipcRenderer.invoke('get-dashboard-summary', startDate, endDate, excludeCategories),
+  getRecurringExpenses: (startDate?: string, endDate?: string) =>
+    ipcRenderer.invoke('get-recurring-expenses', startDate, endDate),
 
   // AI Categorization
   categorizeAi: (onlyUncategorized: boolean, onProgress: (done: number, total: number) => void) => {
@@ -66,11 +67,18 @@ const api = {
     return promise as Promise<{ updated: number }>
   },
 
+  // Chat threads (mémoire conversationnelle)
+  chatThreadsList: () => ipcRenderer.invoke('chat-threads-list'),
+  chatThreadCreate: () => ipcRenderer.invoke('chat-thread-create'),
+  chatThreadMessages: (threadId: number) => ipcRenderer.invoke('chat-thread-messages', threadId),
+  chatThreadRename: (id: number, title: string) => ipcRenderer.invoke('chat-thread-rename', id, title),
+  chatThreadDelete: (id: number) => ipcRenderer.invoke('chat-thread-delete', id),
+
   // LLM Chat
-  chat: (messages: ChatMessage[], onChunk: (chunk: string) => void, onToolCall?: (name: string) => void) => {
+  chat: (threadId: number, content: string, onChunk: (chunk: string) => void, onToolCall?: (name: string) => void) => {
     ipcRenderer.on('chat-chunk', (_, chunk: string) => onChunk(chunk))
     if (onToolCall) ipcRenderer.on('chat-tool-call', (_, name: string) => onToolCall(name))
-    const promise = ipcRenderer.invoke('chat', messages)
+    const promise = ipcRenderer.invoke('chat', threadId, content)
     promise.finally(() => {
       ipcRenderer.removeAllListeners('chat-chunk')
       ipcRenderer.removeAllListeners('chat-tool-call')
