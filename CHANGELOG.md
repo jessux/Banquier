@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/jessux/Banquier/compare/banquier-v1.3.1...banquier-v1.4.0) (2026-06-24)
+
+
+### Nouvelles fonctionnalités
+
+* ajoute la mise à jour automatique via GitHub Releases ([#8](https://github.com/jessux/Banquier/issues/8)) ([45da915](https://github.com/jessux/Banquier/commit/45da9157c33ff16af29527335346f8be7d448d20))
+
 ## [1.3.1](https://github.com/jessux/Banquier/compare/banquier-v1.3.0...banquier-v1.3.1) (2026-06-24)
 
 
