@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.1](https://github.com/jessux/Banquier/compare/banquier-v1.3.0...banquier-v1.3.1) (2026-06-24)
+
+
+### Corrections de bugs
+
+* le filtre « Tout » du dashboard couvre tout l'historique ([b8ad6ac](https://github.com/jessux/Banquier/commit/b8ad6ac300c25e8af737e68bea344ea81546a3b0))
+* met à jour le modèle OpenRouter par défaut vers openrouter/free ([588c6ab](https://github.com/jessux/Banquier/commit/588c6abaadad5d734a4f02c4db9e78f2d0ea70b3))
+
 ## [1.3.0](https://github.com/jessux/Banquier/compare/banquier-v1.2.0...banquier-v1.3.0) (2026-06-24)
 
 
