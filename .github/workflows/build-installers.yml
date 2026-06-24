@@ -38,15 +38,10 @@ jobs:
         include:
           - os: windows-latest
             platform: win
-            files: dist/*.exe
           - os: macos-latest
             platform: mac
-            files: dist/*.dmg
           - os: ubuntu-latest
             platform: linux
-            files: |
-              dist/*.AppImage
-              dist/*.deb
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -64,14 +59,13 @@ jobs:
       - name: Build app
         run: npm run build
 
-      - name: Package installer
-        run: npx --no-install electron-builder --${{ matrix.platform }} --publish never
+      # Publie les installeurs ET les métadonnées de mise à jour
+      # (latest.yml / latest-mac.yml / latest-linux.yml + blockmaps) sur la
+      # release du tag courant. Ces fichiers sont indispensables à
+      # electron-updater pour détecter et télécharger les nouvelles versions.
+      - name: Package & publish installer
+        run: npx --no-install electron-builder --${{ matrix.platform }} --publish always
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Builds non signés : on désactive la découverte de certificat macOS.
           CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ inputs.tag }}
-          files: ${{ matrix.files }}
