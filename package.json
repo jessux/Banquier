@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "electron-store": "^8.2.0",
+    "electron-updater": "^6.8.9",
     "https-proxy-agent": "^7.0.5",
     "nat-upnp": "^1.1.1",
     "node-fetch": "^2.7.0",
@@ -53,6 +54,11 @@
     "productName": "Banquier",
     "directories": {
       "buildResources": "resources"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "jessux",
+      "repo": "Banquier"
     },
     "win": {
       "target": "nsis"

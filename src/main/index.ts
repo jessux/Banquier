@@ -5,7 +5,10 @@ import Store from 'electron-store'
 import { initDatabase } from './database'
 import { registerIpcHandlers } from './ipc'
 import { startMobileServer, stopMobileServer } from './mobile-server'
+import { initAutoUpdater } from './updater'
 import type { Settings } from '../shared/types'
+
+let mainWindow: BrowserWindow | null = null
 
 // Configure Chromium proxy and SSL for net.fetch (used in llm.ts).
 // Must be called before app.whenReady().
@@ -19,7 +22,7 @@ if (proxyUrl) {
 app.commandLine.appendSwitch('ignore-certificate-errors')
 
 function createWindow(): void {
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
     minWidth: 900,
@@ -35,7 +38,11 @@ function createWindow(): void {
   })
 
   mainWindow.on('ready-to-show', () => {
-    mainWindow.show()
+    mainWindow?.show()
+  })
+
+  mainWindow.on('closed', () => {
+    mainWindow = null
   })
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
@@ -60,6 +67,11 @@ app.whenReady().then(async () => {
   initDatabase()
   registerIpcHandlers()
   createWindow()
+
+  // Mise à jour automatique via GitHub Releases (prod uniquement).
+  if (!is.dev) {
+    initAutoUpdater(() => mainWindow)
+  }
 
   const store = new Store<{ settings: Settings }>()
   const settings = store.get('settings') as Settings | undefined
