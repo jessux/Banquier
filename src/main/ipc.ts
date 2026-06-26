@@ -13,7 +13,21 @@ import {
   categorizeBatch
 } from './llm'
 import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
-import type { Settings, CsvMapping, TransactionFilters, AssetInput } from '../shared/types'
+import {
+  getCurrentPriceEur,
+  getHistoricalSeriesEur,
+  priceAt,
+  isMarketType
+} from './quotes'
+import type {
+  Settings,
+  CsvMapping,
+  TransactionFilters,
+  AssetInput,
+  AssetType,
+  QuoteRefreshResult,
+  DcaPlan
+} from '../shared/types'
 
 interface StoreSchema {
   settings: Settings
@@ -259,9 +273,68 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('get-assets', () => db.getAssets())
   ipcMain.handle('get-patrimoine-summary', () => db.getPatrimoineSummary())
   ipcMain.handle('get-asset-lots', (_, assetId: number) => db.getAssetLots(assetId))
-  ipcMain.handle('create-asset', (_, input: AssetInput) => db.createAsset(input))
-  ipcMain.handle('update-asset', (_, id: number, input: AssetInput) => db.updateAsset(id, input))
+  ipcMain.handle('get-dca-plan', (_, assetId: number) => db.getDcaPlanByAsset(assetId) ?? null)
   ipcMain.handle('delete-asset', (_, id: number) => db.deleteAsset(id))
+
+  ipcMain.handle('create-asset', async (_, input: AssetInput) => {
+    const asset = db.createAsset(input)
+    if (input.dca && isMarketType(input.type) && input.symbol) {
+      const planId = db.createDcaPlan(asset.id, input.dca)
+      await applyDca(asset.id, input.type, input.symbol, { ...input.dca, id: planId })
+    }
+    return db.getAssets().find((a) => a.id === asset.id)
+  })
+
+  ipcMain.handle('update-asset', async (_, id: number, input: AssetInput) => {
+    db.updateAsset(id, input)
+    db.deleteDcaPlansByAsset(id)
+    if (input.dca && isMarketType(input.type) && input.symbol) {
+      const planId = db.createDcaPlan(id, input.dca)
+      await applyDca(id, input.type, input.symbol, { ...input.dca, id: planId })
+    }
+  })
+
+  // Aperçu d'un cours pour valider un ticker dans le formulaire.
+  ipcMain.handle('preview-symbol', async (_, type: AssetType, symbol: string) => {
+    try {
+      return { price: await getCurrentPriceEur(type, symbol) }
+    } catch (e) {
+      return { price: null, error: String(e instanceof Error ? e.message : e) }
+    }
+  })
+
+  // Met à jour les cours (et régénère les lots DCA jusqu'à aujourd'hui).
+  ipcMain.handle('refresh-quotes', async (): Promise<QuoteRefreshResult> => {
+    const assets = db.getAssets().filter((a) => a.symbol && isMarketType(a.type))
+    const updated: QuoteRefreshResult['updated'] = []
+    const failed: QuoteRefreshResult['failed'] = []
+    for (const a of assets) {
+      try {
+        const plan = db.getDcaPlanByAsset(a.id)
+        if (plan) {
+          const value = await applyDca(a.id, a.type, a.symbol as string, plan)
+          updated.push({ id: a.id, label: a.label, value })
+          continue
+        }
+        const qty = a.lot_quantity > 0 ? a.lot_quantity : a.quantity ?? 0
+        if (qty <= 0) {
+          failed.push({ label: a.label, reason: 'quantité inconnue' })
+          continue
+        }
+        const price = await getCurrentPriceEur(a.type, a.symbol as string)
+        if (price == null) {
+          failed.push({ label: a.label, reason: 'cours introuvable' })
+          continue
+        }
+        const value = qty * price
+        db.setAssetValue(a.id, value)
+        updated.push({ id: a.id, label: a.label, value })
+      } catch (e) {
+        failed.push({ label: a.label, reason: String(e instanceof Error ? e.message : e) })
+      }
+    }
+    return { updated, failed }
+  })
 
   // --- File Dialog ---
   ipcMain.handle(
@@ -323,4 +396,82 @@ export function registerIpcHandlers(): void {
     fs.writeFileSync(result.filePath, csv, 'utf8')
     return { success: true }
   })
+}
+
+// --- Helpers DCA (investissement programmé) ---
+
+const dayMs = 86400_000
+const toSec = (isoDate: string): number => Math.floor(Date.parse(`${isoDate}T12:00:00Z`) / 1000)
+const fmtDate = (d: Date): string => d.toISOString().slice(0, 10)
+
+/** Dates programmées d'un plan DCA, du début jusqu'à aujourd'hui. */
+function scheduledDates(plan: DcaPlan): string[] {
+  const out: string[] = []
+  const start = new Date(`${plan.start_date}T12:00:00Z`)
+  const today = new Date()
+  if (isNaN(start.getTime())) return out
+
+  if (plan.frequency === 'hebdomadaire') {
+    const target = ((plan.day_ref % 7) + 7) % 7
+    const d = new Date(start)
+    while (d.getUTCDay() !== target) d.setUTCDate(d.getUTCDate() + 1)
+    while (d.getTime() <= today.getTime()) {
+      out.push(fmtDate(d))
+      d.setTime(d.getTime() + 7 * dayMs)
+    }
+  } else {
+    // mensuel
+    let y = start.getUTCFullYear()
+    let m = start.getUTCMonth()
+    while (true) {
+      const daysInMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate()
+      const day = Math.min(Math.max(plan.day_ref, 1), daysInMonth)
+      const d = new Date(Date.UTC(y, m, day, 12))
+      if (d.getTime() > today.getTime()) break
+      if (d.getTime() >= start.getTime()) out.push(fmtDate(d))
+      m++
+      if (m > 11) { m = 0; y++ }
+    }
+  }
+  return out
+}
+
+/**
+ * Génère les lots d'un plan DCA à partir des cours historiques, met à jour la
+ * valeur actuelle de l'actif, et renvoie cette valeur.
+ */
+async function applyDca(
+  assetId: number,
+  type: AssetType,
+  symbol: string,
+  plan: DcaPlan
+): Promise<number> {
+  let dates = scheduledDates(plan)
+  // CoinGecko gratuit : historique crypto limité à ~365 jours.
+  if (type === 'crypto') {
+    const minSec = Math.floor(Date.now() / 1000) - 364 * 86400
+    dates = dates.filter((d) => toSec(d) >= minSec)
+  }
+  if (dates.length === 0) {
+    db.replaceDcaLots(assetId, plan.id, [])
+    return 0
+  }
+
+  const fromSec = toSec(dates[0]) - 3 * 86400
+  const toSecNow = Math.floor(Date.now() / 1000)
+  const series = await getHistoricalSeriesEur(type, symbol, fromSec, toSecNow)
+
+  const lots: { date: string; quantity: number; unit_price: number; fees: number }[] = []
+  for (const d of dates) {
+    const price = priceAt(series, toSec(d))
+    if (!price || price <= 0) continue
+    lots.push({ date: d, quantity: plan.amount / price, unit_price: price, fees: plan.fees || 0 })
+  }
+  db.replaceDcaLots(assetId, plan.id, lots)
+
+  const totalQty = lots.reduce((s, l) => s + l.quantity, 0)
+  const current = await getCurrentPriceEur(type, symbol)
+  const value = current ? totalQty * current : 0
+  db.setAssetValue(assetId, value)
+  return value
 }

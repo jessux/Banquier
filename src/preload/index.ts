@@ -102,9 +102,13 @@ const api = {
   getAssets: () => ipcRenderer.invoke('get-assets'),
   getPatrimoineSummary: () => ipcRenderer.invoke('get-patrimoine-summary'),
   getAssetLots: (assetId: number) => ipcRenderer.invoke('get-asset-lots', assetId),
+  getDcaPlan: (assetId: number) => ipcRenderer.invoke('get-dca-plan', assetId),
   createAsset: (input: unknown) => ipcRenderer.invoke('create-asset', input),
   updateAsset: (id: number, input: unknown) => ipcRenderer.invoke('update-asset', id, input),
   deleteAsset: (id: number) => ipcRenderer.invoke('delete-asset', id),
+  previewSymbol: (type: string, symbol: string) =>
+    ipcRenderer.invoke('preview-symbol', type, symbol),
+  refreshQuotes: () => ipcRenderer.invoke('refresh-quotes'),
 
   // Export
   exportDb: () => ipcRenderer.invoke('export-db') as Promise<{ success: boolean }>,

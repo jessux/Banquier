@@ -3,7 +3,15 @@ import {
   AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
-import type { Asset, AssetInput, AssetLotInput, AssetType, PatrimoineSummary } from '../../../shared/types'
+import type {
+  Asset,
+  AssetInput,
+  AssetLotInput,
+  AssetType,
+  PatrimoineSummary,
+  DcaFrequency,
+  DcaPlanInput
+} from '../../../shared/types'
 
 const ASSET_TYPES: { type: AssetType; label: string; icon: string }[] = [
   { type: 'immobilier', label: 'Immobilier', icon: '🏠' },
@@ -51,6 +59,12 @@ export default function Patrimoine(): JSX.Element {
   const [valueStr, setValueStr] = useState('')
   const [qtyStr, setQtyStr] = useState('')
   const [lots, setLots] = useState<AssetLotInput[]>([])
+  const [dcaEnabled, setDcaEnabled] = useState(false)
+  const [dca, setDca] = useState<DcaPlanInput>({ amount: 0, frequency: 'mensuel', day_ref: 1, start_date: '', fees: 0 })
+  const [dcaAmountStr, setDcaAmountStr] = useState('')
+  const [dcaFeesStr, setDcaFeesStr] = useState('')
+  const [refreshing, setRefreshing] = useState(false)
+  const [quoteMsg, setQuoteMsg] = useState<string | null>(null)
 
   const isMarket = MARKET_TYPES.includes(form.type)
 
@@ -59,12 +73,20 @@ export default function Patrimoine(): JSX.Element {
   }
   useEffect(() => { load() }, [])
 
+  const resetDca = (): void => {
+    setDcaEnabled(false)
+    setDca({ amount: 0, frequency: 'mensuel', day_ref: 1, start_date: '', fees: 0 })
+    setDcaAmountStr('')
+    setDcaFeesStr('')
+  }
+
   const openNew = (): void => {
     setEditId(null)
     setForm(emptyForm)
     setValueStr('')
     setQtyStr('')
     setLots([])
+    resetDca()
     setShowForm(true)
   }
 
@@ -81,9 +103,35 @@ export default function Patrimoine(): JSX.Element {
     })
     setValueStr(String(a.value))
     setQtyStr(a.quantity != null ? String(a.quantity) : '')
-    const loaded = await window.api.getAssetLots(a.id)
-    setLots(loaded.map((l) => ({ date: l.date, quantity: l.quantity, unit_price: l.unit_price, fees: l.fees })))
+    resetDca()
+    const plan = await window.api.getDcaPlan(a.id)
+    if (plan) {
+      setDcaEnabled(true)
+      setDca({ amount: plan.amount, frequency: plan.frequency, day_ref: plan.day_ref, start_date: plan.start_date, fees: plan.fees })
+      setDcaAmountStr(String(plan.amount))
+      setDcaFeesStr(plan.fees ? String(plan.fees) : '')
+      setLots([])
+    } else {
+      const loaded = await window.api.getAssetLots(a.id)
+      setLots(loaded.map((l) => ({ date: l.date, quantity: l.quantity, unit_price: l.unit_price, fees: l.fees })))
+    }
     setShowForm(true)
+  }
+
+  const refreshQuotes = async (): Promise<void> => {
+    setRefreshing(true)
+    setQuoteMsg('Mise à jour des cours…')
+    try {
+      const res = await window.api.refreshQuotes()
+      const parts = [`${res.updated.length} actif(s) mis à jour`]
+      if (res.failed.length) parts.push(`${res.failed.length} échec(s) : ${res.failed.map((f) => f.label).join(', ')}`)
+      setQuoteMsg(parts.join(' · '))
+      load()
+    } catch (e) {
+      setQuoteMsg(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   // Calculs en direct dans le formulaire (lots).
@@ -98,19 +146,40 @@ export default function Patrimoine(): JSX.Element {
   const updateLot = (i: number, patch: Partial<AssetLotInput>): void =>
     setLots(lots.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
 
+  const useDca = isMarket && dcaEnabled
+
   const save = async (): Promise<void> => {
-    const cleanLots = isMarket ? lots.filter((l) => l.quantity > 0 && l.unit_price > 0) : []
+    const cleanLots = isMarket && !useDca ? lots.filter((l) => l.quantity > 0 && l.unit_price > 0) : []
+    const dcaPayload: DcaPlanInput | null = useDca
+      ? {
+          amount: num(dcaAmountStr),
+          frequency: dca.frequency,
+          day_ref: dca.day_ref,
+          start_date: dca.start_date,
+          fees: num(dcaFeesStr)
+        }
+      : null
     const payload: AssetInput = {
       ...form,
-      value: formValue,
+      value: useDca ? 0 : formValue, // pour le DCA, la valeur est calculée côté serveur
       quantity: isMarket ? null : qtyStr.trim() ? num(qtyStr) : null,
-      lots: cleanLots
+      lots: cleanLots,
+      dca: dcaPayload
     }
-    if (!payload.label.trim() || payload.value <= 0) return
-    if (editId != null) await window.api.updateAsset(editId, payload)
-    else await window.api.createAsset(payload)
-    setShowForm(false)
-    load()
+    if (!payload.label.trim()) return
+    if (useDca) {
+      if (!payload.symbol || !dcaPayload!.amount || !dcaPayload!.start_date) return
+    } else if (payload.value <= 0) return
+
+    setRefreshing(true)
+    try {
+      if (editId != null) await window.api.updateAsset(editId, payload)
+      else await window.api.createAsset(payload)
+      setShowForm(false)
+      load()
+    } finally {
+      setRefreshing(false)
+    }
   }
 
   const remove = async (id: number): Promise<void> => {
@@ -152,8 +221,18 @@ export default function Patrimoine(): JSX.Element {
     <div>
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h1 className="page-title">Patrimoine</h1>
-        <button className="btn btn-primary" onClick={openNew}>+ Ajouter un actif</button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button className="btn btn-secondary" onClick={refreshQuotes} disabled={refreshing}>
+            {refreshing ? '…' : '↻ Mettre à jour les cours'}
+          </button>
+          <button className="btn btn-primary" onClick={openNew}>+ Ajouter un actif</button>
+        </div>
       </div>
+      {quoteMsg && (
+        <p className="text-sm" style={{ marginBottom: 12, color: quoteMsg.startsWith('Erreur') ? '#ef4444' : 'var(--text-muted)' }}>
+          {quoteMsg}
+        </p>
+      )}
 
       {isEmpty && !showForm && (
         <div className="card" style={{ textAlign: 'center', padding: 40 }}>
@@ -299,10 +378,12 @@ export default function Patrimoine(): JSX.Element {
               <label>Libellé</label>
               <input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder={isMarket ? 'Apple, Bitcoin, MSCI World…' : 'Appartement Paris 11e'} />
             </div>
-            <div className="form-group">
-              <label>Valeur actuelle totale (€)</label>
-              <input value={valueStr} onChange={(e) => setValueStr(e.target.value)} placeholder="250000" inputMode="decimal" />
-            </div>
+            {!useDca && (
+              <div className="form-group">
+                <label>Valeur actuelle totale (€)</label>
+                <input value={valueStr} onChange={(e) => setValueStr(e.target.value)} placeholder="250000" inputMode="decimal" />
+              </div>
+            )}
             {!isMarket && (
               <div className="form-group">
                 <label>Quantité (optionnel)</label>
@@ -310,8 +391,8 @@ export default function Patrimoine(): JSX.Element {
               </div>
             )}
             <div className="form-group">
-              <label>Symbole / Ticker (optionnel)</label>
-              <input value={form.symbol ?? ''} onChange={(e) => setForm({ ...form, symbol: e.target.value || null })} placeholder="AAPL, BTC, CW8…" />
+              <label>Symbole / Ticker{useDca ? '' : ' (optionnel)'}</label>
+              <input value={form.symbol ?? ''} onChange={(e) => setForm({ ...form, symbol: e.target.value || null })} placeholder="AAPL, BTC, CW8.PA…" />
             </div>
             <div className="form-group">
               <label>Note (optionnel)</label>
@@ -319,8 +400,62 @@ export default function Patrimoine(): JSX.Element {
             </div>
           </div>
 
-          {/* Lots d'achat (actifs boursiers) */}
+          {/* Choix lots manuels / DCA pour les actifs boursiers */}
           {isMarket && (
+            <div style={{ marginTop: 4, marginBottom: 8 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                <input type="checkbox" checked={dcaEnabled} onChange={(e) => setDcaEnabled(e.target.checked)} style={{ width: 'auto' }} />
+                Investissement programmé (DCA) — génère les achats automatiquement à partir des cours historiques
+              </label>
+            </div>
+          )}
+
+          {/* Plan DCA */}
+          {useDca && (
+            <div style={{ marginTop: 8 }}>
+              <div className="card-title" style={{ marginBottom: 8 }}>Plan d'investissement programmé</div>
+              <div className="grid-2" style={{ gap: 12 }}>
+                <div className="form-group">
+                  <label>Montant par versement (€)</label>
+                  <input value={dcaAmountStr} onChange={(e) => setDcaAmountStr(e.target.value)} placeholder="100" inputMode="decimal" />
+                </div>
+                <div className="form-group">
+                  <label>Fréquence</label>
+                  <select value={dca.frequency} onChange={(e) => setDca({ ...dca, frequency: e.target.value as DcaFrequency })}>
+                    <option value="mensuel">Mensuel</option>
+                    <option value="hebdomadaire">Hebdomadaire</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>{dca.frequency === 'mensuel' ? 'Jour du mois (1-28)' : 'Jour de la semaine'}</label>
+                  {dca.frequency === 'mensuel' ? (
+                    <input value={dca.day_ref} onChange={(e) => setDca({ ...dca, day_ref: Math.min(28, Math.max(1, parseInt(e.target.value) || 1)) })} inputMode="numeric" />
+                  ) : (
+                    <select value={dca.day_ref} onChange={(e) => setDca({ ...dca, day_ref: parseInt(e.target.value) })}>
+                      {['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map((d, i) => (
+                        <option key={i} value={i}>{d}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <div className="form-group">
+                  <label>Date de début</label>
+                  <input type="date" value={dca.start_date} onChange={(e) => setDca({ ...dca, start_date: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label>Frais par versement (€, optionnel)</label>
+                  <input value={dcaFeesStr} onChange={(e) => setDcaFeesStr(e.target.value)} placeholder="0" inputMode="decimal" />
+                </div>
+              </div>
+              <p className="text-muted text-sm">
+                À l'enregistrement, Banquier récupère les cours à chaque date et crée les achats automatiquement,
+                puis calcule la valeur actuelle et la plus/moins-value. (Crypto : historique limité à 1 an.)
+              </p>
+            </div>
+          )}
+
+          {/* Lots d'achat manuels (actifs boursiers, hors DCA) */}
+          {isMarket && !useDca && (
             <div style={{ marginTop: 8 }}>
               <div className="card-title" style={{ marginBottom: 8 }}>Lots d'achat (prix de revient)</div>
               <table style={{ width: '100%', fontSize: 13 }}>
@@ -374,8 +509,18 @@ export default function Patrimoine(): JSX.Element {
           )}
 
           <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
-            <button className="btn btn-primary" onClick={save} disabled={!form.label.trim() || !valueStr.trim()}>
-              {editId != null ? 'Enregistrer' : 'Ajouter'}
+            <button
+              className="btn btn-primary"
+              onClick={save}
+              disabled={
+                refreshing ||
+                !form.label.trim() ||
+                (useDca
+                  ? !form.symbol || !dcaAmountStr.trim() || !dca.start_date
+                  : !valueStr.trim())
+              }
+            >
+              {refreshing ? 'Calcul…' : editId != null ? 'Enregistrer' : 'Ajouter'}
             </button>
             <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
           </div>

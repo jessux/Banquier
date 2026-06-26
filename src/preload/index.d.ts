@@ -19,7 +19,9 @@ import type {
   Asset,
   AssetInput,
   AssetLot,
-  PatrimoineSummary
+  PatrimoineSummary,
+  DcaPlan,
+  QuoteRefreshResult
 } from '../shared/types'
 
 declare global {
@@ -70,9 +72,12 @@ declare global {
       getAssets: () => Promise<Asset[]>
       getPatrimoineSummary: () => Promise<PatrimoineSummary>
       getAssetLots: (assetId: number) => Promise<AssetLot[]>
+      getDcaPlan: (assetId: number) => Promise<DcaPlan | null>
       createAsset: (input: AssetInput) => Promise<Asset>
       updateAsset: (id: number, input: AssetInput) => Promise<void>
       deleteAsset: (id: number) => Promise<void>
+      previewSymbol: (type: string, symbol: string) => Promise<{ price: number | null; error?: string }>
+      refreshQuotes: () => Promise<QuoteRefreshResult>
     }
   }
 }

@@ -27,7 +27,9 @@ import type {
   AssetLot,
   AssetLotInput,
   AssetTypeBreakdown,
-  PatrimoineSummary
+  PatrimoineSummary,
+  DcaPlan,
+  DcaPlanInput
 } from '../shared/types'
 
 let db: Database
@@ -47,6 +49,11 @@ function migrate(): void {
     db.exec('ALTER TABLE transactions ADD COLUMN is_internal INTEGER NOT NULL DEFAULT 0')
   } catch {
     // column already exists
+  }
+  try {
+    db.exec('ALTER TABLE asset_lots ADD COLUMN plan_id INTEGER')
+  } catch {
+    // column already exists (ou table absente, recréée par createTables)
   }
 }
 
@@ -135,10 +142,22 @@ function createTables(): void {
       date       TEXT,
       quantity   REAL NOT NULL,
       unit_price REAL NOT NULL,
-      fees       REAL NOT NULL DEFAULT 0
+      fees       REAL NOT NULL DEFAULT 0,
+      plan_id    INTEGER
     );
 
     CREATE INDEX IF NOT EXISTS idx_asset_lots_asset ON asset_lots(asset_id);
+
+    CREATE TABLE IF NOT EXISTS dca_plans (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      asset_id   INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+      amount     REAL NOT NULL,
+      frequency  TEXT NOT NULL,
+      day_ref    INTEGER NOT NULL DEFAULT 1,
+      start_date TEXT NOT NULL,
+      fees       REAL NOT NULL DEFAULT 0,
+      active     INTEGER NOT NULL DEFAULT 1
+    );
   `)
 }
 
@@ -339,14 +358,63 @@ export function getAssetLots(assetId: number): AssetLot[] {
 }
 
 function replaceAssetLots(assetId: number, lots: AssetLotInput[] | undefined): void {
-  db.run('DELETE FROM asset_lots WHERE asset_id = ?', [assetId])
+  // Ne touche qu'aux lots manuels (plan_id NULL) ; les lots DCA sont gérés à part.
+  db.run('DELETE FROM asset_lots WHERE asset_id = ? AND plan_id IS NULL', [assetId])
   for (const lot of lots ?? []) {
     if (!lot.quantity || lot.unit_price == null) continue
     db.run(
-      'INSERT INTO asset_lots (asset_id, date, quantity, unit_price, fees) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO asset_lots (asset_id, date, quantity, unit_price, fees, plan_id) VALUES (?, ?, ?, ?, ?, NULL)',
       [assetId, lot.date ?? null, lot.quantity, lot.unit_price, lot.fees ?? 0]
     )
   }
+}
+
+// --- DCA (investissement programmé) ---
+
+export function getDcaPlanByAsset(assetId: number): DcaPlan | undefined {
+  return db.get('SELECT * FROM dca_plans WHERE asset_id = ? AND active = 1', [assetId]) as
+    | DcaPlan
+    | undefined
+}
+
+export function createDcaPlan(assetId: number, input: DcaPlanInput): number {
+  db.run('DELETE FROM dca_plans WHERE asset_id = ?', [assetId])
+  const result = db.run(
+    `INSERT INTO dca_plans (asset_id, amount, frequency, day_ref, start_date, fees, active)
+     VALUES (?, ?, ?, ?, ?, ?, 1)`,
+    [assetId, input.amount, input.frequency, input.day_ref, input.start_date, input.fees ?? 0]
+  )
+  return result.lastInsertRowid as number
+}
+
+export function deleteDcaPlansByAsset(assetId: number): void {
+  db.run('DELETE FROM asset_lots WHERE asset_id = ? AND plan_id IS NOT NULL', [assetId])
+  db.run('DELETE FROM dca_plans WHERE asset_id = ?', [assetId])
+}
+
+/** Remplace les lots générés par un plan DCA. */
+export function replaceDcaLots(
+  assetId: number,
+  planId: number,
+  lots: { date: string; quantity: number; unit_price: number; fees: number }[]
+): void {
+  db.run('DELETE FROM asset_lots WHERE plan_id = ?', [planId])
+  for (const lot of lots) {
+    db.run(
+      'INSERT INTO asset_lots (asset_id, date, quantity, unit_price, fees, plan_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [assetId, lot.date, lot.quantity, lot.unit_price, lot.fees, planId]
+    )
+  }
+}
+
+/** Met à jour la valeur actuelle d'un actif et enregistre un instantané. */
+export function setAssetValue(id: number, value: number): void {
+  db.run('UPDATE assets SET value = ?, updated_at = ? WHERE id = ?', [
+    value,
+    new Date().toISOString(),
+    id
+  ])
+  snapshotNetWorth()
 }
 
 /** Enregistre un instantané de la valeur nette totale pour aujourd'hui (un point/jour). */

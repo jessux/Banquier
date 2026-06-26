@@ -149,6 +149,37 @@ export interface AssetInput {
   notes: string | null
   /** Lots d'achat (actifs boursiers). Vide pour les autres actifs. */
   lots?: AssetLotInput[]
+  /** Plan DCA (investissement programmé). Si présent, les lots sont générés automatiquement. */
+  dca?: DcaPlanInput | null
+}
+
+export type DcaFrequency = 'hebdomadaire' | 'mensuel'
+
+/** Plan d'investissement programmé (DCA). */
+export interface DcaPlan {
+  id: number
+  asset_id: number
+  amount: number
+  frequency: DcaFrequency
+  /** Jour de référence : jour du mois (1-28) ou jour de semaine (0=dimanche…6). */
+  day_ref: number
+  start_date: string
+  fees: number
+  active: number
+}
+
+export interface DcaPlanInput {
+  amount: number
+  frequency: DcaFrequency
+  day_ref: number
+  start_date: string
+  fees: number
+}
+
+/** Résultat d'un rafraîchissement des cours. */
+export interface QuoteRefreshResult {
+  updated: { id: number; label: string; value: number }[]
+  failed: { label: string; reason: string }[]
 }
 
 /** Répartition du patrimoine par classe d'actif. */
