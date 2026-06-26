@@ -218,7 +218,14 @@ export function getTransactions(filters: TransactionFilters = {}): Transaction[]
 
   if (filters.search) { conditions.push('t.description LIKE ?'); params.push(`%${filters.search}%`) }
   if (filters.category === '__none__') { conditions.push('t.category IS NULL') }
-  else if (filters.category) { conditions.push('t.category = ?'); params.push(filters.category) }
+  else if (filters.category) {
+    // Filtrer sur une catégorie inclut ses sous-catégories : la catégorie d'une
+    // transaction est stockée comme chemin « Parent > Enfant ». On matche donc la
+    // catégorie exacte OU tout chemin descendant « <cat> > … ».
+    const escaped = filters.category.replace(/[\\%_]/g, '\\$&')
+    conditions.push("(t.category = ? OR t.category LIKE ? ESCAPE '\\')")
+    params.push(filters.category, `${escaped} > %`)
+  }
   if (filters.accountId) { conditions.push('t.account_id = ?'); params.push(filters.accountId) }
   if (filters.startDate) { conditions.push('t.date >= ?'); params.push(filters.startDate) }
   if (filters.endDate) { conditions.push('t.date <= ?'); params.push(filters.endDate) }
