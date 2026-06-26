@@ -86,51 +86,6 @@ export interface Settings {
   mobileServerEnabled?: boolean
 }
 
-/** Banque proposée pour la connexion open banking. */
-export interface Institution {
-  id: string
-  name: string
-  bic: string | null
-  logo: string | null
-}
-
-/** Compte bancaire relié via open banking, persisté localement. */
-export interface BankConnection {
-  id: number
-  gc_account_id: string
-  account_id: number | null
-  institution_name: string | null
-  iban_tail: string | null
-  requisition_id: string | null
-  created_at: string
-  last_sync: string | null
-}
-
-/** Résultat d'une connexion ou d'une synchronisation open banking. */
-export interface BankSyncResult {
-  imported: number
-  duplicates: number
-  accounts: number
-}
-
-/** Champ de configuration d'un module Woob (varie selon la banque). */
-export interface WoobField {
-  id: string
-  label: string
-  masked: boolean
-  required: boolean
-  default: string
-  choices: [string, string][] | null
-}
-
-/** Demande de 2FA Woob transmise à l'interface. */
-export interface Woob2faRequest {
-  requestId: string
-  subtype: 'question' | 'decoupled'
-  message: string
-  fields?: { id: string; label: string; masked: boolean }[]
-}
-
 // --- Patrimoine ---
 
 export type AssetType =

@@ -98,29 +98,6 @@ const api = {
   openFileDialog: (filters: { name: string; extensions: string[] }[]) =>
     ipcRenderer.invoke('open-file-dialog', filters),
 
-  // Open banking (Woob — gratuit & local)
-  woobCheck: () => ipcRenderer.invoke('woob-check'),
-  woobInstall: (onLog: (line: string) => void) => {
-    ipcRenderer.on('woob-install-log', (_, line: string) => onLog(line))
-    const promise = ipcRenderer.invoke('woob-install')
-    promise.finally(() => ipcRenderer.removeAllListeners('woob-install-log'))
-    return promise
-  },
-  woobList: () => ipcRenderer.invoke('woob-list'),
-  woobFields: (module: string) => ipcRenderer.invoke('woob-fields', module),
-  woobConnect: (
-    module: string,
-    config: Record<string, string>,
-    on2fa: (req: { requestId: string; subtype: string; message: string; fields?: unknown[] }) => void
-  ) => {
-    ipcRenderer.on('woob-2fa', (_, req) => on2fa(req))
-    const promise = ipcRenderer.invoke('woob-connect', module, config)
-    promise.finally(() => ipcRenderer.removeAllListeners('woob-2fa'))
-    return promise
-  },
-  woobAnswer2fa: (requestId: string, answer: Record<string, unknown>) =>
-    ipcRenderer.invoke('woob-2fa-answer', requestId, answer),
-
   // Patrimoine
   getAssets: () => ipcRenderer.invoke('get-assets'),
   getPatrimoineSummary: () => ipcRenderer.invoke('get-patrimoine-summary'),

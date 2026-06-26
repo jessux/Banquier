@@ -16,10 +16,6 @@ import type {
   ChatThread,
   StoredChatMessage,
   RecurringSummary,
-  Institution,
-  BankSyncResult,
-  WoobField,
-  Woob2faRequest,
   Asset,
   AssetInput,
   AssetLot,
@@ -71,16 +67,6 @@ declare global {
       openFileDialog: (filters: { name: string; extensions: string[] }[]) => Promise<string | null>
       exportDb: () => Promise<{ success: boolean }>
       exportCsv: () => Promise<{ success: boolean }>
-      woobCheck: () => Promise<{ ok: boolean; woobVersion?: string; error?: string }>
-      woobInstall: (onLog: (line: string) => void) => Promise<void>
-      woobList: () => Promise<Institution[]>
-      woobFields: (module: string) => Promise<WoobField[]>
-      woobConnect: (
-        module: string,
-        config: Record<string, string>,
-        on2fa: (req: Woob2faRequest) => void
-      ) => Promise<BankSyncResult>
-      woobAnswer2fa: (requestId: string, answer: Record<string, unknown>) => Promise<void>
       getAssets: () => Promise<Asset[]>
       getPatrimoineSummary: () => Promise<PatrimoineSummary>
       getAssetLots: (assetId: number) => Promise<AssetLot[]>

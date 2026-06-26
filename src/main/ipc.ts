@@ -13,29 +13,11 @@ import {
   categorizeBatch
 } from './llm'
 import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
-import {
-  checkWoob,
-  installWoob,
-  listBanks,
-  getFields as getWoobFields,
-  connectBank,
-  type TwoFaRequest
-} from './woob'
-import { randomUUID } from 'crypto'
-import type {
-  Settings,
-  CsvMapping,
-  TransactionFilters,
-  BankSyncResult,
-  AssetInput
-} from '../shared/types'
+import type { Settings, CsvMapping, TransactionFilters, AssetInput } from '../shared/types'
 
 interface StoreSchema {
   settings: Settings
 }
-
-// Résolveurs en attente pour les demandes 2FA Woob (clé = requestId).
-const pending2fa = new Map<string, (answer: Record<string, unknown>) => void>()
 
 const store = new Store<StoreSchema>({
   defaults: {
@@ -271,73 +253,6 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('save-settings', (_, settings: Partial<Settings>) => {
     const current = store.get('settings')
     store.set('settings', { ...current, ...settings })
-  })
-
-  // --- Open Banking (Woob, gratuit & local) ---
-  ipcMain.handle('woob-check', () => checkWoob())
-  ipcMain.handle('woob-install', (event) =>
-    installWoob((line) => event.sender.send('woob-install-log', line))
-  )
-  ipcMain.handle('woob-list', () => listBanks())
-  ipcMain.handle('woob-fields', (_, module: string) => getWoobFields(module))
-
-  ipcMain.handle(
-    'woob-connect',
-    async (event, module: string, config: Record<string, string>): Promise<BankSyncResult> => {
-      const on2fa = (req: TwoFaRequest): Promise<Record<string, unknown>> =>
-        new Promise((resolve) => {
-          const requestId = randomUUID()
-          pending2fa.set(requestId, resolve)
-          event.sender.send('woob-2fa', { requestId, ...req })
-        })
-
-      const { accounts, transactions } = await connectBank(module, config, on2fa)
-      if (accounts.length === 0) return { imported: 0, duplicates: 0, accounts: 0 }
-
-      // Un import unique pour toute la session, dédupliqué comme un import classique.
-      const importRecord = db.createImport(`Woob — ${module}`, transactions.length)
-      let imported = 0
-      let duplicates = 0
-      for (const acc of accounts) {
-        const gcAccountId = `woob:${module}:${acc.id}`
-        const existing = db.getBankConnectionByGcId(gcAccountId)
-        const accountId =
-          existing?.account_id ??
-          db.createAccount(acc.label || module, module, acc.currency || 'EUR').id
-        db.upsertBankConnection({
-          gcAccountId,
-          accountId,
-          institutionName: module,
-          ibanTail: acc.iban ? acc.iban.slice(-4) : null,
-          requisitionId: ''
-        })
-
-        const rows = transactions
-          .filter((t) => t.account === acc.id && t.date && t.amount !== null)
-          .map((t) => ({
-            account_id: accountId,
-            date: t.date,
-            description: (t.label || 'Transaction').trim(),
-            amount: t.amount as number,
-            category: null,
-            import_id: importRecord.id,
-            is_internal: 0
-          }))
-        const res = db.insertTransactions(rows, importRecord.id)
-        if (res.insertedIds.length > 0) db.applyRulesToTransactions(res.insertedIds)
-        imported += res.imported
-        duplicates += res.duplicates
-      }
-      return { imported, duplicates, accounts: accounts.length }
-    }
-  )
-
-  ipcMain.handle('woob-2fa-answer', (_, requestId: string, answer: Record<string, unknown>) => {
-    const resolve = pending2fa.get(requestId)
-    if (resolve) {
-      resolve(answer)
-      pending2fa.delete(requestId)
-    }
   })
 
   // --- Patrimoine ---

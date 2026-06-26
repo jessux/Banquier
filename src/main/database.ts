@@ -22,7 +22,6 @@ import type {
   RecurringFrequency,
   RecurringExpense,
   RecurringSummary,
-  BankConnection,
   Asset,
   AssetInput,
   AssetLot,
@@ -111,17 +110,6 @@ function createTables(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id);
-
-    CREATE TABLE IF NOT EXISTS bank_connections (
-      id               INTEGER PRIMARY KEY AUTOINCREMENT,
-      gc_account_id    TEXT NOT NULL UNIQUE,
-      account_id       INTEGER REFERENCES accounts(id),
-      institution_name TEXT,
-      iban_tail        TEXT,
-      requisition_id   TEXT,
-      created_at       TEXT NOT NULL,
-      last_sync        TEXT
-    );
 
     CREATE TABLE IF NOT EXISTS assets (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -330,46 +318,6 @@ export function createImport(filename: string, transactionCount: number): Import
 
 export function getImports(): Import[] {
   return db.all('SELECT * FROM imports ORDER BY imported_at DESC') as Import[]
-}
-
-// --- Open banking (connexions de comptes bancaires) ---
-
-export function getBankConnections(): BankConnection[] {
-  return db.all('SELECT * FROM bank_connections ORDER BY created_at DESC') as BankConnection[]
-}
-
-export function getBankConnectionByGcId(gcAccountId: string): BankConnection | undefined {
-  return db.get('SELECT * FROM bank_connections WHERE gc_account_id = ?', [gcAccountId]) as
-    | BankConnection
-    | undefined
-}
-
-export function upsertBankConnection(conn: {
-  gcAccountId: string
-  accountId: number
-  institutionName: string | null
-  ibanTail: string | null
-  requisitionId: string
-}): void {
-  const now = new Date().toISOString()
-  db.run(
-    `INSERT INTO bank_connections (gc_account_id, account_id, institution_name, iban_tail, requisition_id, created_at, last_sync)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(gc_account_id) DO UPDATE SET
-       account_id = excluded.account_id,
-       institution_name = excluded.institution_name,
-       iban_tail = excluded.iban_tail,
-       requisition_id = excluded.requisition_id,
-       last_sync = excluded.last_sync`,
-    [conn.gcAccountId, conn.accountId, conn.institutionName, conn.ibanTail, conn.requisitionId, now, now]
-  )
-}
-
-export function touchBankConnectionSync(gcAccountId: string): void {
-  db.run('UPDATE bank_connections SET last_sync = ? WHERE gc_account_id = ?', [
-    new Date().toISOString(),
-    gcAccountId
-  ])
 }
 
 // --- Patrimoine (actifs) ---

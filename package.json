@@ -55,12 +55,6 @@
     "directories": {
       "buildResources": "resources"
     },
-    "extraResources": [
-      {
-        "from": "resources/woob_bank.py",
-        "to": "woob_bank.py"
-      }
-    ],
     "publish": {
       "provider": "github",
       "owner": "jessux",
