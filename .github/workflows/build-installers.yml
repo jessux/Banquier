@@ -58,6 +58,9 @@ jobs:
 
       - name: Build app
         run: npm run build
+        env:
+          POWENS_CLIENT_ID: ${{ secrets.POWENS_CLIENT_ID }}
+          POWENS_CLIENT_SECRET: ${{ secrets.POWENS_CLIENT_SECRET }}
 
       # Publie les installeurs ET les métadonnées de mise à jour
       # (latest.yml / latest-mac.yml / latest-linux.yml + blockmaps) sur la

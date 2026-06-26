@@ -25,6 +25,7 @@ import {
   getAccounts as getPowensAccounts,
   getTransactions as getPowensTransactions,
   openConnectWebview,
+  POWENS_CREDS,
   type PowensCreds
 } from './powens'
 import type {
@@ -57,6 +58,7 @@ const store = new Store<StoreSchema>({
 export function registerIpcHandlers(): void {
   // --- Accounts ---
   ipcMain.handle('get-accounts', () => db.getAccounts())
+  ipcMain.handle('rename-account', (_, id: number, name: string) => db.renameAccount(id, name))
   ipcMain.handle('create-account', (_, name: string, bank: string, currency: string) =>
     db.createAccount(name, bank, currency)
   )
@@ -290,7 +292,7 @@ export function registerIpcHandlers(): void {
     const asset = db.createAsset(input)
     if (input.dca && isMarketType(input.type) && input.symbol) {
       const planId = db.createDcaPlan(asset.id, input.dca)
-      await applyDca(asset.id, input.type, input.symbol, { ...input.dca, id: planId })
+      await applyDca(asset.id, input.type, input.symbol, { ...input.dca, id: planId, asset_id: asset.id, active: 1 })
     }
     return db.getAssets().find((a) => a.id === asset.id)
   })
@@ -300,7 +302,7 @@ export function registerIpcHandlers(): void {
     db.deleteDcaPlansByAsset(id)
     if (input.dca && isMarketType(input.type) && input.symbol) {
       const planId = db.createDcaPlan(id, input.dca)
-      await applyDca(id, input.type, input.symbol, { ...input.dca, id: planId })
+      await applyDca(id, input.type, input.symbol, { ...input.dca, id: planId, asset_id: id, active: 1 })
     }
   })
 
@@ -348,15 +350,11 @@ export function registerIpcHandlers(): void {
 
   // --- Powens (agrégation bancaire) ---
   ipcMain.handle('powens-status', (): PowensStatus => {
-    const s = store.get('settings')
-    return {
-      configured: !!(s.powensDomain && s.powensClientId && s.powensClientSecret),
-      connected: !!s.powensToken
-    }
+    return { configured: true, connected: !!store.get('settings').powensToken }
   })
 
   ipcMain.handle('powens-connect', async (): Promise<PowensSyncResult> => {
-    const creds = getPowensCreds()
+    const creds = POWENS_CREDS
     const parent = BrowserWindow.getFocusedWindow() ?? undefined
 
     // Token permanent d'abord (création de l'utilisateur Powens au besoin).
@@ -378,7 +376,7 @@ export function registerIpcHandlers(): void {
   })
 
   ipcMain.handle('powens-sync', async (): Promise<PowensSyncResult> => {
-    const creds = getPowensCreds()
+    const creds = POWENS_CREDS
     const token = store.get('settings').powensToken
     if (!token) throw new Error('Aucune connexion Powens. Connectez d\'abord une banque.')
     return importPowens(creds, token)
@@ -387,6 +385,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('powens-disconnect', () => {
     const s = store.get('settings')
     store.set('settings', { ...s, powensToken: undefined })
+  })
+
+  ipcMain.handle('powens-startup-sync', async (): Promise<PowensSyncResult | null> => {
+    const token = store.get('settings').powensToken
+    if (!token) return null
+    try {
+      return await importPowens(POWENS_CREDS, token)
+    } catch (err) {
+      console.error('[powens-startup-sync]', err)
+      return null
+    }
   })
 
   // --- File Dialog ---
@@ -453,19 +462,6 @@ export function registerIpcHandlers(): void {
 
 // --- Helpers Powens ---
 
-function getPowensCreds(): PowensCreds {
-  const s = store.get('settings')
-  if (!s.powensDomain || !s.powensClientId || !s.powensClientSecret) {
-    throw new Error('Identifiants Powens manquants. Renseignez-les dans Paramètres → Powens.')
-  }
-  return {
-    domain: s.powensDomain,
-    clientId: s.powensClientId,
-    clientSecret: s.powensClientSecret,
-    redirectUri: s.powensRedirectUri || 'http://localhost:8645'
-  }
-}
-
 /** Récupère comptes + transactions Powens et les importe dans la base locale. */
 async function importPowens(creds: PowensCreds, token: string): Promise<PowensSyncResult> {
   // Powens récupère les données de la banque de façon asynchrone : on attend
@@ -502,13 +498,21 @@ async function importPowens(creds: PowensCreds, token: string): Promise<PowensSy
     }))
     .filter((r) => r.date && r.amount != null)
 
-  if (rows.length === 0) return { imported: 0, duplicates: 0, accounts: accounts.length }
+  if (rows.length === 0) return { imported: 0, duplicates: 0, accounts: accounts.length, categorized: 0 }
 
   const importRecord = db.createImport('Powens', rows.length)
   const withImport = rows.map((r) => ({ ...r, import_id: importRecord.id }))
   const { imported, duplicates, insertedIds } = db.insertTransactions(withImport, importRecord.id)
-  if (insertedIds.length > 0) db.applyRulesToTransactions(insertedIds)
-  return { imported, duplicates, accounts: accounts.length }
+
+  // On ré-applique les règles aux transactions nouvellement insérées ET à toutes
+  // celles encore non catégorisées de ces comptes : Powens dédoublonne à chaque
+  // synchro, donc des transactions importées avant la création d'une règle ne
+  // seraient sinon jamais catégorisées automatiquement.
+  const accountIds = [...accountIdByPowens.values()]
+  const targetIds = new Set<number>(insertedIds)
+  for (const id of db.getUncategorizedTransactionIds(accountIds)) targetIds.add(id)
+  const categorized = targetIds.size > 0 ? db.applyRulesToTransactions([...targetIds]) : 0
+  return { imported, duplicates, accounts: accounts.length, categorized }
 }
 
 // --- Helpers DCA (investissement programmé) ---

@@ -84,12 +84,7 @@ export interface Settings {
   currency: string
   locale: string
   mobileServerEnabled?: boolean
-  /** Powens (agrégation bancaire) — identifiants fournis par l'utilisateur. */
-  powensDomain?: string
-  powensClientId?: string
-  powensClientSecret?: string
-  powensRedirectUri?: string
-  /** Token d'accès permanent obtenu après la première connexion. */
+  /** Token d'accès Powens permanent obtenu après la première connexion (interne). */
   powensToken?: string
 }
 
@@ -104,6 +99,8 @@ export interface PowensSyncResult {
   imported: number
   duplicates: number
   accounts: number
+  /** Transactions automatiquement catégorisées par les règles lors de l'import. */
+  categorized: number
 }
 
 // --- Patrimoine ---

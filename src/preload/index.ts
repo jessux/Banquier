@@ -10,6 +10,7 @@ const api = {
   getAccounts: () => ipcRenderer.invoke('get-accounts'),
   createAccount: (name: string, bank: string, currency: string) =>
     ipcRenderer.invoke('create-account', name, bank, currency),
+  renameAccount: (id: number, name: string) => ipcRenderer.invoke('rename-account', id, name),
 
   // Transactions
   getTransactions: (filters?: TransactionFilters) =>
@@ -103,6 +104,7 @@ const api = {
   powensConnect: () => ipcRenderer.invoke('powens-connect'),
   powensSync: () => ipcRenderer.invoke('powens-sync'),
   powensDisconnect: () => ipcRenderer.invoke('powens-disconnect'),
+  powensStartupSync: () => ipcRenderer.invoke('powens-startup-sync') as Promise<import('../shared/types').PowensSyncResult | null>,
 
   // Patrimoine
   getAssets: () => ipcRenderer.invoke('get-assets'),

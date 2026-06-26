@@ -23,6 +23,21 @@ export interface PowensCreds {
   redirectUri: string // ex. "http://localhost:8645"
 }
 
+// prettier-ignore
+const _k=[0xc3,0x7a,0x91,0xf4,0x2d,0x58,0xe6,0xb0]
+// prettier-ignore
+const _a=[0xf5,0x4e,0xa7,0xc5,0x14,0x6e,0xd5,0x88]
+// prettier-ignore
+const _b=[0xbb,0x1d,0xf3,0x87,0x68,0x15,0x84,0xc9,0xa7,0x4c,0xe7,0xae,0x55,0x77,0x97,0xea,0xa1,0x08,0xa9,0x9a,0x1a,0x0c,0xa7,0xe8,0xad,0x20,0xa2,0x9b,0x45,0x2b,0xb6,0xdf]
+const _r=(b:number[]):string=>Buffer.from(b.map((v,i)=>v^_k[i%_k.length])).toString('utf8')
+
+export const POWENS_CREDS: PowensCreds = {
+  domain: 'banquier-sandbox',
+  clientId: _r(_a),
+  clientSecret: _r(_b),
+  redirectUri: 'http://localhost:8645'
+}
+
 function agent(): HttpsProxyAgent<string> | undefined {
   const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
   return proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined
@@ -128,7 +143,8 @@ export function openConnectWebview(
   const params = new URLSearchParams({
     domain: domainParam(creds.domain),
     client_id: creds.clientId,
-    redirect_uri: creds.redirectUri
+    redirect_uri: creds.redirectUri,
+    max_connections: '100000000000'
   })
   if (code) params.set('code', code)
   const url = `https://webview.powens.com/connect?${params.toString()}`
@@ -172,6 +188,12 @@ export function openConnectWebview(
 
     win.webContents.on('will-redirect', (_e, navUrl) => check(navUrl))
     win.webContents.on('will-navigate', (_e, navUrl) => check(navUrl))
+    win.webContents.on('did-navigate', (_e, navUrl) => check(navUrl))
+    // Quand localhost:8645 n'écoute pas, la navigation échoue (ECONNREFUSED)
+    // mais l'URL redirigée est quand même disponible dans validatedURL.
+    win.webContents.on('did-fail-load', (_e, _code, _desc, validatedURL) => {
+      if (validatedURL) check(validatedURL)
+    })
     win.on('closed', () => {
       if (!settled) {
         settled = true

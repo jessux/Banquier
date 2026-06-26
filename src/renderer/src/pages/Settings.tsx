@@ -15,6 +15,7 @@ export default function SettingsPage(): JSX.Element {
   const [accounts, setAccounts] = useState<Account[]>([])
   const [newAccount, setNewAccount] = useState({ name: '', bank: '', currency: 'EUR' })
   const [accountSaved, setAccountSaved] = useState(false)
+  const [editingAccount, setEditingAccount] = useState<{ id: number; name: string } | null>(null)
   const [showKey, setShowKey] = useState(false)
   const [exportStatus, setExportStatus] = useState<'idle' | 'ok' | 'err'>('idle')
   const [mobileServer, setMobileServer] = useState<MobileServerInfo | null>(null)
@@ -24,7 +25,6 @@ export default function SettingsPage(): JSX.Element {
 
   // Powens
   const [powens, setPowens] = useState<PowensStatus>({ configured: false, connected: false })
-  const [showSecret, setShowSecret] = useState(false)
   const [powensBusy, setPowensBusy] = useState(false)
   const [powensMsg, setPowensMsg] = useState<string | null>(null)
 
@@ -36,12 +36,14 @@ export default function SettingsPage(): JSX.Element {
 
   const connectPowens = async (): Promise<void> => {
     setPowensBusy(true)
-    setPowensMsg('Connexion… autorisez l\'accès dans la fenêtre de votre banque.')
+    setPowensMsg("Connexion… autorisez l'accès dans la fenêtre de votre banque.")
     try {
-      await window.api.saveSettings(settings) // s'assure que les identifiants sont enregistrés
       const res = await window.api.powensConnect()
-      setPowensMsg(`Connecté : ${res.imported} transactions importées, ${res.duplicates} doublons (${res.accounts} compte(s)).`)
+      setPowensMsg(
+        `Connecté : ${res.imported} transactions importées, ${res.duplicates} doublons (${res.accounts} compte(s)).`
+      )
       window.api.powensStatus().then(setPowens)
+      window.api.getAccounts().then(setAccounts)
     } catch (e) {
       setPowensMsg(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
     } finally {
@@ -115,6 +117,13 @@ export default function SettingsPage(): JSX.Element {
     window.api.getAccounts().then(setAccounts)
   }
 
+  const saveAccountName = async (): Promise<void> => {
+    if (!editingAccount || !editingAccount.name.trim()) return
+    await window.api.renameAccount(editingAccount.id, editingAccount.name.trim())
+    setEditingAccount(null)
+    window.api.getAccounts().then(setAccounts)
+  }
+
   return (
     <div style={{ maxWidth: 600 }}>
       <div className="page-header">
@@ -124,7 +133,6 @@ export default function SettingsPage(): JSX.Element {
       {/* LLM */}
       <div className="card" style={{ marginBottom: 20 }}>
         <h3 style={{ marginBottom: 16 }}>OpenRouter (LLM)</h3>
-
         <div className="form-group">
           <label>Clé API OpenRouter</label>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -138,11 +146,8 @@ export default function SettingsPage(): JSX.Element {
               {showKey ? '🙈' : '👁️'}
             </button>
           </div>
-          <p className="text-muted text-sm" style={{ marginTop: 4 }}>
-            Obtenez une clé sur openrouter.ai
-          </p>
+          <p className="text-muted text-sm" style={{ marginTop: 4 }}>Obtenez une clé sur openrouter.ai</p>
         </div>
-
         <div className="form-group">
           <label>Modèle</label>
           <input
@@ -179,9 +184,7 @@ export default function SettingsPage(): JSX.Element {
       </div>
 
       <div style={{ marginBottom: 24 }}>
-        <button className="btn btn-primary" onClick={save}>
-          {saved ? '✓ Sauvegardé' : 'Sauvegarder'}
-        </button>
+        <button className="btn btn-primary" onClick={save}>{saved ? '✓ Sauvegardé' : 'Sauvegarder'}</button>
       </div>
 
       {/* Accès mobile */}
@@ -202,90 +205,42 @@ export default function SettingsPage(): JSX.Element {
             {mobileLoading ? 'Démarrage...' : mobileServer ? 'Désactiver' : 'Activer'}
           </button>
         </div>
-
         {mobileServer && (
           <div style={{ marginTop: 16 }}>
-            {/* Statut UPnP */}
             <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              padding: '4px 10px',
-              borderRadius: 20,
-              fontSize: 12,
-              fontWeight: 600,
-              marginBottom: 14,
+              display: 'inline-flex', alignItems: 'center', gap: 6, padding: '4px 10px',
+              borderRadius: 20, fontSize: 12, fontWeight: 600, marginBottom: 14,
               background: mobileServer.upnpEnabled ? 'rgba(16,185,129,0.12)' : 'rgba(100,116,139,0.12)',
               color: mobileServer.upnpEnabled ? '#059669' : 'var(--text-muted)',
               border: `1px solid ${mobileServer.upnpEnabled ? 'rgba(16,185,129,0.3)' : 'var(--border)'}`
             }}>
-              <span style={{ fontSize: 8 }}>{mobileServer.upnpEnabled ? '●' : '●'}</span>
+              <span style={{ fontSize: 8 }}>●</span>
               {mobileServer.upnpEnabled ? 'UPnP actif — accessible en 4G' : 'Wi-Fi uniquement — UPnP non disponible'}
             </div>
-
             <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start' }}>
-              {/* QR code (pointe vers l'URL externe si UPnP, locale sinon) */}
-              <div
-                style={{
-                  flexShrink: 0,
-                  background: '#fff',
-                  borderRadius: 8,
-                  padding: 8,
-                  border: '1px solid var(--border)',
-                  width: 120,
-                  height: 120,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-                dangerouslySetInnerHTML={{ __html: mobileServer.qrSvg }}
-              />
-              {/* URLs + instructions */}
+              <div style={{
+                flexShrink: 0, background: '#fff', borderRadius: 8, padding: 8,
+                border: '1px solid var(--border)', width: 120, height: 120,
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }} dangerouslySetInnerHTML={{ __html: mobileServer.qrSvg }} />
               <div style={{ flex: 1, minWidth: 0 }}>
                 <p className="text-sm" style={{ marginBottom: 8, fontWeight: 500 }}>
                   {mobileServer.upnpEnabled
-                    ? 'Scannez le QR code ou ouvrez l\'URL externe (4G) :'
+                    ? "Scannez le QR code ou ouvrez l'URL externe (4G) :"
                     : 'Scannez le QR code ou ouvrez cette URL sur le même réseau :'}
                 </p>
-
                 {mobileServer.upnpEnabled && mobileServer.externalUrl && (
                   <>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>URL externe (4G)</div>
-                    <div
-                      style={{
-                        background: 'var(--bg)',
-                        border: '1px solid rgba(16,185,129,0.4)',
-                        borderRadius: 6,
-                        padding: '6px 10px',
-                        fontFamily: 'monospace',
-                        fontSize: 11,
-                        wordBreak: 'break-all',
-                        marginBottom: 8,
-                        color: 'var(--text-muted)'
-                      }}
-                    >
+                    <div style={{ background: 'var(--bg)', border: '1px solid rgba(16,185,129,0.4)', borderRadius: 6, padding: '6px 10px', fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all', marginBottom: 8, color: 'var(--text-muted)' }}>
                       {mobileServer.externalUrl}
                     </div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>URL locale (Wi-Fi)</div>
                   </>
                 )}
-
-                <div
-                  style={{
-                    background: 'var(--bg)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 6,
-                    padding: '6px 10px',
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    wordBreak: 'break-all',
-                    marginBottom: 8,
-                    color: 'var(--text-muted)'
-                  }}
-                >
+                <div style={{ background: 'var(--bg)', border: '1px solid var(--border)', borderRadius: 6, padding: '6px 10px', fontFamily: 'monospace', fontSize: 11, wordBreak: 'break-all', marginBottom: 8, color: 'var(--text-muted)' }}>
                   {mobileServer.url}
                 </div>
-
                 <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={copyUrl}>
                   {urlCopied ? '✓ Copié' : 'Copier le lien'}
                 </button>
@@ -298,86 +253,96 @@ export default function SettingsPage(): JSX.Element {
         )}
       </div>
 
-      {/* Powens — agrégation bancaire */}
+      {/* Comptes bancaires + Powens */}
       <div className="card" style={{ marginBottom: 20 }}>
-        <h3 style={{ marginBottom: 4 }}>Powens (agrégation bancaire)</h3>
-        <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
-          Connectez vos comptes via Powens avec vos propres identifiants (console Powens, ex. une
-          sandbox gratuite). Les transactions sont importées dans votre base locale.
-        </p>
+        <h3 style={{ marginBottom: 16 }}>Comptes bancaires</h3>
 
-        <div className="grid-2" style={{ gap: 12 }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Domaine</label>
-            <input
-              value={settings.powensDomain ?? ''}
-              onChange={(e) => setSettings({ ...settings, powensDomain: e.target.value })}
-              placeholder="banquier-sandbox"
-            />
+        {accounts.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            {accounts.map((a) => (
+              <div key={a.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                {editingAccount?.id === a.id ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <input
+                      autoFocus
+                      value={editingAccount.name}
+                      onChange={(e) => setEditingAccount({ id: a.id, name: e.target.value })}
+                      onKeyDown={(e) => { if (e.key === 'Enter') saveAccountName(); if (e.key === 'Escape') setEditingAccount(null) }}
+                      style={{ flex: 1, maxWidth: 240 }}
+                    />
+                    <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={saveAccountName} disabled={!editingAccount.name.trim()}>OK</button>
+                    <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => setEditingAccount(null)}>✕</button>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <span style={{ fontWeight: 500 }}>{a.name}</span>
+                      {a.bank && <span className="text-muted" style={{ marginLeft: 8, fontSize: 12 }}>{a.bank}</span>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span className="badge badge-success">{a.currency}</span>
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: 12 }}
+                        onClick={() => setEditingAccount({ id: a.id, name: a.name })}
+                      >
+                        Renommer
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Client ID</label>
-            <input
-              value={settings.powensClientId ?? ''}
-              onChange={(e) => setSettings({ ...settings, powensClientId: e.target.value })}
-              placeholder="64619638"
-            />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Client Secret</label>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                type={showSecret ? 'text' : 'password'}
-                value={settings.powensClientSecret ?? ''}
-                onChange={(e) => setSettings({ ...settings, powensClientSecret: e.target.value })}
-                placeholder="client secret"
-              />
-              <button className="btn btn-secondary" style={{ flexShrink: 0 }} onClick={() => setShowSecret(!showSecret)}>
-                {showSecret ? '🙈' : '👁️'}
-              </button>
-            </div>
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Redirect URI</label>
-            <input
-              value={settings.powensRedirectUri ?? ''}
-              onChange={(e) => setSettings({ ...settings, powensRedirectUri: e.target.value })}
-              placeholder="http://localhost:8645"
-            />
-          </div>
-        </div>
+        )}
 
-        <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
-          <button className="btn btn-secondary" onClick={save}>
-            {saved ? '✓ Enregistré' : 'Enregistrer les identifiants'}
-          </button>
-          <button
-            className="btn btn-primary"
-            onClick={connectPowens}
-            disabled={powensBusy || !settings.powensDomain || !settings.powensClientId || !settings.powensClientSecret}
-          >
-            {powensBusy ? 'Patientez…' : powens.connected ? '+ Ajouter une banque' : 'Connecter ma banque'}
-          </button>
-          {powens.connected && (
-            <>
-              <button className="btn btn-secondary" onClick={syncPowens} disabled={powensBusy}>
-                ↻ Synchroniser
-              </button>
-              <button className="btn btn-secondary" onClick={disconnectPowens} disabled={powensBusy}>
-                Déconnecter
-              </button>
-            </>
+        {/* Powens */}
+        <div style={{ borderTop: accounts.length > 0 ? '1px solid var(--border)' : 'none', paddingTop: accounts.length > 0 ? 16 : 0, marginBottom: 20 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <p className="text-sm" style={{ fontWeight: 500 }}>Agrégation Powens</p>
+            {powens.connected && <span style={{ fontSize: 12, color: '#22c55e' }}>✓ Connecté</span>}
+          </div>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={connectPowens} disabled={powensBusy}>
+              {powensBusy ? 'Patientez…' : powens.connected ? '+ Ajouter une banque' : 'Connecter ma banque'}
+            </button>
+            {powens.connected && (
+              <>
+                <button className="btn btn-secondary" onClick={syncPowens} disabled={powensBusy}>↻ Synchroniser</button>
+                <button className="btn btn-secondary" onClick={disconnectPowens} disabled={powensBusy}>Déconnecter</button>
+              </>
+            )}
+          </div>
+          {powensMsg && (
+            <p className="text-sm" style={{ marginTop: 10, color: powensMsg.startsWith('Erreur') ? '#ef4444' : 'var(--text2)' }}>
+              {powensMsg}
+            </p>
           )}
         </div>
 
-        {powens.connected && (
-          <p className="text-sm" style={{ marginTop: 10, color: '#22c55e' }}>✓ Connecté à Powens.</p>
-        )}
-        {powensMsg && (
-          <p className="text-sm" style={{ marginTop: 10, color: powensMsg.startsWith('Erreur') ? '#ef4444' : 'var(--text-muted)' }}>
-            {powensMsg}
-          </p>
-        )}
+        {/* Ajouter manuellement */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16 }}>
+          <p className="text-sm" style={{ fontWeight: 500, marginBottom: 12 }}>Ajouter manuellement</p>
+          <div className="grid-3" style={{ marginBottom: 12 }}>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Nom</label>
+              <input value={newAccount.name} onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })} placeholder="Compte courant" />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Banque</label>
+              <input value={newAccount.bank} onChange={(e) => setNewAccount({ ...newAccount, bank: e.target.value })} placeholder="BNP Paribas" />
+            </div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label>Devise</label>
+              <select value={newAccount.currency} onChange={(e) => setNewAccount({ ...newAccount, currency: e.target.value })}>
+                {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+          </div>
+          <button className="btn btn-secondary" onClick={addAccount} disabled={!newAccount.name}>
+            {accountSaved ? '✓ Ajouté' : '+ Ajouter le compte'}
+          </button>
+        </div>
       </div>
 
       {/* Export */}
@@ -387,56 +352,12 @@ export default function SettingsPage(): JSX.Element {
           Sauvegardez vos données ou exportez vos transactions dans un tableur.
         </p>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn btn-secondary" onClick={() => doExport('db')}>
-            Backup SQLite (.db)
-          </button>
-          <button className="btn btn-secondary" onClick={() => doExport('csv')}>
-            Transactions CSV
-          </button>
+          <button className="btn btn-secondary" onClick={() => doExport('db')}>Backup SQLite (.db)</button>
+          <button className="btn btn-secondary" onClick={() => doExport('csv')}>Transactions CSV</button>
         </div>
         {exportStatus === 'ok' && (
           <p style={{ marginTop: 10, fontSize: 13, color: '#22c55e' }}>Fichier exporté avec succès.</p>
         )}
-      </div>
-
-      {/* Comptes */}
-      <div className="card">
-        <h3 style={{ marginBottom: 16 }}>Comptes bancaires</h3>
-
-        {accounts.length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            {accounts.map((a) => (
-              <div key={a.id} className="flex justify-between items-center" style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                <div>
-                  <span style={{ fontWeight: 500 }}>{a.name}</span>
-                  {a.bank && <span className="text-muted" style={{ marginLeft: 8 }}>{a.bank}</span>}
-                </div>
-                <span className="badge badge-success">{a.currency}</span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <h4 style={{ marginBottom: 12, fontSize: 13 }}>Ajouter un compte</h4>
-        <div className="grid-3" style={{ marginBottom: 12 }}>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Nom</label>
-            <input value={newAccount.name} onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })} placeholder="Compte courant" />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Banque</label>
-            <input value={newAccount.bank} onChange={(e) => setNewAccount({ ...newAccount, bank: e.target.value })} placeholder="BNP Paribas" />
-          </div>
-          <div className="form-group" style={{ marginBottom: 0 }}>
-            <label>Devise</label>
-            <select value={newAccount.currency} onChange={(e) => setNewAccount({ ...newAccount, currency: e.target.value })}>
-              {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
-            </select>
-          </div>
-        </div>
-        <button className="btn btn-secondary" onClick={addAccount} disabled={!newAccount.name}>
-          {accountSaved ? '✓ Ajouté' : '+ Ajouter le compte'}
-        </button>
       </div>
     </div>
   )

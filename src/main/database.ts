@@ -206,6 +206,10 @@ export function createAccount(name: string, bank: string, currency: string): Acc
   return db.get('SELECT * FROM accounts WHERE id = ?', [result.lastInsertRowid]) as Account
 }
 
+export function renameAccount(id: number, name: string): void {
+  db.run('UPDATE accounts SET name = ? WHERE id = ?', [name, id])
+}
+
 // --- Transactions ---
 
 export function getTransactions(filters: TransactionFilters = {}): Transaction[] {
@@ -1165,6 +1169,17 @@ export function renameChatThread(id: number, title: string): void {
 export function deleteChatThread(id: number): void {
   db.run('DELETE FROM chat_messages WHERE thread_id = ?', [id])
   db.run('DELETE FROM chat_threads WHERE id = ?', [id])
+}
+
+/** IDs des transactions encore non catégorisées pour les comptes donnés. */
+export function getUncategorizedTransactionIds(accountIds: number[]): number[] {
+  if (accountIds.length === 0) return []
+  const placeholders = accountIds.map(() => '?').join(',')
+  const rows = db.all(
+    `SELECT id FROM transactions WHERE category IS NULL AND account_id IN (${placeholders})`,
+    accountIds
+  ) as { id: number }[]
+  return rows.map((r) => r.id)
 }
 
 export function applyRulesToTransactions(transactionIds: number[]): number {

@@ -31,6 +31,7 @@ declare global {
     api: {
       getAccounts: () => Promise<Account[]>
       createAccount: (name: string, bank: string, currency: string) => Promise<Account>
+      renameAccount: (id: number, name: string) => Promise<void>
       getTransactions: (filters?: TransactionFilters) => Promise<Transaction[]>
       updateTransactionCategory: (id: number, category: string, applyToSimilar?: boolean) => Promise<void>
       deleteTransactions: (importId: number) => Promise<void>
@@ -75,6 +76,7 @@ declare global {
       powensConnect: () => Promise<PowensSyncResult>
       powensSync: () => Promise<PowensSyncResult>
       powensDisconnect: () => Promise<void>
+      powensStartupSync: () => Promise<PowensSyncResult | null>
       getAssets: () => Promise<Asset[]>
       getPatrimoineSummary: () => Promise<PatrimoineSummary>
       getAssetLots: (assetId: number) => Promise<AssetLot[]>
@@ -84,6 +86,10 @@ declare global {
       deleteAsset: (id: number) => Promise<void>
       previewSymbol: (type: string, symbol: string) => Promise<{ price: number | null; error?: string }>
       refreshQuotes: () => Promise<QuoteRefreshResult>
+      startMobileServer: () => Promise<unknown>
+      stopMobileServer: () => Promise<void>
+      getMobileServerStatus: () => Promise<{ running: boolean }>
+      powensStartupSync: () => Promise<PowensSyncResult | null>
     }
   }
 }

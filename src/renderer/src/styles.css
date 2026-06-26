@@ -48,6 +48,72 @@ body {
   background: var(--bg);
 }
 
+/* Toast synchronisation Powens */
+.sync-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  background: var(--bg3);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  max-width: 340px;
+  animation: toast-in 0.25s ease;
+}
+
+@keyframes toast-in {
+  from { transform: translateY(12px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.sync-toast-icon {
+  font-size: 20px;
+  line-height: 1;
+  padding-top: 2px;
+}
+
+.sync-toast-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sync-toast-body strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.sync-toast-body span {
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.sync-toast-body em {
+  font-style: normal;
+  color: var(--yellow);
+}
+
+.sync-toast-close {
+  background: none;
+  border: none;
+  color: var(--text2);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0;
+  line-height: 1;
+  align-self: flex-start;
+}
+
+.sync-toast-close:hover {
+  color: var(--text);
+}
+
 /* Sidebar */
 .sidebar {
   width: var(--sidebar-width);
