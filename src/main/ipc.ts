@@ -22,7 +22,13 @@ import {
   type TwoFaRequest
 } from './woob'
 import { randomUUID } from 'crypto'
-import type { Settings, CsvMapping, TransactionFilters, BankSyncResult } from '../shared/types'
+import type {
+  Settings,
+  CsvMapping,
+  TransactionFilters,
+  BankSyncResult,
+  AssetInput
+} from '../shared/types'
 
 interface StoreSchema {
   settings: Settings
@@ -333,6 +339,13 @@ export function registerIpcHandlers(): void {
       pending2fa.delete(requestId)
     }
   })
+
+  // --- Patrimoine ---
+  ipcMain.handle('get-assets', () => db.getAssets())
+  ipcMain.handle('get-patrimoine-summary', () => db.getPatrimoineSummary())
+  ipcMain.handle('create-asset', (_, input: AssetInput) => db.createAsset(input))
+  ipcMain.handle('update-asset', (_, id: number, input: AssetInput) => db.updateAsset(id, input))
+  ipcMain.handle('delete-asset', (_, id: number) => db.deleteAsset(id))
 
   // --- File Dialog ---
   ipcMain.handle(

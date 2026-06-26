@@ -22,7 +22,11 @@ import type {
   RecurringFrequency,
   RecurringExpense,
   RecurringSummary,
-  BankConnection
+  BankConnection,
+  Asset,
+  AssetInput,
+  AssetTypeBreakdown,
+  PatrimoineSummary
 } from '../shared/types'
 
 let db: Database
@@ -115,6 +119,24 @@ function createTables(): void {
       requisition_id   TEXT,
       created_at       TEXT NOT NULL,
       last_sync        TEXT
+    );
+
+    CREATE TABLE IF NOT EXISTS assets (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      type       TEXT NOT NULL,
+      label      TEXT NOT NULL,
+      quantity   REAL,
+      value      REAL NOT NULL,
+      currency   TEXT NOT NULL DEFAULT 'EUR',
+      symbol     TEXT,
+      notes      TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS networth_snapshots (
+      date  TEXT PRIMARY KEY,
+      value REAL NOT NULL
     );
   `)
 }
@@ -335,6 +357,81 @@ export function touchBankConnectionSync(gcAccountId: string): void {
     new Date().toISOString(),
     gcAccountId
   ])
+}
+
+// --- Patrimoine (actifs) ---
+
+export function getAssets(): Asset[] {
+  return db.all('SELECT * FROM assets ORDER BY type, value DESC') as Asset[]
+}
+
+/** Enregistre un instantané de la valeur nette totale pour aujourd'hui (un point/jour). */
+function snapshotNetWorth(): void {
+  const row = db.get('SELECT COALESCE(SUM(value), 0) AS total FROM assets') as { total: number }
+  const today = new Date().toISOString().slice(0, 10)
+  db.run(
+    `INSERT INTO networth_snapshots (date, value) VALUES (?, ?)
+     ON CONFLICT(date) DO UPDATE SET value = excluded.value`,
+    [today, row.total]
+  )
+}
+
+export function createAsset(input: AssetInput): Asset {
+  const now = new Date().toISOString()
+  const result = db.run(
+    `INSERT INTO assets (type, label, quantity, value, currency, symbol, notes, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      input.type,
+      input.label,
+      input.quantity ?? null,
+      input.value,
+      input.currency || 'EUR',
+      input.symbol ?? null,
+      input.notes ?? null,
+      now,
+      now
+    ]
+  )
+  snapshotNetWorth()
+  return db.get('SELECT * FROM assets WHERE id = ?', [result.lastInsertRowid]) as Asset
+}
+
+export function updateAsset(id: number, input: AssetInput): void {
+  db.run(
+    `UPDATE assets SET type = ?, label = ?, quantity = ?, value = ?, currency = ?, symbol = ?, notes = ?, updated_at = ?
+     WHERE id = ?`,
+    [
+      input.type,
+      input.label,
+      input.quantity ?? null,
+      input.value,
+      input.currency || 'EUR',
+      input.symbol ?? null,
+      input.notes ?? null,
+      new Date().toISOString(),
+      id
+    ]
+  )
+  snapshotNetWorth()
+}
+
+export function deleteAsset(id: number): void {
+  db.run('DELETE FROM assets WHERE id = ?', [id])
+  snapshotNetWorth()
+}
+
+export function getPatrimoineSummary(): PatrimoineSummary {
+  const assets = getAssets()
+  const totalValue = assets.reduce((sum, a) => sum + a.value, 0)
+  const byType = db.all(
+    `SELECT type, SUM(value) AS total, COUNT(*) AS count
+     FROM assets GROUP BY type ORDER BY total DESC`
+  ) as AssetTypeBreakdown[]
+  const history = db.all(
+    'SELECT date, value FROM networth_snapshots ORDER BY date ASC'
+  ) as { date: string; value: number }[]
+  return { totalValue, byType, assets, history }
 }
 
 // --- Stats ---

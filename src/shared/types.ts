@@ -131,6 +131,61 @@ export interface Woob2faRequest {
   fields?: { id: string; label: string; masked: boolean }[]
 }
 
+// --- Patrimoine ---
+
+export type AssetType =
+  | 'immobilier'
+  | 'actions'
+  | 'etf'
+  | 'crypto'
+  | 'liquidites'
+  | 'assurance_vie'
+  | 'autre'
+
+/** Actif détenu (bien, ligne boursière, crypto, livret…). */
+export interface Asset {
+  id: number
+  type: AssetType
+  label: string
+  /** Quantité optionnelle (nombre d'actions/parts/unités). */
+  quantity: number | null
+  /** Valeur actuelle totale, en devise. */
+  value: number
+  currency: string
+  /** Ticker/symbole, pour une future cotation automatique. */
+  symbol: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Données saisies à la création/modification d'un actif. */
+export interface AssetInput {
+  type: AssetType
+  label: string
+  quantity: number | null
+  value: number
+  currency: string
+  symbol: string | null
+  notes: string | null
+}
+
+/** Répartition du patrimoine par classe d'actif. */
+export interface AssetTypeBreakdown {
+  type: AssetType
+  total: number
+  count: number
+}
+
+/** Synthèse du patrimoine net. */
+export interface PatrimoineSummary {
+  totalValue: number
+  byType: AssetTypeBreakdown[]
+  assets: Asset[]
+  /** Historique de la valeur nette (un point par jour observé). */
+  history: { date: string; value: number }[]
+}
+
 export interface MobileServerInfo {
   url: string
   qrSvg: string

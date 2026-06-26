@@ -121,6 +121,13 @@ const api = {
   woobAnswer2fa: (requestId: string, answer: Record<string, unknown>) =>
     ipcRenderer.invoke('woob-2fa-answer', requestId, answer),
 
+  // Patrimoine
+  getAssets: () => ipcRenderer.invoke('get-assets'),
+  getPatrimoineSummary: () => ipcRenderer.invoke('get-patrimoine-summary'),
+  createAsset: (input: unknown) => ipcRenderer.invoke('create-asset', input),
+  updateAsset: (id: number, input: unknown) => ipcRenderer.invoke('update-asset', id, input),
+  deleteAsset: (id: number) => ipcRenderer.invoke('delete-asset', id),
+
   // Export
   exportDb: () => ipcRenderer.invoke('export-db') as Promise<{ success: boolean }>,
   exportCsv: () => ipcRenderer.invoke('export-csv') as Promise<{ success: boolean }>,

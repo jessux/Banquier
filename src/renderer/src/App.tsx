@@ -8,8 +8,9 @@ import Settings from './pages/Settings'
 import Categories from './pages/Categories'
 import Rules from './pages/Rules'
 import Recurring from './pages/Recurring'
+import Patrimoine from './pages/Patrimoine'
 
-export type Page = 'dashboard' | 'transactions' | 'recurring' | 'import' | 'chat' | 'categories' | 'rules' | 'settings'
+export type Page = 'dashboard' | 'transactions' | 'recurring' | 'patrimoine' | 'import' | 'chat' | 'categories' | 'rules' | 'settings'
 
 export default function App(): JSX.Element {
   const [page, setPage] = useState<Page>('dashboard')
@@ -19,6 +20,7 @@ export default function App(): JSX.Element {
       case 'dashboard': return <Dashboard />
       case 'transactions': return <Transactions onImport={() => setPage('import')} />
       case 'recurring': return <Recurring />
+      case 'patrimoine': return <Patrimoine />
       case 'import': return <Import />
       case 'chat': return <Chat />
       case 'categories': return <Categories />

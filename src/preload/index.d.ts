@@ -19,7 +19,10 @@ import type {
   Institution,
   BankSyncResult,
   WoobField,
-  Woob2faRequest
+  Woob2faRequest,
+  Asset,
+  AssetInput,
+  PatrimoineSummary
 } from '../shared/types'
 
 declare global {
@@ -77,6 +80,11 @@ declare global {
         on2fa: (req: Woob2faRequest) => void
       ) => Promise<BankSyncResult>
       woobAnswer2fa: (requestId: string, answer: Record<string, unknown>) => Promise<void>
+      getAssets: () => Promise<Asset[]>
+      getPatrimoineSummary: () => Promise<PatrimoineSummary>
+      createAsset: (input: AssetInput) => Promise<Asset>
+      updateAsset: (id: number, input: AssetInput) => Promise<void>
+      deleteAsset: (id: number) => Promise<void>
     }
   }
 }
