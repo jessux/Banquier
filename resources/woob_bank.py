@@ -39,7 +39,12 @@ SENTINEL = "@@WOOB@@ "
 # stdout strictement réservé au protocole ; tout le bruit part sur stderr.
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", newline="\n")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", newline="\n")
-logging.basicConfig(stream=sys.stderr, level=logging.WARNING)
+
+# Mode debug : trace HTTP complète sur stderr (capturée par le pont Node).
+# Activé par la variable d'environnement BANQUIER_WOOB_DEBUG, utile pour
+# diagnostiquer un module récalcitrant (ex : Crédit Agricole / keypad).
+_DEBUG = bool(os.environ.get("BANQUIER_WOOB_DEBUG"))
+logging.basicConfig(stream=sys.stderr, level=logging.DEBUG if _DEBUG else logging.WARNING)
 
 
 def emit(obj):

@@ -172,15 +172,31 @@ export function connectBank(
   on2fa: TwoFaHandler
 ): Promise<{ accounts: WoobAccount[]; transactions: WoobTransaction[] }> {
   return new Promise((resolve, reject) => {
-    const child = spawn(venvPython(), [scriptPath(), 'fetch', module])
+    // BANQUIER_WOOB_DEBUG : trace HTTP complète sur stderr, écrite dans un log
+    // local en cas d'échec pour diagnostiquer les modules récalcitrants.
+    const child = spawn(venvPython(), [scriptPath(), 'fetch', module], {
+      env: { ...process.env, BANQUIER_WOOB_DEBUG: '1' }
+    })
     let buffer = ''
+    let stderrBuf = ''
     let settled = false
+
+    const writeDebugLog = (): string => {
+      const logPath = path.join(app.getPath('userData'), 'woob-debug.log')
+      try {
+        fs.writeFileSync(logPath, stderrBuf.slice(-200000), 'utf8')
+      } catch {
+        /* ignore */
+      }
+      return logPath
+    }
 
     const fail = (e: Error): void => {
       if (settled) return
       settled = true
       child.kill()
-      reject(e)
+      const logPath = writeDebugLog()
+      reject(new Error(`${e.message}\n\nDétails techniques écrits dans :\n${logPath}`))
     }
 
     const handleMessage = async (msg: Record<string, unknown>): Promise<void> => {
@@ -224,6 +240,10 @@ export function connectBank(
           /* ligne protocole malformée, ignorée */
         }
       }
+    })
+    child.stderr.on('data', (d) => {
+      stderrBuf += d.toString()
+      if (stderrBuf.length > 400000) stderrBuf = stderrBuf.slice(-200000)
     })
     child.on('error', (e) => fail(e))
     child.on('close', (code) => {
