@@ -2,6 +2,13 @@
 
 > **Vos relevés bancaires enfin sous contrôle — localement, intelligemment, sans abonnement.**
 
+### ⬇️ Télécharger Banquier
+
+- **[➡️ Dernière version (installeur Windows)](https://github.com/jessux/Banquier/releases/latest)** — le plus simple, téléchargez le `.exe` et lancez-le
+- **[📜 Toutes les versions / historique des releases](https://github.com/jessux/Banquier/releases)** — versions précédentes et notes de version
+
+> Astuce : dans la page d'une release, le fichier d'installation se trouve dans la section **« Assets »** (cliquez pour la déplier), c'est le fichier qui se termine par `.exe`.
+
 Banquier est une application de bureau qui importe vos relevés (CSV, PDF), les catégorise automatiquement par IA, et vous donne une vision claire de vos finances. Tout tourne sur votre machine. Vos données ne quittent jamais votre disque.
 
 ---
