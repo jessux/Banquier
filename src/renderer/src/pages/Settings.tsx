@@ -478,11 +478,25 @@ export default function SettingsPage(): JSX.Element {
             {woobFields.map((f) => (
               <div className="form-group" key={f.id}>
                 <label>{f.label}</label>
-                <input
-                  type={f.masked ? 'password' : 'text'}
-                  value={woobCreds[f.id] ?? ''}
-                  onChange={(e) => setWoobCreds({ ...woobCreds, [f.id]: e.target.value })}
-                />
+                {f.choices ? (
+                  <select
+                    value={woobCreds[f.id] ?? ''}
+                    onChange={(e) => setWoobCreds({ ...woobCreds, [f.id]: e.target.value })}
+                  >
+                    <option value="">— choisir —</option>
+                    {f.choices.map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type={f.masked ? 'password' : 'text'}
+                    value={woobCreds[f.id] ?? ''}
+                    onChange={(e) => setWoobCreds({ ...woobCreds, [f.id]: e.target.value })}
+                  />
+                )}
               </div>
             ))}
 
