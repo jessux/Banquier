@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/jessux/Banquier/compare/v1.5.0...v1.6.0) (2026-06-26)
+
+
+### Nouvelles fonctionnalités
+
+* **database:** améliore le filtrage des transactions par catégorie pour inclure les sous-catégories ([5e74878](https://github.com/jessux/Banquier/commit/5e74878d978b5a7fc41598a86bc598e46a3aacfe))
+
+
+### Corrections de bugs
+
+* supprime le doublon de categorie Remboursement (singulier) ([c693891](https://github.com/jessux/Banquier/commit/c693891a33c2087e06b653b3835a1cc0f4beb1c4))
+
 ## [1.5.0](https://github.com/jessux/Banquier/compare/v1.4.0...v1.5.0) (2026-06-26)
 
 
