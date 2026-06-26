@@ -20,7 +20,7 @@ import {
   isMarketType
 } from './quotes'
 import {
-  exchangeCode,
+  initAuth,
   getTempCode,
   getAccounts as getPowensAccounts,
   getTransactions as getPowensTransactions,
@@ -358,21 +358,20 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('powens-connect', async (): Promise<PowensSyncResult> => {
     const creds = getPowensCreds()
     const parent = BrowserWindow.getFocusedWindow() ?? undefined
-    let token = store.get('settings').powensToken
 
-    // Code temporaire si l'utilisateur Powens existe déjà ; sinon webview anonyme.
-    const tempCode = token ? await getTempCode(creds, token) : null
+    // Token permanent d'abord (création de l'utilisateur Powens au besoin).
+    let token = store.get('settings').powensToken
+    if (!token) {
+      token = await initAuth(creds)
+      const s = store.get('settings')
+      store.set('settings', { ...s, powensToken: token })
+    }
+
+    // Webview rattaché à notre utilisateur via un code temporaire.
+    const tempCode = await getTempCode(creds, token)
     const result = await openConnectWebview(creds, tempCode, parent)
     if (result.error) {
       throw new Error(result.errorDescription || `Connexion refusée (${result.error}).`)
-    }
-
-    // Première connexion : on échange le code reçu contre un token permanent.
-    if (!token) {
-      if (!result.code) throw new Error('Aucun code reçu de Powens.')
-      token = await exchangeCode(creds, result.code)
-      const s = store.get('settings')
-      store.set('settings', { ...s, powensToken: token })
     }
 
     return importPowens(creds, token)
@@ -469,10 +468,14 @@ function getPowensCreds(): PowensCreds {
 
 /** Récupère comptes + transactions Powens et les importe dans la base locale. */
 async function importPowens(creds: PowensCreds, token: string): Promise<PowensSyncResult> {
-  const [accounts, transactions] = await Promise.all([
-    getPowensAccounts(creds, token),
-    getPowensTransactions(creds, token)
-  ])
+  // Powens récupère les données de la banque de façon asynchrone : on attend
+  // qu'au moins un compte apparaisse (jusqu'à ~30 s).
+  let accounts = await getPowensAccounts(creds, token)
+  for (let i = 0; i < 10 && accounts.length === 0; i++) {
+    await new Promise((r) => setTimeout(r, 3000))
+    accounts = await getPowensAccounts(creds, token)
+  }
+  const transactions = accounts.length > 0 ? await getPowensTransactions(creds, token) : []
 
   // Mappe chaque compte Powens vers un compte Banquier (clé : bank = "powens:<id>").
   const existing = db.getAccounts()

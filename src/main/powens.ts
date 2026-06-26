@@ -59,19 +59,14 @@ async function api<T>(
   return (await res.json()) as T
 }
 
-/** Échange le code renvoyé par le webview contre un token d'accès permanent. */
-export async function exchangeCode(creds: PowensCreds, code: string): Promise<string> {
-  const json = await api<{ access_token: string }>(creds.domain, '/auth/token/access', {
+/** Crée (ou ré-obtient) un utilisateur Powens permanent et renvoie son token. */
+export async function initAuth(creds: PowensCreds): Promise<string> {
+  const json = await api<{ auth_token?: string }>(creds.domain, '/auth/init', {
     method: 'POST',
-    body: {
-      grant_type: 'authorization_code',
-      client_id: creds.clientId,
-      client_secret: creds.clientSecret,
-      code
-    }
+    body: { client_id: creds.clientId, client_secret: creds.clientSecret }
   })
-  if (!json.access_token) throw new Error('Token Powens absent de la réponse.')
-  return json.access_token
+  if (!json.auth_token) throw new Error('Token Powens absent de la réponse /auth/init.')
+  return json.auth_token
 }
 
 /** Génère un code temporaire (utilisateur existant) pour rouvrir le webview. */
