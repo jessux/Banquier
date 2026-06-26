@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.1](https://github.com/jessux/Banquier/compare/v1.6.0...v1.6.1) (2026-06-26)
+
+
+### Corrections de bugs
+
+* permet de filtrer les transactions par compte bancaire ([3bedb42](https://github.com/jessux/Banquier/commit/3bedb4275aa09c375bc917f6e19933120eedcba9))
+
 ## [1.6.0](https://github.com/jessux/Banquier/compare/v1.5.0...v1.6.0) (2026-06-26)
 
 
