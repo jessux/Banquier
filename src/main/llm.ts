@@ -486,7 +486,7 @@ export async function runFinancialChat(
 const DEFAULT_CATEGORIES = [
   'Alimentation', 'Restaurants', 'Transport', 'Logement', 'Shopping',
   'Santé', 'Loisirs', 'Abonnements', 'Voyages', 'Épargne',
-  'Salaire', 'Revenus', 'Remboursement', 'Frais bancaires', 'Autre'
+  'Salaire', 'Revenus', 'Frais bancaires', 'Autre'
 ]
 
 export async function categorizeBatch(

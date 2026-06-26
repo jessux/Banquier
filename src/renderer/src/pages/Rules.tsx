@@ -4,7 +4,7 @@ import CategoryPicker from '../components/CategoryPicker'
 
 const COMMON_CATEGORIES = [
   'Alimentation', 'Logement', 'Transport', 'Restaurants', 'Loisirs',
-  'Santé', 'Shopping', 'Abonnements', 'Épargne', 'Salaire', 'Remboursement', 'Autre'
+  'Santé', 'Shopping', 'Abonnements', 'Épargne', 'Salaire', 'Autre'
 ]
 
 interface EditingRule {
