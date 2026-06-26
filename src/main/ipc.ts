@@ -343,6 +343,7 @@ export function registerIpcHandlers(): void {
   // --- Patrimoine ---
   ipcMain.handle('get-assets', () => db.getAssets())
   ipcMain.handle('get-patrimoine-summary', () => db.getPatrimoineSummary())
+  ipcMain.handle('get-asset-lots', (_, assetId: number) => db.getAssetLots(assetId))
   ipcMain.handle('create-asset', (_, input: AssetInput) => db.createAsset(input))
   ipcMain.handle('update-asset', (_, id: number, input: AssetInput) => db.updateAsset(id, input))
   ipcMain.handle('delete-asset', (_, id: number) => db.deleteAsset(id))

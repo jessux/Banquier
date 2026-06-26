@@ -3,7 +3,7 @@ import {
   AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
-import type { Asset, AssetInput, AssetType, PatrimoineSummary } from '../../../shared/types'
+import type { Asset, AssetInput, AssetLotInput, AssetType, PatrimoineSummary } from '../../../shared/types'
 
 const ASSET_TYPES: { type: AssetType; label: string; icon: string }[] = [
   { type: 'immobilier', label: 'Immobilier', icon: '🏠' },
@@ -15,6 +15,9 @@ const ASSET_TYPES: { type: AssetType; label: string; icon: string }[] = [
   { type: 'autre', label: 'Autre', icon: '📦' }
 ]
 
+/** Types pour lesquels on suit un prix de revient via des lots d'achat. */
+const MARKET_TYPES: AssetType[] = ['actions', 'etf', 'crypto']
+
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
 
 const typeMeta = (type: AssetType): { label: string; icon: string } =>
@@ -22,6 +25,11 @@ const typeMeta = (type: AssetType): { label: string; icon: string } =>
 
 const euro = (n: number): string =>
   n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 })
+
+const euro2 = (n: number, currency = 'EUR'): string =>
+  n.toLocaleString('fr-FR', { style: 'currency', currency })
+
+const num = (s: string): number => parseFloat(s.replace(',', '.')) || 0
 
 const emptyForm: AssetInput = {
   type: 'immobilier',
@@ -33,6 +41,8 @@ const emptyForm: AssetInput = {
   notes: null
 }
 
+const emptyLot = (): AssetLotInput => ({ date: null, quantity: 0, unit_price: 0, fees: 0 })
+
 export default function Patrimoine(): JSX.Element {
   const [summary, setSummary] = useState<PatrimoineSummary | null>(null)
   const [showForm, setShowForm] = useState(false)
@@ -40,6 +50,9 @@ export default function Patrimoine(): JSX.Element {
   const [form, setForm] = useState<AssetInput>(emptyForm)
   const [valueStr, setValueStr] = useState('')
   const [qtyStr, setQtyStr] = useState('')
+  const [lots, setLots] = useState<AssetLotInput[]>([])
+
+  const isMarket = MARKET_TYPES.includes(form.type)
 
   const load = (): void => {
     window.api.getPatrimoineSummary().then(setSummary)
@@ -51,10 +64,11 @@ export default function Patrimoine(): JSX.Element {
     setForm(emptyForm)
     setValueStr('')
     setQtyStr('')
+    setLots([])
     setShowForm(true)
   }
 
-  const openEdit = (a: Asset): void => {
+  const openEdit = async (a: Asset): Promise<void> => {
     setEditId(a.id)
     setForm({
       type: a.type,
@@ -67,14 +81,30 @@ export default function Patrimoine(): JSX.Element {
     })
     setValueStr(String(a.value))
     setQtyStr(a.quantity != null ? String(a.quantity) : '')
+    const loaded = await window.api.getAssetLots(a.id)
+    setLots(loaded.map((l) => ({ date: l.date, quantity: l.quantity, unit_price: l.unit_price, fees: l.fees })))
     setShowForm(true)
   }
 
+  // Calculs en direct dans le formulaire (lots).
+  const formCostBasis = useMemo(
+    () => lots.reduce((s, l) => s + l.quantity * l.unit_price + (l.fees || 0), 0),
+    [lots]
+  )
+  const formLotQty = useMemo(() => lots.reduce((s, l) => s + l.quantity, 0), [lots])
+  const formValue = num(valueStr)
+  const formGain = formValue - formCostBasis
+
+  const updateLot = (i: number, patch: Partial<AssetLotInput>): void =>
+    setLots(lots.map((l, idx) => (idx === i ? { ...l, ...patch } : l)))
+
   const save = async (): Promise<void> => {
+    const cleanLots = isMarket ? lots.filter((l) => l.quantity > 0 && l.unit_price > 0) : []
     const payload: AssetInput = {
       ...form,
-      value: parseFloat(valueStr.replace(',', '.')) || 0,
-      quantity: qtyStr.trim() ? parseFloat(qtyStr.replace(',', '.')) : null
+      value: formValue,
+      quantity: isMarket ? null : qtyStr.trim() ? num(qtyStr) : null,
+      lots: cleanLots
     }
     if (!payload.label.trim() || payload.value <= 0) return
     if (editId != null) await window.api.updateAsset(editId, payload)
@@ -89,11 +119,7 @@ export default function Patrimoine(): JSX.Element {
   }
 
   const pieData = useMemo(
-    () =>
-      (summary?.byType ?? []).map((b) => ({
-        name: typeMeta(b.type).label,
-        value: b.total
-      })),
+    () => (summary?.byType ?? []).map((b) => ({ name: typeMeta(b.type).label, value: b.total })),
     [summary]
   )
 
@@ -116,6 +142,11 @@ export default function Patrimoine(): JSX.Element {
   }
 
   const isEmpty = summary.assets.length === 0
+  const gainColor = (g: number): string => (g >= 0 ? '#22c55e' : '#ef4444')
+  const gainLabel = (gain: number, basis: number): string => {
+    const pct = basis > 0 ? ` (${gain >= 0 ? '+' : ''}${Math.round((gain / basis) * 100)} %)` : ''
+    return `${gain >= 0 ? '+' : ''}${euro2(gain)}${pct}`
+  }
 
   return (
     <div>
@@ -137,11 +168,22 @@ export default function Patrimoine(): JSX.Element {
       {!isEmpty && (
         <>
           {/* Synthèse */}
-          <div className="card" style={{ marginBottom: 20 }}>
-            <div className="text-muted text-sm">Valeur nette totale</div>
-            <div style={{ fontSize: 34, fontWeight: 700, marginTop: 4 }}>
-              {summary.totalValue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+          <div className="card" style={{ marginBottom: 20, display: 'flex', gap: 40, flexWrap: 'wrap' }}>
+            <div>
+              <div className="text-muted text-sm">Valeur nette totale</div>
+              <div style={{ fontSize: 34, fontWeight: 700, marginTop: 4 }}>
+                {summary.totalValue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+              </div>
             </div>
+            {summary.totalCostBasis > 0 && (
+              <div>
+                <div className="text-muted text-sm">Plus/moins-value latente (titres)</div>
+                <div style={{ fontSize: 34, fontWeight: 700, marginTop: 4, color: gainColor(summary.totalGain) }}>
+                  {gainLabel(summary.totalGain, summary.totalCostBasis)}
+                </div>
+                <div className="text-muted text-sm">Prix de revient : {euro(summary.totalCostBasis)}</div>
+              </div>
+            )}
           </div>
 
           <div className="grid-2" style={{ marginBottom: 20, gap: 20 }}>
@@ -204,29 +246,37 @@ export default function Patrimoine(): JSX.Element {
               <div className="card-title" style={{ marginBottom: 12 }}>
                 {typeMeta(type).icon} {typeMeta(type).label}
               </div>
-              {assets.map((a) => (
-                <div
-                  key={a.id}
-                  className="flex justify-between items-center"
-                  style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}
-                >
-                  <div>
-                    <span style={{ fontWeight: 500 }}>{a.label}</span>
-                    {a.quantity != null && (
-                      <span className="text-muted text-sm" style={{ marginLeft: 8 }}>× {a.quantity}</span>
-                    )}
-                    {a.symbol && <span className="badge" style={{ marginLeft: 8 }}>{a.symbol}</span>}
-                    {a.notes && <div className="text-muted text-sm" style={{ marginTop: 2 }}>{a.notes}</div>}
+              {assets.map((a) => {
+                const gain = a.value - a.cost_basis
+                const qty = a.lot_quantity > 0 ? a.lot_quantity : a.quantity
+                return (
+                  <div
+                    key={a.id}
+                    className="flex justify-between items-center"
+                    style={{ padding: '10px 0', borderBottom: '1px solid var(--border)' }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 500 }}>{a.label}</span>
+                      {qty != null && (
+                        <span className="text-muted text-sm" style={{ marginLeft: 8 }}>× {qty}</span>
+                      )}
+                      {a.symbol && <span className="badge" style={{ marginLeft: 8 }}>{a.symbol}</span>}
+                      {a.cost_basis > 0 && (
+                        <div className="text-sm" style={{ marginTop: 2 }}>
+                          <span className="text-muted">Prix de revient {euro2(a.cost_basis, a.currency)} · </span>
+                          <span style={{ color: gainColor(gain), fontWeight: 500 }}>{gainLabel(gain, a.cost_basis)}</span>
+                        </div>
+                      )}
+                      {a.notes && <div className="text-muted text-sm" style={{ marginTop: 2 }}>{a.notes}</div>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <span style={{ fontWeight: 600 }}>{euro2(a.value, a.currency)}</span>
+                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(a)}>Modifier</button>
+                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => remove(a.id)}>Supprimer</button>
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <span style={{ fontWeight: 600 }}>
-                      {a.value.toLocaleString('fr-FR', { style: 'currency', currency: a.currency })}
-                    </span>
-                    <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(a)}>Modifier</button>
-                    <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => remove(a.id)}>Supprimer</button>
-                  </div>
-                </div>
-              ))}
+                )
+              })}
             </div>
           ))}
         </>
@@ -247,16 +297,18 @@ export default function Patrimoine(): JSX.Element {
             </div>
             <div className="form-group">
               <label>Libellé</label>
-              <input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder="Appartement Paris 11e" />
+              <input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder={isMarket ? 'Apple, Bitcoin, MSCI World…' : 'Appartement Paris 11e'} />
             </div>
             <div className="form-group">
-              <label>Valeur actuelle (€)</label>
+              <label>Valeur actuelle totale (€)</label>
               <input value={valueStr} onChange={(e) => setValueStr(e.target.value)} placeholder="250000" inputMode="decimal" />
             </div>
-            <div className="form-group">
-              <label>Quantité (optionnel)</label>
-              <input value={qtyStr} onChange={(e) => setQtyStr(e.target.value)} placeholder="10 (nb d'actions/parts)" inputMode="decimal" />
-            </div>
+            {!isMarket && (
+              <div className="form-group">
+                <label>Quantité (optionnel)</label>
+                <input value={qtyStr} onChange={(e) => setQtyStr(e.target.value)} placeholder="nb de parts/unités" inputMode="decimal" />
+              </div>
+            )}
             <div className="form-group">
               <label>Symbole / Ticker (optionnel)</label>
               <input value={form.symbol ?? ''} onChange={(e) => setForm({ ...form, symbol: e.target.value || null })} placeholder="AAPL, BTC, CW8…" />
@@ -266,7 +318,62 @@ export default function Patrimoine(): JSX.Element {
               <input value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value || null })} placeholder="PEA, compte-titres…" />
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+
+          {/* Lots d'achat (actifs boursiers) */}
+          {isMarket && (
+            <div style={{ marginTop: 8 }}>
+              <div className="card-title" style={{ marginBottom: 8 }}>Lots d'achat (prix de revient)</div>
+              <table style={{ width: '100%', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', color: 'var(--text2, #94a3b8)' }}>
+                    <th style={{ fontWeight: 500, padding: '4px 6px' }}>Date</th>
+                    <th style={{ fontWeight: 500, padding: '4px 6px' }}>Quantité</th>
+                    <th style={{ fontWeight: 500, padding: '4px 6px' }}>Prix unitaire</th>
+                    <th style={{ fontWeight: 500, padding: '4px 6px' }}>Frais</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lots.map((l, i) => (
+                    <tr key={i}>
+                      <td style={{ padding: '3px 6px' }}>
+                        <input type="date" value={l.date ?? ''} onChange={(e) => updateLot(i, { date: e.target.value || null })} />
+                      </td>
+                      <td style={{ padding: '3px 6px' }}>
+                        <input value={l.quantity || ''} onChange={(e) => updateLot(i, { quantity: num(e.target.value) })} placeholder="10" inputMode="decimal" style={{ width: 90 }} />
+                      </td>
+                      <td style={{ padding: '3px 6px' }}>
+                        <input value={l.unit_price || ''} onChange={(e) => updateLot(i, { unit_price: num(e.target.value) })} placeholder="150" inputMode="decimal" style={{ width: 100 }} />
+                      </td>
+                      <td style={{ padding: '3px 6px' }}>
+                        <input value={l.fees || ''} onChange={(e) => updateLot(i, { fees: num(e.target.value) })} placeholder="0" inputMode="decimal" style={{ width: 80 }} />
+                      </td>
+                      <td style={{ padding: '3px 6px' }}>
+                        <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 12 }} onClick={() => setLots(lots.filter((_, idx) => idx !== i))}>✕</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button className="btn btn-secondary" style={{ fontSize: 12, marginTop: 8 }} onClick={() => setLots([...lots, emptyLot()])}>
+                + Ajouter un lot
+              </button>
+
+              {formCostBasis > 0 && (
+                <div className="text-sm" style={{ marginTop: 10 }}>
+                  <span className="text-muted">Quantité totale {formLotQty} · Prix de revient {euro2(formCostBasis)}</span>
+                  {formValue > 0 && (
+                    <>
+                      <span className="text-muted"> · +/- value </span>
+                      <span style={{ color: gainColor(formGain), fontWeight: 600 }}>{gainLabel(formGain, formCostBasis)}</span>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
             <button className="btn btn-primary" onClick={save} disabled={!form.label.trim() || !valueStr.trim()}>
               {editId != null ? 'Enregistrer' : 'Ajouter'}
             </button>

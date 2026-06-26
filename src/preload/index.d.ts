@@ -22,6 +22,7 @@ import type {
   Woob2faRequest,
   Asset,
   AssetInput,
+  AssetLot,
   PatrimoineSummary
 } from '../shared/types'
 
@@ -82,6 +83,7 @@ declare global {
       woobAnswer2fa: (requestId: string, answer: Record<string, unknown>) => Promise<void>
       getAssets: () => Promise<Asset[]>
       getPatrimoineSummary: () => Promise<PatrimoineSummary>
+      getAssetLots: (assetId: number) => Promise<AssetLot[]>
       createAsset: (input: AssetInput) => Promise<Asset>
       updateAsset: (id: number, input: AssetInput) => Promise<void>
       deleteAsset: (id: number) => Promise<void>

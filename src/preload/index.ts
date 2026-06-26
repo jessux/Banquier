@@ -124,6 +124,7 @@ const api = {
   // Patrimoine
   getAssets: () => ipcRenderer.invoke('get-assets'),
   getPatrimoineSummary: () => ipcRenderer.invoke('get-patrimoine-summary'),
+  getAssetLots: (assetId: number) => ipcRenderer.invoke('get-asset-lots', assetId),
   createAsset: (input: unknown) => ipcRenderer.invoke('create-asset', input),
   updateAsset: (id: number, input: unknown) => ipcRenderer.invoke('update-asset', id, input),
   deleteAsset: (id: number) => ipcRenderer.invoke('delete-asset', id),

@@ -142,12 +142,32 @@ export type AssetType =
   | 'assurance_vie'
   | 'autre'
 
+/** Lot d'achat d'un actif boursier (prix de revient). */
+export interface AssetLot {
+  id: number
+  asset_id: number
+  date: string | null
+  quantity: number
+  /** Prix d'achat unitaire. */
+  unit_price: number
+  /** Frais d'achat (courtage…), optionnels. */
+  fees: number
+}
+
+/** Lot saisi à la création/modification. */
+export interface AssetLotInput {
+  date: string | null
+  quantity: number
+  unit_price: number
+  fees: number
+}
+
 /** Actif détenu (bien, ligne boursière, crypto, livret…). */
 export interface Asset {
   id: number
   type: AssetType
   label: string
-  /** Quantité optionnelle (nombre d'actions/parts/unités). */
+  /** Quantité saisie manuellement (pour les actifs sans lots). */
   quantity: number | null
   /** Valeur actuelle totale, en devise. */
   value: number
@@ -157,6 +177,10 @@ export interface Asset {
   notes: string | null
   created_at: string
   updated_at: string
+  /** Prix de revient total calculé depuis les lots (0 si aucun lot). */
+  cost_basis: number
+  /** Quantité totale issue des lots (0 si aucun lot). */
+  lot_quantity: number
 }
 
 /** Données saisies à la création/modification d'un actif. */
@@ -168,6 +192,8 @@ export interface AssetInput {
   currency: string
   symbol: string | null
   notes: string | null
+  /** Lots d'achat (actifs boursiers). Vide pour les autres actifs. */
+  lots?: AssetLotInput[]
 }
 
 /** Répartition du patrimoine par classe d'actif. */
@@ -184,6 +210,10 @@ export interface PatrimoineSummary {
   assets: Asset[]
   /** Historique de la valeur nette (un point par jour observé). */
   history: { date: string; value: number }[]
+  /** Prix de revient total des actifs suivis en lots. */
+  totalCostBasis: number
+  /** Plus/moins-value latente totale (valeur actuelle − prix de revient) des actifs suivis en lots. */
+  totalGain: number
 }
 
 export interface MobileServerInfo {

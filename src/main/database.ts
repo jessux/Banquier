@@ -25,6 +25,8 @@ import type {
   BankConnection,
   Asset,
   AssetInput,
+  AssetLot,
+  AssetLotInput,
   AssetTypeBreakdown,
   PatrimoineSummary
 } from '../shared/types'
@@ -138,6 +140,17 @@ function createTables(): void {
       date  TEXT PRIMARY KEY,
       value REAL NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS asset_lots (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      asset_id   INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+      date       TEXT,
+      quantity   REAL NOT NULL,
+      unit_price REAL NOT NULL,
+      fees       REAL NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_asset_lots_asset ON asset_lots(asset_id);
   `)
 }
 
@@ -362,7 +375,30 @@ export function touchBankConnectionSync(gcAccountId: string): void {
 // --- Patrimoine (actifs) ---
 
 export function getAssets(): Asset[] {
-  return db.all('SELECT * FROM assets ORDER BY type, value DESC') as Asset[]
+  return db.all(
+    `SELECT a.*,
+       (SELECT COALESCE(SUM(l.quantity * l.unit_price + l.fees), 0)
+          FROM asset_lots l WHERE l.asset_id = a.id) AS cost_basis,
+       (SELECT COALESCE(SUM(l.quantity), 0)
+          FROM asset_lots l WHERE l.asset_id = a.id) AS lot_quantity
+     FROM assets a
+     ORDER BY a.type, a.value DESC`
+  ) as Asset[]
+}
+
+export function getAssetLots(assetId: number): AssetLot[] {
+  return db.all('SELECT * FROM asset_lots WHERE asset_id = ? ORDER BY date', [assetId]) as AssetLot[]
+}
+
+function replaceAssetLots(assetId: number, lots: AssetLotInput[] | undefined): void {
+  db.run('DELETE FROM asset_lots WHERE asset_id = ?', [assetId])
+  for (const lot of lots ?? []) {
+    if (!lot.quantity || lot.unit_price == null) continue
+    db.run(
+      'INSERT INTO asset_lots (asset_id, date, quantity, unit_price, fees) VALUES (?, ?, ?, ?, ?)',
+      [assetId, lot.date ?? null, lot.quantity, lot.unit_price, lot.fees ?? 0]
+    )
+  }
 }
 
 /** Enregistre un instantané de la valeur nette totale pour aujourd'hui (un point/jour). */
@@ -393,8 +429,10 @@ export function createAsset(input: AssetInput): Asset {
       now
     ]
   )
+  const assetId = result.lastInsertRowid as number
+  replaceAssetLots(assetId, input.lots)
   snapshotNetWorth()
-  return db.get('SELECT * FROM assets WHERE id = ?', [result.lastInsertRowid]) as Asset
+  return getAssets().find((a) => a.id === assetId) as Asset
 }
 
 export function updateAsset(id: number, input: AssetInput): void {
@@ -413,6 +451,7 @@ export function updateAsset(id: number, input: AssetInput): void {
       id
     ]
   )
+  replaceAssetLots(id, input.lots)
   snapshotNetWorth()
 }
 
@@ -431,7 +470,11 @@ export function getPatrimoineSummary(): PatrimoineSummary {
   const history = db.all(
     'SELECT date, value FROM networth_snapshots ORDER BY date ASC'
   ) as { date: string; value: number }[]
-  return { totalValue, byType, assets, history }
+  // Plus/moins-value latente : uniquement les actifs suivis en lots (prix de revient connu).
+  const tracked = assets.filter((a) => a.cost_basis > 0)
+  const totalCostBasis = tracked.reduce((sum, a) => sum + a.cost_basis, 0)
+  const totalGain = tracked.reduce((sum, a) => sum + (a.value - a.cost_basis), 0)
+  return { totalValue, byType, assets, history, totalCostBasis, totalGain }
 }
 
 // --- Stats ---
