@@ -21,7 +21,9 @@ import type {
   AssetLot,
   PatrimoineSummary,
   DcaPlan,
-  QuoteRefreshResult
+  QuoteRefreshResult,
+  PowensStatus,
+  PowensSyncResult
 } from '../shared/types'
 
 declare global {
@@ -69,6 +71,10 @@ declare global {
       openFileDialog: (filters: { name: string; extensions: string[] }[]) => Promise<string | null>
       exportDb: () => Promise<{ success: boolean }>
       exportCsv: () => Promise<{ success: boolean }>
+      powensStatus: () => Promise<PowensStatus>
+      powensConnect: () => Promise<PowensSyncResult>
+      powensSync: () => Promise<PowensSyncResult>
+      powensDisconnect: () => Promise<void>
       getAssets: () => Promise<Asset[]>
       getPatrimoineSummary: () => Promise<PatrimoineSummary>
       getAssetLots: (assetId: number) => Promise<AssetLot[]>

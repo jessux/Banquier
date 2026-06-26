@@ -98,6 +98,12 @@ const api = {
   openFileDialog: (filters: { name: string; extensions: string[] }[]) =>
     ipcRenderer.invoke('open-file-dialog', filters),
 
+  // Powens (agrégation bancaire)
+  powensStatus: () => ipcRenderer.invoke('powens-status'),
+  powensConnect: () => ipcRenderer.invoke('powens-connect'),
+  powensSync: () => ipcRenderer.invoke('powens-sync'),
+  powensDisconnect: () => ipcRenderer.invoke('powens-disconnect'),
+
   // Patrimoine
   getAssets: () => ipcRenderer.invoke('get-assets'),
   getPatrimoineSummary: () => ipcRenderer.invoke('get-patrimoine-summary'),

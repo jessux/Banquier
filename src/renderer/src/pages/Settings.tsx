@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Settings, MobileServerInfo } from '../../../shared/types'
+import type { Settings, MobileServerInfo, PowensStatus } from '../../../shared/types'
 import type { Account } from '../../../shared/types'
 
 const CURRENCIES = ['EUR', 'USD', 'CHF', 'GBP', 'CAD']
@@ -22,10 +22,51 @@ export default function SettingsPage(): JSX.Element {
   const [urlCopied, setUrlCopied] = useState(false)
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Powens
+  const [powens, setPowens] = useState<PowensStatus>({ configured: false, connected: false })
+  const [showSecret, setShowSecret] = useState(false)
+  const [powensBusy, setPowensBusy] = useState(false)
+  const [powensMsg, setPowensMsg] = useState<string | null>(null)
+
   useEffect(() => {
     window.api.getSettings().then(setSettings)
     window.api.getAccounts().then(setAccounts)
+    window.api.powensStatus().then(setPowens)
   }, [])
+
+  const connectPowens = async (): Promise<void> => {
+    setPowensBusy(true)
+    setPowensMsg('Connexion… autorisez l\'accès dans la fenêtre de votre banque.')
+    try {
+      await window.api.saveSettings(settings) // s'assure que les identifiants sont enregistrés
+      const res = await window.api.powensConnect()
+      setPowensMsg(`Connecté : ${res.imported} transactions importées, ${res.duplicates} doublons (${res.accounts} compte(s)).`)
+      window.api.powensStatus().then(setPowens)
+    } catch (e) {
+      setPowensMsg(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+    } finally {
+      setPowensBusy(false)
+    }
+  }
+
+  const syncPowens = async (): Promise<void> => {
+    setPowensBusy(true)
+    setPowensMsg('Synchronisation…')
+    try {
+      const res = await window.api.powensSync()
+      setPowensMsg(`Synchronisé : ${res.imported} nouvelles transactions, ${res.duplicates} doublons.`)
+    } catch (e) {
+      setPowensMsg(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+    } finally {
+      setPowensBusy(false)
+    }
+  }
+
+  const disconnectPowens = async (): Promise<void> => {
+    await window.api.powensDisconnect()
+    window.api.powensStatus().then(setPowens)
+    setPowensMsg('Déconnecté.')
+  }
 
   const toggleMobileServer = async (): Promise<void> => {
     setMobileLoading(true)
@@ -254,6 +295,88 @@ export default function SettingsPage(): JSX.Element {
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Powens — agrégation bancaire */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h3 style={{ marginBottom: 4 }}>Powens (agrégation bancaire)</h3>
+        <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+          Connectez vos comptes via Powens avec vos propres identifiants (console Powens, ex. une
+          sandbox gratuite). Les transactions sont importées dans votre base locale.
+        </p>
+
+        <div className="grid-2" style={{ gap: 12 }}>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Domaine</label>
+            <input
+              value={settings.powensDomain ?? ''}
+              onChange={(e) => setSettings({ ...settings, powensDomain: e.target.value })}
+              placeholder="banquier-sandbox"
+            />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Client ID</label>
+            <input
+              value={settings.powensClientId ?? ''}
+              onChange={(e) => setSettings({ ...settings, powensClientId: e.target.value })}
+              placeholder="64619638"
+            />
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Client Secret</label>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type={showSecret ? 'text' : 'password'}
+                value={settings.powensClientSecret ?? ''}
+                onChange={(e) => setSettings({ ...settings, powensClientSecret: e.target.value })}
+                placeholder="client secret"
+              />
+              <button className="btn btn-secondary" style={{ flexShrink: 0 }} onClick={() => setShowSecret(!showSecret)}>
+                {showSecret ? '🙈' : '👁️'}
+              </button>
+            </div>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Redirect URI</label>
+            <input
+              value={settings.powensRedirectUri ?? ''}
+              onChange={(e) => setSettings({ ...settings, powensRedirectUri: e.target.value })}
+              placeholder="http://localhost:8645"
+            />
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={save}>
+            {saved ? '✓ Enregistré' : 'Enregistrer les identifiants'}
+          </button>
+          <button
+            className="btn btn-primary"
+            onClick={connectPowens}
+            disabled={powensBusy || !settings.powensDomain || !settings.powensClientId || !settings.powensClientSecret}
+          >
+            {powensBusy ? 'Patientez…' : powens.connected ? '+ Ajouter une banque' : 'Connecter ma banque'}
+          </button>
+          {powens.connected && (
+            <>
+              <button className="btn btn-secondary" onClick={syncPowens} disabled={powensBusy}>
+                ↻ Synchroniser
+              </button>
+              <button className="btn btn-secondary" onClick={disconnectPowens} disabled={powensBusy}>
+                Déconnecter
+              </button>
+            </>
+          )}
+        </div>
+
+        {powens.connected && (
+          <p className="text-sm" style={{ marginTop: 10, color: '#22c55e' }}>✓ Connecté à Powens.</p>
+        )}
+        {powensMsg && (
+          <p className="text-sm" style={{ marginTop: 10, color: powensMsg.startsWith('Erreur') ? '#ef4444' : 'var(--text-muted)' }}>
+            {powensMsg}
+          </p>
         )}
       </div>
 

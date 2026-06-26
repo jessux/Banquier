@@ -19,6 +19,14 @@ import {
   priceAt,
   isMarketType
 } from './quotes'
+import {
+  exchangeCode,
+  getTempCode,
+  getAccounts as getPowensAccounts,
+  getTransactions as getPowensTransactions,
+  openConnectWebview,
+  type PowensCreds
+} from './powens'
 import type {
   Settings,
   CsvMapping,
@@ -26,7 +34,9 @@ import type {
   AssetInput,
   AssetType,
   QuoteRefreshResult,
-  DcaPlan
+  DcaPlan,
+  PowensStatus,
+  PowensSyncResult
 } from '../shared/types'
 
 interface StoreSchema {
@@ -336,6 +346,50 @@ export function registerIpcHandlers(): void {
     return { updated, failed }
   })
 
+  // --- Powens (agrégation bancaire) ---
+  ipcMain.handle('powens-status', (): PowensStatus => {
+    const s = store.get('settings')
+    return {
+      configured: !!(s.powensDomain && s.powensClientId && s.powensClientSecret),
+      connected: !!s.powensToken
+    }
+  })
+
+  ipcMain.handle('powens-connect', async (): Promise<PowensSyncResult> => {
+    const creds = getPowensCreds()
+    const parent = BrowserWindow.getFocusedWindow() ?? undefined
+    let token = store.get('settings').powensToken
+
+    // Code temporaire si l'utilisateur Powens existe déjà ; sinon webview anonyme.
+    const tempCode = token ? await getTempCode(creds, token) : null
+    const result = await openConnectWebview(creds, tempCode, parent)
+    if (result.error) {
+      throw new Error(result.errorDescription || `Connexion refusée (${result.error}).`)
+    }
+
+    // Première connexion : on échange le code reçu contre un token permanent.
+    if (!token) {
+      if (!result.code) throw new Error('Aucun code reçu de Powens.')
+      token = await exchangeCode(creds, result.code)
+      const s = store.get('settings')
+      store.set('settings', { ...s, powensToken: token })
+    }
+
+    return importPowens(creds, token)
+  })
+
+  ipcMain.handle('powens-sync', async (): Promise<PowensSyncResult> => {
+    const creds = getPowensCreds()
+    const token = store.get('settings').powensToken
+    if (!token) throw new Error('Aucune connexion Powens. Connectez d\'abord une banque.')
+    return importPowens(creds, token)
+  })
+
+  ipcMain.handle('powens-disconnect', () => {
+    const s = store.get('settings')
+    store.set('settings', { ...s, powensToken: undefined })
+  })
+
   // --- File Dialog ---
   ipcMain.handle(
     'open-file-dialog',
@@ -396,6 +450,62 @@ export function registerIpcHandlers(): void {
     fs.writeFileSync(result.filePath, csv, 'utf8')
     return { success: true }
   })
+}
+
+// --- Helpers Powens ---
+
+function getPowensCreds(): PowensCreds {
+  const s = store.get('settings')
+  if (!s.powensDomain || !s.powensClientId || !s.powensClientSecret) {
+    throw new Error('Identifiants Powens manquants. Renseignez-les dans Paramètres → Powens.')
+  }
+  return {
+    domain: s.powensDomain,
+    clientId: s.powensClientId,
+    clientSecret: s.powensClientSecret,
+    redirectUri: s.powensRedirectUri || 'http://localhost:8645'
+  }
+}
+
+/** Récupère comptes + transactions Powens et les importe dans la base locale. */
+async function importPowens(creds: PowensCreds, token: string): Promise<PowensSyncResult> {
+  const [accounts, transactions] = await Promise.all([
+    getPowensAccounts(creds, token),
+    getPowensTransactions(creds, token)
+  ])
+
+  // Mappe chaque compte Powens vers un compte Banquier (clé : bank = "powens:<id>").
+  const existing = db.getAccounts()
+  const accountIdByPowens = new Map<number, number>()
+  for (const acc of accounts) {
+    const key = `powens:${acc.id}`
+    const found = existing.find((a) => a.bank === key)
+    accountIdByPowens.set(
+      acc.id,
+      found?.id ?? db.createAccount(acc.name || 'Compte', key, acc.currency?.id || 'EUR').id
+    )
+  }
+
+  const rows = transactions
+    .filter((t) => !t.coming)
+    .map((t) => ({
+      account_id: accountIdByPowens.get(t.id_account) ?? null,
+      date: (t.rdate || t.date || '').slice(0, 10),
+      description: (t.wording || t.original_wording || t.simplified_wording || 'Transaction').trim(),
+      amount: t.value,
+      category: null,
+      import_id: null,
+      is_internal: 0
+    }))
+    .filter((r) => r.date && r.amount != null)
+
+  if (rows.length === 0) return { imported: 0, duplicates: 0, accounts: accounts.length }
+
+  const importRecord = db.createImport('Powens', rows.length)
+  const withImport = rows.map((r) => ({ ...r, import_id: importRecord.id }))
+  const { imported, duplicates, insertedIds } = db.insertTransactions(withImport, importRecord.id)
+  if (insertedIds.length > 0) db.applyRulesToTransactions(insertedIds)
+  return { imported, duplicates, accounts: accounts.length }
 }
 
 // --- Helpers DCA (investissement programmé) ---
