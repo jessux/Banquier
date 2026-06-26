@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.5.0](https://github.com/jessux/Banquier/compare/v1.4.0...v1.5.0) (2026-06-26)
+
+
+### Nouvelles fonctionnalités
+
+* ajoute l'agrégation bancaire via Powens ([25c6f87](https://github.com/jessux/Banquier/commit/25c6f873e0a8f557e5c2f60564dd582a3db93032))
+* ajoute l'open banking gratuit via GoCardless Bank Account Data ([4b5f750](https://github.com/jessux/Banquier/commit/4b5f7500d98a5ddf8353aede0b1430e5c4f71496))
+* ajoute le module Patrimoine (immobilier, actions, ETF, crypto…) ([0802c4b](https://github.com/jessux/Banquier/commit/0802c4bac218ff408249c857b4ab541f3d0481b5))
+* ajoute une intégration Woob (open banking gratuit et 100% local) ([2ffa0bc](https://github.com/jessux/Banquier/commit/2ffa0bcc8b499cb964a1031ae55031eaa62614c4))
+* **patrimoine:** cotation automatique et investissement programmé (DCA) ([cda5ec7](https://github.com/jessux/Banquier/commit/cda5ec722f049c174aa6d5f0fcb0232dc56936e8))
+* **patrimoine:** lots d'achat et plus/moins-value pour actions/ETF/crypto ([79b2441](https://github.com/jessux/Banquier/commit/79b244170186f9949b7343bca3fd1bcd11720bdb))
+* **powens:** flux via /auth/init + code temporaire, et attente de synchro ([58989cd](https://github.com/jessux/Banquier/commit/58989cdb8883199b3992b756c49b8faac58e8556))
+* renommage de comptes, correction des règles sur comptes Powens et sync au démarrage ([f3c4696](https://github.com/jessux/Banquier/commit/f3c46964f7c4a7cbcc20af3f04c499e3193e0103))
+* **woob:** capture une trace HTTP de debug en cas d'échec de connexion ([913735b](https://github.com/jessux/Banquier/commit/913735be9b542118fff09a18c4be9646cf49cffb))
+
+
+### Corrections de bugs
+
+* affiche un menu déroulant pour les champs Woob à choix (ex: Caisse Régionale du Crédit Agricole) ([1c9a8dc](https://github.com/jessux/Banquier/commit/1c9a8dc7338fcbf05c091e9e1cde95b88de1bd65))
+
+
+### Documentation
+
+* met à jour le README avec des liens vers les dernières versions et des instructions de téléchargement ([da2c30f](https://github.com/jessux/Banquier/commit/da2c30f6c04ec2fe15d43b51e1e4027dc93ee995))
+
 ## [1.4.0](https://github.com/jessux/Banquier/compare/banquier-v1.3.1...banquier-v1.4.0) (2026-06-24)
 
 
