@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Transaction } from '../../../shared/types'
+import type { Transaction, Account } from '../../../shared/types'
 import CategoryPicker from '../components/CategoryPicker'
 import { categoryBadgeStyle } from '../utils/categoryColor'
 
@@ -43,6 +43,8 @@ export default function Transactions({ onImport }: { onImport?: () => void }): J
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [categories, setCategories] = useState<string[]>([])
+  const [accounts, setAccounts] = useState<Account[]>([])
+  const [accountId, setAccountId] = useState<number | null>(null)
   const [categorizing, setCategorizing] = useState(false)
   const [catProgress, setCatProgress] = useState<{ done: number; total: number } | null>(null)
   const [editing, setEditing] = useState<EditingCell | null>(null)
@@ -64,6 +66,7 @@ export default function Transactions({ onImport }: { onImport?: () => void }): J
     window.api.getTransactions({
       search: search || undefined,
       category: category || undefined,
+      accountId: accountId ?? undefined,
       startDate: startDate || undefined,
       endDate: endDate || undefined,
       isInternal: internalFilter === 'all' ? undefined : internalFilter === 'internal'
@@ -77,8 +80,9 @@ export default function Transactions({ onImport }: { onImport?: () => void }): J
     Promise.all([window.api.getCategories(), window.api.getCategoryPaths()]).then(([existing, paths]) => {
       setCategories([...new Set([...paths, ...existing])].sort())
     })
+    window.api.getAccounts().then(setAccounts)
   }, [])
-  useEffect(() => { load() }, [search, category, startDate, endDate, internalFilter])
+  useEffect(() => { load() }, [search, category, accountId, startDate, endDate, internalFilter])
   useEffect(() => {
     if (!editing) return
     const id = setTimeout(() => editRef.current?.focus(), 0)
@@ -287,6 +291,15 @@ export default function Transactions({ onImport }: { onImport?: () => void }): J
           <option value="__none__">— Sans catégorie</option>
           {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
+        {accounts.length > 0 && (
+          <select
+            value={accountId ?? ''}
+            onChange={(e) => setAccountId(e.target.value ? Number(e.target.value) : null)}
+          >
+            <option value="">Tous les comptes</option>
+            {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+          </select>
+        )}
 
         {/* Navigateur de mois */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 2, background: '#1a1d27', borderRadius: 20, padding: '3px 6px', border: monthOffset !== null ? '1px solid #6366f1' : '1px solid #2e3147' }}>
@@ -315,8 +328,8 @@ export default function Transactions({ onImport }: { onImport?: () => void }): J
           <option value="external">Hors internes</option>
           <option value="internal">Internes uniquement</option>
         </select>
-        {(search || category || startDate || endDate || internalFilter !== 'all') && (
-          <button className="btn btn-secondary" onClick={() => { setSearch(''); setCategory(''); setStartDate(''); setEndDate(''); setInternalFilter('all'); setMonthOffset(null) }}>
+        {(search || category || accountId !== null || startDate || endDate || internalFilter !== 'all') && (
+          <button className="btn btn-secondary" onClick={() => { setSearch(''); setCategory(''); setAccountId(null); setStartDate(''); setEndDate(''); setInternalFilter('all'); setMonthOffset(null) }}>
             Effacer filtres
           </button>
         )}
