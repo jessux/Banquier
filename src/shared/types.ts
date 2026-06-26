@@ -84,6 +84,42 @@ export interface Settings {
   currency: string
   locale: string
   mobileServerEnabled?: boolean
+  /** Identifiants GoCardless Bank Account Data (open banking gratuit). */
+  gocardlessSecretId?: string
+  gocardlessSecretKey?: string
+}
+
+/** Identifiants GoCardless transmis au client open banking. */
+export interface GoCardlessCreds {
+  secretId: string
+  secretKey: string
+}
+
+/** Banque proposée par GoCardless pour la connexion. */
+export interface Institution {
+  id: string
+  name: string
+  bic: string | null
+  logo: string | null
+}
+
+/** Compte bancaire relié via open banking, persisté localement. */
+export interface BankConnection {
+  id: number
+  gc_account_id: string
+  account_id: number | null
+  institution_name: string | null
+  iban_tail: string | null
+  requisition_id: string | null
+  created_at: string
+  last_sync: string | null
+}
+
+/** Résultat d'une connexion ou d'une synchronisation open banking. */
+export interface BankSyncResult {
+  imported: number
+  duplicates: number
+  accounts: number
 }
 
 export interface MobileServerInfo {
@@ -231,6 +267,12 @@ export interface IpcApi {
 
   // File dialog
   openFileDialog: (filters: { name: string; extensions: string[] }[]) => Promise<string | null>
+
+  // Open banking (GoCardless)
+  gocardlessInstitutions: (country?: string) => Promise<Institution[]>
+  gocardlessConnect: (institutionId: string) => Promise<BankSyncResult>
+  gocardlessSync: () => Promise<BankSyncResult>
+  gocardlessConnections: () => Promise<BankConnection[]>
 }
 
 export interface TransactionFilters {

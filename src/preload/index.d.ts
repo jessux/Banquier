@@ -15,7 +15,10 @@ import type {
   Settings,
   ChatThread,
   StoredChatMessage,
-  RecurringSummary
+  RecurringSummary,
+  Institution,
+  BankConnection,
+  BankSyncResult
 } from '../shared/types'
 
 declare global {
@@ -63,6 +66,10 @@ declare global {
       openFileDialog: (filters: { name: string; extensions: string[] }[]) => Promise<string | null>
       exportDb: () => Promise<{ success: boolean }>
       exportCsv: () => Promise<{ success: boolean }>
+      gocardlessInstitutions: (country?: string) => Promise<Institution[]>
+      gocardlessConnect: (institutionId: string) => Promise<BankSyncResult>
+      gocardlessSync: () => Promise<BankSyncResult>
+      gocardlessConnections: () => Promise<BankConnection[]>
     }
   }
 }

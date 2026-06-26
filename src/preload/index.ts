@@ -98,6 +98,14 @@ const api = {
   openFileDialog: (filters: { name: string; extensions: string[] }[]) =>
     ipcRenderer.invoke('open-file-dialog', filters),
 
+  // Open banking (GoCardless)
+  gocardlessInstitutions: (country?: string) =>
+    ipcRenderer.invoke('gocardless-institutions', country),
+  gocardlessConnect: (institutionId: string) =>
+    ipcRenderer.invoke('gocardless-connect', institutionId),
+  gocardlessSync: () => ipcRenderer.invoke('gocardless-sync'),
+  gocardlessConnections: () => ipcRenderer.invoke('gocardless-connections'),
+
   // Export
   exportDb: () => ipcRenderer.invoke('export-db') as Promise<{ success: boolean }>,
   exportCsv: () => ipcRenderer.invoke('export-csv') as Promise<{ success: boolean }>,

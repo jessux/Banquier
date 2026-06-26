@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Settings, MobileServerInfo } from '../../../shared/types'
+import type { Settings, MobileServerInfo, Institution, BankConnection } from '../../../shared/types'
 import type { Account } from '../../../shared/types'
 
 const CURRENCIES = ['EUR', 'USD', 'CHF', 'GBP', 'CAD']
@@ -22,9 +22,18 @@ export default function SettingsPage(): JSX.Element {
   const [urlCopied, setUrlCopied] = useState(false)
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Open banking
+  const [showGcKey, setShowGcKey] = useState(false)
+  const [institutions, setInstitutions] = useState<Institution[]>([])
+  const [selectedBank, setSelectedBank] = useState('')
+  const [connections, setConnections] = useState<BankConnection[]>([])
+  const [gcStatus, setGcStatus] = useState<string | null>(null)
+  const [gcBusy, setGcBusy] = useState(false)
+
   useEffect(() => {
     window.api.getSettings().then(setSettings)
     window.api.getAccounts().then(setAccounts)
+    window.api.gocardlessConnections().then(setConnections)
   }, [])
 
   const toggleMobileServer = async (): Promise<void> => {
@@ -62,6 +71,56 @@ export default function SettingsPage(): JSX.Element {
     if (result.success) {
       setExportStatus('ok')
       setTimeout(() => setExportStatus('idle'), 2500)
+    }
+  }
+
+  const loadInstitutions = async (): Promise<void> => {
+    setGcBusy(true)
+    setGcStatus(null)
+    try {
+      await window.api.saveSettings(settings) // s'assure que les identifiants sont enregistrés
+      const list = await window.api.gocardlessInstitutions('fr')
+      setInstitutions(list)
+      if (list.length > 0) setSelectedBank(list[0].id)
+      setGcStatus(`${list.length} banques disponibles.`)
+    } catch (e) {
+      setGcStatus(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+    } finally {
+      setGcBusy(false)
+    }
+  }
+
+  const connectBank = async (): Promise<void> => {
+    if (!selectedBank) return
+    setGcBusy(true)
+    setGcStatus('Connexion en cours… autorisez l\'accès dans la fenêtre de votre banque.')
+    try {
+      const res = await window.api.gocardlessConnect(selectedBank)
+      setGcStatus(
+        `Connecté : ${res.imported} transactions importées, ${res.duplicates} doublons ignorés (${res.accounts} compte(s)).`
+      )
+      window.api.gocardlessConnections().then(setConnections)
+      window.api.getAccounts().then(setAccounts)
+    } catch (e) {
+      setGcStatus(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+    } finally {
+      setGcBusy(false)
+    }
+  }
+
+  const syncBanks = async (): Promise<void> => {
+    setGcBusy(true)
+    setGcStatus('Synchronisation…')
+    try {
+      const res = await window.api.gocardlessSync()
+      setGcStatus(
+        `Synchronisé : ${res.imported} nouvelles transactions, ${res.duplicates} doublons ignorés.`
+      )
+      window.api.gocardlessConnections().then(setConnections)
+    } catch (e) {
+      setGcStatus(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+    } finally {
+      setGcBusy(false)
     }
   }
 
@@ -254,6 +313,113 @@ export default function SettingsPage(): JSX.Element {
               </div>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Open Banking */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h3 style={{ marginBottom: 4 }}>Open Banking (gratuit)</h3>
+        <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+          Reliez vos comptes via GoCardless Bank Account Data — accès PSD2 gratuit aux banques
+          françaises. Créez un compte gratuit sur{' '}
+          <a href="https://bankaccountdata.gocardless.com" target="_blank" rel="noreferrer">
+            bankaccountdata.gocardless.com
+          </a>{' '}
+          puis collez vos identifiants ci-dessous. Les transactions sont importées dans votre base
+          locale.
+        </p>
+
+        <div className="form-group">
+          <label>Secret ID</label>
+          <input
+            value={settings.gocardlessSecretId ?? ''}
+            onChange={(e) => setSettings({ ...settings, gocardlessSecretId: e.target.value })}
+            placeholder="00000000-0000-0000-0000-000000000000"
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Secret Key</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type={showGcKey ? 'text' : 'password'}
+              value={settings.gocardlessSecretKey ?? ''}
+              onChange={(e) => setSettings({ ...settings, gocardlessSecretKey: e.target.value })}
+              placeholder="clé secrète GoCardless"
+            />
+            <button
+              className="btn btn-secondary"
+              style={{ flexShrink: 0 }}
+              onClick={() => setShowGcKey(!showGcKey)}
+            >
+              {showGcKey ? '🙈' : '👁️'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+          <button
+            className="btn btn-secondary"
+            onClick={loadInstitutions}
+            disabled={gcBusy || !settings.gocardlessSecretId || !settings.gocardlessSecretKey}
+          >
+            {gcBusy ? 'Patientez…' : '1. Charger les banques'}
+          </button>
+        </div>
+
+        {institutions.length > 0 && (
+          <div style={{ display: 'flex', gap: 10, marginBottom: 12, alignItems: 'flex-end' }}>
+            <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+              <label>Banque</label>
+              <select value={selectedBank} onChange={(e) => setSelectedBank(e.target.value)}>
+                {institutions.map((i) => (
+                  <option key={i.id} value={i.id}>
+                    {i.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <button
+              className="btn btn-primary"
+              style={{ flexShrink: 0 }}
+              onClick={connectBank}
+              disabled={gcBusy || !selectedBank}
+            >
+              2. Connecter
+            </button>
+          </div>
+        )}
+
+        {connections.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <h4 style={{ fontSize: 13, margin: 0 }}>Comptes reliés</h4>
+              <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={syncBanks} disabled={gcBusy}>
+                ↻ Synchroniser
+              </button>
+            </div>
+            {connections.map((c) => (
+              <div
+                key={c.id}
+                className="flex justify-between items-center"
+                style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}
+              >
+                <div>
+                  <span style={{ fontWeight: 500 }}>{c.institution_name}</span>
+                  {c.iban_tail && <span className="text-muted" style={{ marginLeft: 8 }}>··{c.iban_tail}</span>}
+                </div>
+                <span className="text-muted text-sm">
+                  {c.last_sync ? `Sync : ${new Date(c.last_sync).toLocaleString('fr-FR')}` : 'jamais'}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {gcStatus && (
+          <p className="text-sm" style={{ marginTop: 12, color: gcStatus.startsWith('Erreur') ? '#ef4444' : 'var(--text-muted)' }}>
+            {gcStatus}
+          </p>
         )}
       </div>
 
