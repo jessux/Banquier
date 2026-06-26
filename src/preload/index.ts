@@ -98,14 +98,6 @@ const api = {
   openFileDialog: (filters: { name: string; extensions: string[] }[]) =>
     ipcRenderer.invoke('open-file-dialog', filters),
 
-  // Open banking (GoCardless)
-  gocardlessInstitutions: (country?: string) =>
-    ipcRenderer.invoke('gocardless-institutions', country),
-  gocardlessConnect: (institutionId: string) =>
-    ipcRenderer.invoke('gocardless-connect', institutionId),
-  gocardlessSync: () => ipcRenderer.invoke('gocardless-sync'),
-  gocardlessConnections: () => ipcRenderer.invoke('gocardless-connections'),
-
   // Open banking (Woob — gratuit & local)
   woobCheck: () => ipcRenderer.invoke('woob-check'),
   woobInstall: (onLog: (line: string) => void) => {

@@ -14,13 +14,6 @@ import {
 } from './llm'
 import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
 import {
-  listInstitutions,
-  connectInstitution,
-  getAccountDetails,
-  getAccountTransactions
-} from './openbanking'
-import type { GcTransaction } from './openbanking'
-import {
   checkWoob,
   installWoob,
   listBanks,
@@ -29,14 +22,7 @@ import {
   type TwoFaRequest
 } from './woob'
 import { randomUUID } from 'crypto'
-import type {
-  Settings,
-  CsvMapping,
-  TransactionFilters,
-  GoCardlessCreds,
-  BankSyncResult,
-  Transaction
-} from '../shared/types'
+import type { Settings, CsvMapping, TransactionFilters, BankSyncResult } from '../shared/types'
 
 interface StoreSchema {
   settings: Settings
@@ -281,75 +267,6 @@ export function registerIpcHandlers(): void {
     store.set('settings', { ...current, ...settings })
   })
 
-  // --- Open Banking (GoCardless, gratuit) ---
-  ipcMain.handle('gocardless-institutions', (_, country?: string) => {
-    const creds = getGoCardlessCreds()
-    return listInstitutions(creds, country || 'fr')
-  })
-
-  ipcMain.handle('gocardless-connect', async (_, institutionId: string): Promise<BankSyncResult> => {
-    const creds = getGoCardlessCreds()
-    const parent = BrowserWindow.getFocusedWindow() ?? undefined
-    const { requisitionId, accounts } = await connectInstitution(creds, institutionId, parent)
-
-    let imported = 0
-    let duplicates = 0
-    for (const gcAccountId of accounts) {
-      const details = await getAccountDetails(creds, gcAccountId).catch(() => ({}))
-      const ibanTail = details.iban ? details.iban.slice(-4) : null
-      const institutionName = details.institution_id || details.name || 'Banque'
-
-      // Réutilise le compte Banquier déjà lié, sinon en crée un.
-      const existing = db.getBankConnectionByGcId(gcAccountId)
-      let accountId: number
-      if (existing?.account_id) {
-        accountId = existing.account_id
-      } else {
-        const label = ibanTail ? `${institutionName} ··${ibanTail}` : institutionName
-        accountId = db.createAccount(label, institutionName, details.currency || 'EUR').id
-      }
-
-      db.upsertBankConnection({
-        gcAccountId,
-        accountId,
-        institutionName,
-        ibanTail,
-        requisitionId
-      })
-
-      const res = await importGcAccount(creds, gcAccountId, accountId, institutionName)
-      imported += res.imported
-      duplicates += res.duplicates
-    }
-
-    return { imported, duplicates, accounts: accounts.length }
-  })
-
-  ipcMain.handle('gocardless-sync', async (): Promise<BankSyncResult> => {
-    const creds = getGoCardlessCreds()
-    const connections = db.getBankConnections()
-    let imported = 0
-    let duplicates = 0
-    for (const conn of connections) {
-      if (!conn.account_id) continue
-      try {
-        const res = await importGcAccount(
-          creds,
-          conn.gc_account_id,
-          conn.account_id,
-          conn.institution_name || 'Banque'
-        )
-        imported += res.imported
-        duplicates += res.duplicates
-      } catch (err) {
-        console.error(`[gocardless-sync] compte ${conn.gc_account_id} échoué :`, err)
-      }
-    }
-    return { imported, duplicates, accounts: connections.length }
-  })
-
-  ipcMain.handle('gocardless-connections', () => db.getBankConnections())
-
   // --- Open Banking (Woob, gratuit & local) ---
   ipcMain.handle('woob-check', () => checkWoob())
   ipcMain.handle('woob-install', (event) =>
@@ -477,66 +394,4 @@ export function registerIpcHandlers(): void {
     fs.writeFileSync(result.filePath, csv, 'utf8')
     return { success: true }
   })
-}
-
-// --- Helpers Open Banking ---
-
-function getGoCardlessCreds(): GoCardlessCreds {
-  const settings = store.get('settings')
-  const secretId = settings.gocardlessSecretId?.trim()
-  const secretKey = settings.gocardlessSecretKey?.trim()
-  if (!secretId || !secretKey) {
-    throw new Error(
-      'Identifiants GoCardless manquants. Renseignez-les dans Paramètres → Open Banking.'
-    )
-  }
-  return { secretId, secretKey }
-}
-
-/** Convertit une transaction GoCardless au format Banquier (débit négatif, crédit positif). */
-function mapGcTransaction(tx: GcTransaction, accountId: number): Omit<Transaction, 'id'> {
-  const amount = parseFloat(tx.transactionAmount.amount)
-  const date =
-    tx.bookingDate || tx.valueDate || (tx.bookingDateTime ? tx.bookingDateTime.slice(0, 10) : '')
-  const description =
-    tx.remittanceInformationUnstructured ||
-    (tx.remittanceInformationUnstructuredArray || []).join(' ') ||
-    (amount < 0 ? tx.creditorName : tx.debtorName) ||
-    tx.creditorName ||
-    tx.debtorName ||
-    'Transaction'
-  return {
-    account_id: accountId,
-    date,
-    description: description.trim(),
-    amount,
-    category: null,
-    import_id: null,
-    is_internal: 0
-  }
-}
-
-/** Récupère et insère les transactions d'un compte GoCardless dans la base locale. */
-async function importGcAccount(
-  creds: GoCardlessCreds,
-  gcAccountId: string,
-  accountId: number,
-  institutionName: string
-): Promise<{ imported: number; duplicates: number }> {
-  const gcTx = await getAccountTransactions(creds, gcAccountId)
-  const mapped = gcTx
-    .map((t) => mapGcTransaction(t, accountId))
-    .filter((t) => t.date) // ignore les lignes sans date exploitable
-
-  if (mapped.length === 0) {
-    db.touchBankConnectionSync(gcAccountId)
-    return { imported: 0, duplicates: 0 }
-  }
-
-  const importRecord = db.createImport(`Open Banking — ${institutionName}`, mapped.length)
-  const withImport = mapped.map((t) => ({ ...t, import_id: importRecord.id }))
-  const { imported, duplicates, insertedIds } = db.insertTransactions(withImport, importRecord.id)
-  if (insertedIds.length > 0) db.applyRulesToTransactions(insertedIds)
-  db.touchBankConnectionSync(gcAccountId)
-  return { imported, duplicates }
 }

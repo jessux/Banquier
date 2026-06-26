@@ -297,7 +297,7 @@ export function getImports(): Import[] {
   return db.all('SELECT * FROM imports ORDER BY imported_at DESC') as Import[]
 }
 
-// --- Open banking (connexions GoCardless) ---
+// --- Open banking (connexions de comptes bancaires) ---
 
 export function getBankConnections(): BankConnection[] {
   return db.all('SELECT * FROM bank_connections ORDER BY created_at DESC') as BankConnection[]

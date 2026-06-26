@@ -17,7 +17,6 @@ import type {
   StoredChatMessage,
   RecurringSummary,
   Institution,
-  BankConnection,
   BankSyncResult,
   WoobField,
   Woob2faRequest
@@ -68,10 +67,6 @@ declare global {
       openFileDialog: (filters: { name: string; extensions: string[] }[]) => Promise<string | null>
       exportDb: () => Promise<{ success: boolean }>
       exportCsv: () => Promise<{ success: boolean }>
-      gocardlessInstitutions: (country?: string) => Promise<Institution[]>
-      gocardlessConnect: (institutionId: string) => Promise<BankSyncResult>
-      gocardlessSync: () => Promise<BankSyncResult>
-      gocardlessConnections: () => Promise<BankConnection[]>
       woobCheck: () => Promise<{ ok: boolean; woobVersion?: string; error?: string }>
       woobInstall: (onLog: (line: string) => void) => Promise<void>
       woobList: () => Promise<Institution[]>
