@@ -58,7 +58,8 @@
     "publish": {
       "provider": "github",
       "owner": "jessux",
-      "repo": "Banquier"
+      "repo": "Banquier",
+      "releaseType": "release"
     },
     "win": {
       "target": "nsis"
