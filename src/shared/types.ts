@@ -122,6 +122,24 @@ export interface BankSyncResult {
   accounts: number
 }
 
+/** Champ de configuration d'un module Woob (varie selon la banque). */
+export interface WoobField {
+  id: string
+  label: string
+  masked: boolean
+  required: boolean
+  default: string
+  choices: [string, string][] | null
+}
+
+/** Demande de 2FA Woob transmise à l'interface. */
+export interface Woob2faRequest {
+  requestId: string
+  subtype: 'question' | 'decoupled'
+  message: string
+  fields?: { id: string; label: string; masked: boolean }[]
+}
+
 export interface MobileServerInfo {
   url: string
   qrSvg: string

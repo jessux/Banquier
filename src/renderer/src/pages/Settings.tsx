@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Settings, MobileServerInfo, Institution, BankConnection } from '../../../shared/types'
+import type {
+  Settings,
+  MobileServerInfo,
+  Institution,
+  BankConnection,
+  WoobField,
+  Woob2faRequest
+} from '../../../shared/types'
 import type { Account } from '../../../shared/types'
 
 const CURRENCIES = ['EUR', 'USD', 'CHF', 'GBP', 'CAD']
@@ -30,11 +37,98 @@ export default function SettingsPage(): JSX.Element {
   const [gcStatus, setGcStatus] = useState<string | null>(null)
   const [gcBusy, setGcBusy] = useState(false)
 
+  // Open banking — Woob (local)
+  const [woobStatus, setWoobStatus] = useState<{ ok: boolean; woobVersion?: string; error?: string } | null>(null)
+  const [woobLog, setWoobLog] = useState('')
+  const [woobInstalling, setWoobInstalling] = useState(false)
+  const [woobBanks, setWoobBanks] = useState<Institution[]>([])
+  const [woobBank, setWoobBank] = useState('')
+  const [woobFields, setWoobFields] = useState<WoobField[]>([])
+  const [woobCreds, setWoobCreds] = useState<Record<string, string>>({})
+  const [woobBusy, setWoobBusy] = useState(false)
+  const [woobMsg, setWoobMsg] = useState<string | null>(null)
+  const [twofa, setTwofa] = useState<Woob2faRequest | null>(null)
+  const [twofaAnswers, setTwofaAnswers] = useState<Record<string, string>>({})
+
   useEffect(() => {
     window.api.getSettings().then(setSettings)
     window.api.getAccounts().then(setAccounts)
     window.api.gocardlessConnections().then(setConnections)
+    window.api.woobCheck().then(setWoobStatus)
   }, [])
+
+  const installWoob = async (): Promise<void> => {
+    setWoobInstalling(true)
+    setWoobLog('')
+    try {
+      await window.api.woobInstall((line) => setWoobLog((prev) => (prev + line).slice(-4000)))
+      setWoobStatus(await window.api.woobCheck())
+    } catch (e) {
+      setWoobLog((prev) => prev + `\nErreur : ${String(e instanceof Error ? e.message : e)}`)
+    } finally {
+      setWoobInstalling(false)
+    }
+  }
+
+  const loadWoobBanks = async (): Promise<void> => {
+    setWoobBusy(true)
+    setWoobMsg(null)
+    try {
+      const banks = await window.api.woobList()
+      setWoobBanks(banks)
+      setWoobMsg(`${banks.length} banques disponibles.`)
+    } catch (e) {
+      setWoobMsg(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+    } finally {
+      setWoobBusy(false)
+    }
+  }
+
+  const selectWoobBank = async (id: string): Promise<void> => {
+    setWoobBank(id)
+    setWoobFields([])
+    setWoobCreds({})
+    if (!id) return
+    setWoobBusy(true)
+    try {
+      const fields = await window.api.woobFields(id)
+      setWoobFields(fields.filter((f) => f.required))
+    } catch (e) {
+      setWoobMsg(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+    } finally {
+      setWoobBusy(false)
+    }
+  }
+
+  const submit2fa = (): void => {
+    if (!twofa) return
+    window.api.woobAnswer2fa(twofa.requestId, twofa.subtype === 'question' ? twofaAnswers : {})
+    setTwofa(null)
+    setTwofaAnswers({})
+    setWoobMsg('Vérification en cours…')
+  }
+
+  const connectWoob = async (): Promise<void> => {
+    if (!woobBank) return
+    setWoobBusy(true)
+    setWoobMsg('Connexion à votre banque…')
+    try {
+      const res = await window.api.woobConnect(woobBank, woobCreds, (req) => {
+        setTwofaAnswers({})
+        setTwofa(req)
+        setWoobMsg(null)
+      })
+      setWoobMsg(
+        `Connecté : ${res.imported} transactions importées, ${res.duplicates} doublons ignorés (${res.accounts} compte(s)).`
+      )
+      window.api.getAccounts().then(setAccounts)
+    } catch (e) {
+      setWoobMsg(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+    } finally {
+      setWoobBusy(false)
+      setTwofa(null)
+    }
+  }
 
   const toggleMobileServer = async (): Promise<void> => {
     setMobileLoading(true)
@@ -316,9 +410,139 @@ export default function SettingsPage(): JSX.Element {
         )}
       </div>
 
+      {/* Open Banking — Woob (local) */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h3 style={{ marginBottom: 4 }}>Open Banking — Woob (gratuit & local)</h3>
+        <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+          Connexion directe au site de votre banque avec vos identifiants, en local, sans compte ni
+          service tiers. Repose sur l'outil libre Woob (nécessite Python). ⚠️ Test en cours de
+          validation : la connexion et la double authentification (2FA) dépendent de chaque banque.
+        </p>
+
+        {/* État de l'installation */}
+        {woobStatus && !woobStatus.ok && (
+          <div style={{ marginBottom: 12 }}>
+            <p className="text-sm" style={{ marginBottom: 8 }}>
+              Woob n'est pas encore installé. Cliquez pour préparer un environnement Python isolé
+              (téléchargement de ~50 Mo, 1 à 2 min).
+            </p>
+            <button className="btn btn-primary" onClick={installWoob} disabled={woobInstalling}>
+              {woobInstalling ? 'Installation…' : 'Installer Woob'}
+            </button>
+            {woobLog && (
+              <pre
+                style={{
+                  marginTop: 10,
+                  maxHeight: 140,
+                  overflow: 'auto',
+                  background: 'var(--bg)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 6,
+                  padding: 8,
+                  fontSize: 11,
+                  whiteSpace: 'pre-wrap'
+                }}
+              >
+                {woobLog}
+              </pre>
+            )}
+          </div>
+        )}
+
+        {woobStatus?.ok && (
+          <>
+            <p className="text-sm" style={{ marginBottom: 12, color: '#22c55e' }}>
+              ✓ Woob {woobStatus.woobVersion} prêt.
+            </p>
+
+            <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+              <button className="btn btn-secondary" onClick={loadWoobBanks} disabled={woobBusy}>
+                {woobBusy && woobBanks.length === 0 ? 'Chargement…' : '1. Charger les banques'}
+              </button>
+            </div>
+
+            {woobBanks.length > 0 && (
+              <div className="form-group">
+                <label>Banque</label>
+                <select value={woobBank} onChange={(e) => selectWoobBank(e.target.value)}>
+                  <option value="">— choisir —</option>
+                  {woobBanks.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {woobFields.map((f) => (
+              <div className="form-group" key={f.id}>
+                <label>{f.label}</label>
+                <input
+                  type={f.masked ? 'password' : 'text'}
+                  value={woobCreds[f.id] ?? ''}
+                  onChange={(e) => setWoobCreds({ ...woobCreds, [f.id]: e.target.value })}
+                />
+              </div>
+            ))}
+
+            {woobBank && woobFields.length > 0 && (
+              <button
+                className="btn btn-primary"
+                onClick={connectWoob}
+                disabled={woobBusy || woobFields.some((f) => f.required && !woobCreds[f.id])}
+              >
+                {woobBusy ? 'Connexion…' : '2. Connecter'}
+              </button>
+            )}
+
+            {/* Invite 2FA */}
+            {twofa && (
+              <div
+                style={{
+                  marginTop: 16,
+                  padding: 12,
+                  border: '1px solid var(--accent, #3b82f6)',
+                  borderRadius: 8,
+                  background: 'rgba(59,130,246,0.06)'
+                }}
+              >
+                <p className="text-sm" style={{ marginBottom: 10, fontWeight: 500 }}>
+                  🔐 {twofa.message}
+                </p>
+                {twofa.subtype === 'question' &&
+                  (twofa.fields ?? []).map((f) => (
+                    <div className="form-group" key={f.id}>
+                      <label>{f.label}</label>
+                      <input
+                        autoFocus
+                        type={f.masked ? 'password' : 'text'}
+                        value={twofaAnswers[f.id] ?? ''}
+                        onChange={(e) => setTwofaAnswers({ ...twofaAnswers, [f.id]: e.target.value })}
+                      />
+                    </div>
+                  ))}
+                <button className="btn btn-primary" onClick={submit2fa}>
+                  {twofa.subtype === 'decoupled' ? "J'ai validé dans mon app" : 'Valider le code'}
+                </button>
+              </div>
+            )}
+          </>
+        )}
+
+        {woobMsg && (
+          <p
+            className="text-sm"
+            style={{ marginTop: 12, color: woobMsg.startsWith('Erreur') ? '#ef4444' : 'var(--text-muted)' }}
+          >
+            {woobMsg}
+          </p>
+        )}
+      </div>
+
       {/* Open Banking */}
       <div className="card" style={{ marginBottom: 20 }}>
-        <h3 style={{ marginBottom: 4 }}>Open Banking (gratuit)</h3>
+        <h3 style={{ marginBottom: 4 }}>Open Banking (GoCardless — réservé aux entreprises)</h3>
         <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
           Reliez vos comptes via GoCardless Bank Account Data — accès PSD2 gratuit aux banques
           françaises. Créez un compte gratuit sur{' '}
