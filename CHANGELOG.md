@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/jessux/Banquier/compare/v1.9.3...v1.10.0) (2026-06-27)
+
+
+### Nouvelles fonctionnalités
+
+* **dashboard:** exclusion de catégorie inline + toggle dépenses/revenus ([2ba12ae](https://github.com/jessux/Banquier/commit/2ba12ae3d385f8b5f0d9ed78e759ebb3bb316a70))
+
 ## [1.9.3](https://github.com/jessux/Banquier/compare/v1.9.2...v1.9.3) (2026-06-27)
 
 
