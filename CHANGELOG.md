@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/jessux/Banquier/compare/v1.8.0...v1.9.0) (2026-06-27)
+
+
+### Nouvelles fonctionnalités
+
+* **dashboard:** catégories de revenus et popup de dates pour la sync Powens ([7e88838](https://github.com/jessux/Banquier/commit/7e88838b44c2ea62394df8a4c1885ee739c7fed6))
+
 ## [1.8.0](https://github.com/jessux/Banquier/compare/v1.7.0...v1.8.0) (2026-06-27)
 
 
