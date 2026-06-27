@@ -549,6 +549,57 @@ export function getCategoryStats(startDate?: string, endDate?: string, excludeCa
   ) as CategoryStats[]
 }
 
+export function getCreditCategoryStats(startDate?: string, endDate?: string, excludeCategories?: string[]): CategoryStats[] {
+  const conditions: string[] = ['amount > 0', 'is_internal = 0']
+  const params: unknown[] = []
+
+  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+  if (excludeCategories?.length) {
+    conditions.push(`(category IS NULL OR category NOT IN (${excludeCategories.map(() => '?').join(',')}))`)
+    params.push(...excludeCategories)
+  }
+
+  return db.all(
+    `SELECT
+      COALESCE(category, 'Non catégorisé') AS category,
+      SUM(amount) AS total,
+      COUNT(*) AS count
+    FROM transactions
+    WHERE ${conditions.join(' AND ')}
+    GROUP BY category
+    ORDER BY total DESC`,
+    params
+  ) as CategoryStats[]
+}
+
+export function getCreditCategoryStatsGrouped(startDate?: string, endDate?: string, excludeCategories?: string[]): CategoryStatsGrouped[] {
+  const flat = getCreditCategoryStats(startDate, endDate, excludeCategories)
+  const parentMap = new Map<string, { total: number; count: number; subcategories: CategoryStats[] }>()
+
+  for (const s of flat) {
+    const sep = s.category.indexOf(' > ')
+    if (sep !== -1) {
+      const parent = s.category.slice(0, sep)
+      const child = s.category.slice(sep + 3)
+      if (!parentMap.has(parent)) parentMap.set(parent, { total: 0, count: 0, subcategories: [] })
+      const entry = parentMap.get(parent)!
+      entry.total += s.total
+      entry.count += s.count
+      entry.subcategories.push({ category: child, total: s.total, count: s.count })
+    } else {
+      if (!parentMap.has(s.category)) parentMap.set(s.category, { total: 0, count: 0, subcategories: [] })
+      const entry = parentMap.get(s.category)!
+      entry.total += s.total
+      entry.count += s.count
+    }
+  }
+
+  return Array.from(parentMap.entries())
+    .map(([category, data]) => ({ category, ...data }))
+    .sort((a, b) => b.total - a.total)
+}
+
 export function getCategoryStatsGrouped(startDate?: string, endDate?: string, excludeCategories?: string[]): CategoryStatsGrouped[] {
   const flat = getCategoryStats(startDate, endDate, excludeCategories)
   const parentMap = new Map<string, { total: number; count: number; subcategories: CategoryStats[] }>()
@@ -655,6 +706,7 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
     previousPeriodDebit: previous.total_debit,
     totalTransactions: countRow?.n ?? 0,
     topCategories: getCategoryStatsGrouped(effectiveStart, effectiveEnd, excludeCategories),
+    topIncomeCategories: getCreditCategoryStatsGrouped(effectiveStart, effectiveEnd, excludeCategories),
     monthlyTrend: getMonthlyStats(trendMonths, trendAnchor),
     trendHighlightStart,
     trendHighlightEnd

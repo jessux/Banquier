@@ -103,7 +103,7 @@ const api = {
   // Powens (agrégation bancaire)
   powensStatus: () => ipcRenderer.invoke('powens-status'),
   powensConnect: () => ipcRenderer.invoke('powens-connect'),
-  powensSync: () => ipcRenderer.invoke('powens-sync'),
+  powensSync: (minDate?: string, maxDate?: string) => ipcRenderer.invoke('powens-sync', minDate, maxDate),
   powensDisconnect: () => ipcRenderer.invoke('powens-disconnect'),
   powensStartupSync: () => ipcRenderer.invoke('powens-startup-sync') as Promise<import('../shared/types').PowensSyncResult | null>,
 

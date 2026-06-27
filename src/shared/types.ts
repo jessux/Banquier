@@ -385,6 +385,7 @@ export interface DashboardSummary {
   previousPeriodDebit: number
   totalTransactions: number
   topCategories: CategoryStatsGrouped[]
+  topIncomeCategories: CategoryStatsGrouped[]
   monthlyTrend: MonthlyStats[]
   /** Premier mois (YYYY-MM) de la période filtrée, à surligner dans la tendance. null = pas de surlignage (ex: "Tout"). */
   trendHighlightStart: string | null

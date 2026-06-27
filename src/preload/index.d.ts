@@ -74,7 +74,7 @@ declare global {
       exportCsv: () => Promise<{ success: boolean }>
       powensStatus: () => Promise<PowensStatus>
       powensConnect: () => Promise<PowensSyncResult>
-      powensSync: () => Promise<PowensSyncResult>
+      powensSync: (minDate?: string, maxDate?: string) => Promise<PowensSyncResult>
       powensDisconnect: () => Promise<void>
       powensStartupSync: () => Promise<PowensSyncResult | null>
       getAssets: () => Promise<Asset[]>

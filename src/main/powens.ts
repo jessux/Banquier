@@ -117,7 +117,8 @@ export interface PowensTransaction {
 export async function getTransactions(
   creds: PowensCreds,
   token: string,
-  minDate?: string
+  minDate?: string,
+  maxDate?: string
 ): Promise<PowensTransaction[]> {
   const PAGE = 500
   const all: PowensTransaction[] = []
@@ -126,6 +127,7 @@ export async function getTransactions(
   while (true) {
     const params = new URLSearchParams({ limit: String(PAGE), offset: String(offset) })
     if (minDate) params.set('min_date', minDate)
+    if (maxDate) params.set('max_date', maxDate)
     const json = await api<{ transactions: PowensTransaction[]; total: number }>(
       creds.domain,
       `/users/me/transactions?${params.toString()}`,

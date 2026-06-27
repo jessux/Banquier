@@ -424,37 +424,70 @@ export default function Dashboard(): JSX.Element {
         </div>
       </div>
 
-      {summary.topCategories.length > 0 && (
-        <div className="card">
-          <div className="card-title" style={{ marginBottom: 12 }}>Catégories</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {summary.topCategories.map((c, i) => {
-              const max = summary.topCategories[0].total
-              return (
-                <div key={c.category}>
-                  <div className="flex justify-between" style={{ marginBottom: 4 }}>
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{c.category}</span>
-                    <span className="amount-negative">{formatEur(c.total)}</span>
-                  </div>
-                  <div style={{ background: '#242736', borderRadius: 4, height: 6, overflow: 'hidden', marginBottom: c.subcategories.length ? 6 : 0 }}>
-                    <div style={{ width: `${(c.total / max) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 4 }} />
-                  </div>
-                  {c.subcategories.length > 0 && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 12, borderLeft: `2px solid ${COLORS[i % COLORS.length]}33` }}>
-                      {c.subcategories.sort((a, b) => b.total - a.total).map((s) => (
-                        <div key={s.category} className="flex justify-between" style={{ fontSize: 12, color: '#94a3b8' }}>
-                          <span>{s.category}</span>
-                          <span>{formatEur(s.total)}</span>
-                        </div>
-                      ))}
+      <div className="grid-2" style={{ marginBottom: 24 }}>
+        {summary.topCategories.length > 0 && (
+          <div className="card">
+            <div className="card-title" style={{ marginBottom: 12 }}>Dépenses par catégorie</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {summary.topCategories.map((c, i) => {
+                const max = summary.topCategories[0].total
+                return (
+                  <div key={c.category}>
+                    <div className="flex justify-between" style={{ marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{c.category}</span>
+                      <span className="amount-negative">{formatEur(c.total)}</span>
                     </div>
-                  )}
-                </div>
-              )
-            })}
+                    <div style={{ background: '#242736', borderRadius: 4, height: 6, overflow: 'hidden', marginBottom: c.subcategories.length ? 6 : 0 }}>
+                      <div style={{ width: `${(c.total / max) * 100}%`, height: '100%', background: COLORS[i % COLORS.length], borderRadius: 4 }} />
+                    </div>
+                    {c.subcategories.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 12, borderLeft: `2px solid ${COLORS[i % COLORS.length]}33` }}>
+                        {c.subcategories.sort((a, b) => b.total - a.total).map((s) => (
+                          <div key={s.category} className="flex justify-between" style={{ fontSize: 12, color: '#94a3b8' }}>
+                            <span>{s.category}</span>
+                            <span>{formatEur(s.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+        {summary.topIncomeCategories.length > 0 && (
+          <div className="card">
+            <div className="card-title" style={{ marginBottom: 12 }}>Revenus par catégorie</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {summary.topIncomeCategories.map((c, i) => {
+                const max = summary.topIncomeCategories[0].total
+                return (
+                  <div key={c.category}>
+                    <div className="flex justify-between" style={{ marginBottom: 4 }}>
+                      <span style={{ fontSize: 13, fontWeight: 600 }}>{c.category}</span>
+                      <span className="amount-positive">{formatEur(c.total)}</span>
+                    </div>
+                    <div style={{ background: '#242736', borderRadius: 4, height: 6, overflow: 'hidden', marginBottom: c.subcategories.length ? 6 : 0 }}>
+                      <div style={{ width: `${(c.total / max) * 100}%`, height: '100%', background: '#22c55e', opacity: 0.7 + 0.3 * (1 - i / (summary.topIncomeCategories.length || 1)), borderRadius: 4 }} />
+                    </div>
+                    {c.subcategories.length > 0 && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 12, borderLeft: '2px solid #22c55e33' }}>
+                        {c.subcategories.sort((a, b) => b.total - a.total).map((s) => (
+                          <div key={s.category} className="flex justify-between" style={{ fontSize: 12, color: '#94a3b8' }}>
+                            <span>{s.category}</span>
+                            <span>{formatEur(s.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
