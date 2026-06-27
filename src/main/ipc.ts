@@ -372,9 +372,8 @@ export function registerIpcHandlers(): void {
       throw new Error(result.errorDescription || `Connexion refusée (${result.error}).`)
     }
 
-    const oneYearAgo = new Date()
-    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
-    const minDate = oneYearAgo.toISOString().slice(0, 10)
+    const now = new Date()
+    const minDate = `${now.getFullYear() - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
     return importPowens(creds, token, minDate)
   })
 
