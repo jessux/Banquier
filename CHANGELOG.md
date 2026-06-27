@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.1](https://github.com/jessux/Banquier/compare/v1.10.0...v1.10.1) (2026-06-27)
+
+
+### Corrections de bugs
+
+* **csv:** parseDate robuste aux séparateurs point et tiret ([d26953e](https://github.com/jessux/Banquier/commit/d26953e42332a612ffaa32697d9745c6cb68b46a))
+
 ## [1.10.0](https://github.com/jessux/Banquier/compare/v1.9.3...v1.10.0) (2026-06-27)
 
 
