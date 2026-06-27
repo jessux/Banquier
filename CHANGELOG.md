@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.3](https://github.com/jessux/Banquier/compare/v1.9.2...v1.9.3) (2026-06-27)
+
+
+### Corrections de bugs
+
+* **powens:** pagination relationnelle + limit 1000 + first_date dans la popup ([cb7f92c](https://github.com/jessux/Banquier/commit/cb7f92c0cc0845e8ae0518338905d9ac947cfee6))
+* **powens:** startup sync incrémentale depuis la dernière transaction connue ([8de16c1](https://github.com/jessux/Banquier/commit/8de16c137ca1fd1555aea275527cafd8ddeff45c))
+
 ## [1.9.2](https://github.com/jessux/Banquier/compare/v1.9.1...v1.9.2) (2026-06-27)
 
 
