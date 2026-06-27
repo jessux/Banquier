@@ -101,7 +101,6 @@ export default function Dashboard(): JSX.Element {
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [excludedCats, setExcludedCats] = useState<Set<string>>(new Set())
-  const [catView, setCatView] = useState<'depenses' | 'revenus'>('depenses')
   const [hoveredCat, setHoveredCat] = useState<string | null>(null)
 
   useEffect(() => {
@@ -388,55 +387,26 @@ export default function Dashboard(): JSX.Element {
       </div>
 
       {(summary.topCategories.length > 0 || summary.topIncomeCategories.length > 0) && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div className="flex justify-between" style={{ alignItems: 'center', marginBottom: 16 }}>
-            <div className="card-title">Catégories</div>
-            <div style={{ display: 'flex', gap: 4, background: '#242736', borderRadius: 20, padding: 3 }}>
-              {(['depenses', 'revenus'] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setCatView(v)}
-                  style={{
-                    padding: '4px 14px', borderRadius: 16, border: 'none', cursor: 'pointer', fontSize: 12,
-                    fontWeight: catView === v ? 600 : 400,
-                    background: catView === v ? (v === 'depenses' ? '#ef4444' : '#22c55e') : 'transparent',
-                    color: catView === v ? '#fff' : '#94a3b8',
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  {v === 'depenses' ? 'Dépenses' : 'Revenus'}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div style={{ position: 'relative', overflow: 'hidden' }}>
-            {(['depenses', 'revenus'] as const).map((v) => {
-              const items = v === 'depenses' ? summary.topCategories : summary.topIncomeCategories
-              const active = catView === v
-              return (
-                <div
-                  key={v}
-                  style={{
-                    display: 'flex', flexDirection: 'column', gap: 12,
-                    opacity: active ? 1 : 0,
-                    transform: active ? 'translateX(0)' : (v === 'depenses' ? 'translateX(-16px)' : 'translateX(16px)'),
-                    transition: 'opacity 0.22s ease, transform 0.22s ease',
-                    pointerEvents: active ? 'auto' : 'none',
-                    position: active ? 'relative' : 'absolute',
-                    top: 0, left: 0, right: 0
-                  }}
-                >
+        <div className="grid-2" style={{ marginBottom: 24 }}>
+          {(['depenses', 'revenus'] as const).map((v) => {
+            const items = v === 'depenses' ? summary.topCategories : summary.topIncomeCategories
+            if (items.length === 0) return null
+            return (
+              <div key={v} className="card">
+                <div className="card-title" style={{ marginBottom: 16, color: v === 'depenses' ? '#ef4444' : '#22c55e' }}>
+                  {v === 'depenses' ? 'Dépenses' : 'Revenus'} par catégorie
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   {items.map((c, i) => {
                     const max = items[0]?.total ?? 1
                     const color = v === 'depenses' ? COLORS[i % COLORS.length] : '#22c55e'
-                    const isHovered = hoveredCat === c.category
+                    const isHovered = hoveredCat === `${v}/${c.category}`
                     return (
                       <div key={c.category}>
                         <div
                           className="flex justify-between"
                           onClick={() => toggleCat(c.category)}
-                          onMouseEnter={() => setHoveredCat(c.category)}
+                          onMouseEnter={() => setHoveredCat(`${v}/${c.category}`)}
                           onMouseLeave={() => setHoveredCat(null)}
                           style={{ marginBottom: 4, cursor: 'pointer', borderRadius: 4, padding: '2px 4px', marginLeft: -4, background: isHovered ? '#2e314733' : 'transparent', transition: 'background 0.15s' }}
                           title="Cliquer pour exclure du calcul"
@@ -453,13 +423,13 @@ export default function Dashboard(): JSX.Element {
                         {c.subcategories.length > 0 && (
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 12, borderLeft: `2px solid ${color}33` }}>
                             {c.subcategories.sort((a, b) => b.total - a.total).map((s) => {
-                              const isSubHovered = hoveredCat === `${c.category}/${s.category}`
+                              const isSubHovered = hoveredCat === `${v}/${c.category}/${s.category}`
                               return (
                                 <div
                                   key={s.category}
                                   className="flex justify-between"
                                   onClick={() => toggleCat(s.category)}
-                                  onMouseEnter={() => setHoveredCat(`${c.category}/${s.category}`)}
+                                  onMouseEnter={() => setHoveredCat(`${v}/${c.category}/${s.category}`)}
                                   onMouseLeave={() => setHoveredCat(null)}
                                   style={{ fontSize: 12, color: '#94a3b8', cursor: 'pointer', borderRadius: 3, padding: '1px 4px', marginLeft: -4, background: isSubHovered ? '#2e314744' : 'transparent', transition: 'background 0.15s' }}
                                   title="Cliquer pour exclure du calcul"
@@ -478,9 +448,9 @@ export default function Dashboard(): JSX.Element {
                     )
                   })}
                 </div>
-              )
-            })}
-          </div>
+              </div>
+            )
+          })}
         </div>
       )}
     </div>
