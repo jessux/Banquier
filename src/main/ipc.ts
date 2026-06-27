@@ -481,7 +481,8 @@ async function importPowens(
   }
   let transactions =
     accounts.length > 0 ? await getPowensTransactions(creds, token, minDate, maxDate) : []
-  if (maxDate) transactions = transactions.filter((t) => (t.rdate || t.date || '') <= maxDate)
+  if (minDate) transactions = transactions.filter((t) => (t.rdate || t.date || '').slice(0, 10) >= minDate)
+  if (maxDate) transactions = transactions.filter((t) => (t.rdate || t.date || '').slice(0, 10) <= maxDate)
 
   // Mappe chaque compte Powens vers un compte Banquier (clé : bank = "powens:<id>").
   const existing = db.getAccounts()
