@@ -123,6 +123,15 @@ const api = {
   exportDb: () => ipcRenderer.invoke('export-db') as Promise<{ success: boolean }>,
   exportCsv: () => ipcRenderer.invoke('export-csv') as Promise<{ success: boolean }>,
 
+  // App info & updates
+  getAppVersion: () => ipcRenderer.invoke('get-app-version') as Promise<string>,
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+
+  // Account management
+  deleteAccount: (id: number) => ipcRenderer.invoke('delete-account', id),
+  updateAccountCurrency: (id: number, currency: string) =>
+    ipcRenderer.invoke('update-account-currency', id, currency),
+
   // Mobile server
   startMobileServer: () => ipcRenderer.invoke('start-mobile-server'),
   stopMobileServer: () => ipcRenderer.invoke('stop-mobile-server'),

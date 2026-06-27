@@ -210,6 +210,15 @@ export function renameAccount(id: number, name: string): void {
   db.run('UPDATE accounts SET name = ? WHERE id = ?', [name, id])
 }
 
+export function deleteAccount(id: number): void {
+  db.run('DELETE FROM transactions WHERE account_id = ?', [id])
+  db.run('DELETE FROM accounts WHERE id = ?', [id])
+}
+
+export function updateAccountCurrency(id: number, currency: string): void {
+  db.run('UPDATE accounts SET currency = ? WHERE id = ?', [currency, id])
+}
+
 // --- Transactions ---
 
 export function getTransactions(filters: TransactionFilters = {}): Transaction[] {

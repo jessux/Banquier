@@ -89,7 +89,11 @@ declare global {
       startMobileServer: () => Promise<unknown>
       stopMobileServer: () => Promise<void>
       getMobileServerStatus: () => Promise<{ running: boolean }>
-      powensStartupSync: () => Promise<PowensSyncResult | null>
+      getAppVersion: () => Promise<string>
+      checkForUpdates: () => Promise<{ status: 'up-to-date' | 'available' | 'downloading' | 'error'; version?: string; message?: string }>
+      deleteAccount: (id: number) => Promise<void>
+      updateAccountCurrency: (id: number, currency: string) => Promise<void>
+      clearAllTransactions: () => Promise<void>
     }
   }
 }

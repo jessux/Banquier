@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from 'electron'
+import { ipcMain, dialog, BrowserWindow, app } from 'electron'
 import fs from 'fs'
 import Store from 'electron-store'
 import path from 'path'
@@ -13,6 +13,8 @@ import {
   categorizeBatch
 } from './llm'
 import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
+import { checkForUpdatesManual, type UpdateCheckResult } from './updater'
+import { is } from '@electron-toolkit/utils'
 import {
   getCurrentPriceEur,
   getHistoricalSeriesEur,
@@ -467,6 +469,19 @@ export function registerIpcHandlers(): void {
     fs.writeFileSync(result.filePath, csv, 'utf8')
     return { success: true }
   })
+
+  ipcMain.handle('get-app-version', () => app.getVersion())
+
+  ipcMain.handle('check-for-updates', async (): Promise<UpdateCheckResult> => {
+    if (is.dev) return { status: 'error', message: 'Vérification indisponible en mode développement.' }
+    return checkForUpdatesManual()
+  })
+
+  ipcMain.handle('delete-account', (_, id: number) => db.deleteAccount(id))
+
+  ipcMain.handle('update-account-currency', (_, id: number, currency: string) =>
+    db.updateAccountCurrency(id, currency)
+  )
 }
 
 // --- Helpers Powens ---

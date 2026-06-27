@@ -4,6 +4,12 @@ import { dialog, BrowserWindow } from 'electron'
 // Intervalle de vérification périodique (en plus de la vérification au démarrage).
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6 heures
 
+export type UpdateCheckResult =
+  | { status: 'up-to-date' }
+  | { status: 'available'; version: string }
+  | { status: 'downloading'; version: string }
+  | { status: 'error'; message: string }
+
 /**
  * Configure la mise à jour automatique via GitHub Releases.
  * La nouvelle version est téléchargée en arrière-plan ; l'utilisateur est
@@ -29,8 +35,6 @@ export function initAutoUpdater(getWindow: () => BrowserWindow | null): void {
   })
 
   autoUpdater.on('error', (err) => {
-    // Ne pas interrompre l'utilisateur : on logge simplement l'échec
-    // (pas de réseau, release introuvable, etc.).
     console.error('[updater] erreur :', err)
   })
 
@@ -65,4 +69,43 @@ export function initAutoUpdater(getWindow: () => BrowserWindow | null): void {
 
   check()
   setInterval(check, CHECK_INTERVAL_MS)
+}
+
+/** Vérification manuelle déclenchée depuis les Paramètres. */
+export async function checkForUpdatesManual(): Promise<UpdateCheckResult> {
+  return new Promise((resolve) => {
+    const onAvailable = (info: { version: string }): void => {
+      cleanup()
+      resolve({ status: 'available', version: info.version })
+    }
+    const onNotAvailable = (): void => {
+      cleanup()
+      resolve({ status: 'up-to-date' })
+    }
+    const onError = (err: Error): void => {
+      cleanup()
+      resolve({ status: 'error', message: err.message })
+    }
+    const onProgress = (info: { version: string }): void => {
+      cleanup()
+      resolve({ status: 'downloading', version: info.version })
+    }
+
+    const cleanup = (): void => {
+      autoUpdater.removeListener('update-available', onAvailable)
+      autoUpdater.removeListener('update-not-available', onNotAvailable)
+      autoUpdater.removeListener('error', onError)
+      autoUpdater.removeListener('download-progress', onProgress)
+    }
+
+    autoUpdater.once('update-available', onAvailable)
+    autoUpdater.once('update-not-available', onNotAvailable)
+    autoUpdater.once('error', onError)
+    autoUpdater.once('download-progress', onProgress)
+
+    autoUpdater.checkForUpdates().catch((err: Error) => {
+      cleanup()
+      resolve({ status: 'error', message: err.message })
+    })
+  })
 }

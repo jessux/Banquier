@@ -20,6 +20,11 @@ export default function SettingsPage(): JSX.Element {
   const [exportStatus, setExportStatus] = useState<'idle' | 'ok' | 'err'>('idle')
   const [clearStep, setClearStep] = useState<0 | 1 | 2>(0)
   const [clearBusy, setClearBusy] = useState(false)
+  const [appVersion, setAppVersion] = useState('')
+  const [updateChecking, setUpdateChecking] = useState(false)
+  const [updateResult, setUpdateResult] = useState<{ status: string; version?: string; message?: string } | null>(null)
+  const [deletingAccountId, setDeletingAccountId] = useState<number | null>(null)
+  const [editingCurrency, setEditingCurrency] = useState<{ id: number; currency: string } | null>(null)
   const [mobileServer, setMobileServer] = useState<MobileServerInfo | null>(null)
   const [mobileLoading, setMobileLoading] = useState(false)
   const [urlCopied, setUrlCopied] = useState(false)
@@ -40,6 +45,7 @@ export default function SettingsPage(): JSX.Element {
     window.api.getSettings().then(setSettings)
     window.api.getAccounts().then(setAccounts)
     window.api.powensStatus().then(setPowens)
+    window.api.getAppVersion().then(setAppVersion)
   }, [])
 
   const connectPowens = async (): Promise<void> => {
@@ -145,6 +151,30 @@ export default function SettingsPage(): JSX.Element {
     await window.api.renameAccount(editingAccount.id, editingAccount.name.trim())
     setEditingAccount(null)
     window.api.getAccounts().then(setAccounts)
+  }
+
+  const deleteAccount = async (id: number): Promise<void> => {
+    await window.api.deleteAccount(id)
+    setDeletingAccountId(null)
+    window.api.getAccounts().then(setAccounts)
+  }
+
+  const saveCurrency = async (): Promise<void> => {
+    if (!editingCurrency) return
+    await window.api.updateAccountCurrency(editingCurrency.id, editingCurrency.currency)
+    setEditingCurrency(null)
+    window.api.getAccounts().then(setAccounts)
+  }
+
+  const checkForUpdates = async (): Promise<void> => {
+    setUpdateChecking(true)
+    setUpdateResult(null)
+    try {
+      const result = await window.api.checkForUpdates()
+      setUpdateResult(result)
+    } finally {
+      setUpdateChecking(false)
+    }
   }
 
   return (
@@ -297,21 +327,34 @@ export default function SettingsPage(): JSX.Element {
                     <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={saveAccountName} disabled={!editingAccount.name.trim()}>OK</button>
                     <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => setEditingAccount(null)}>✕</button>
                   </div>
+                ) : deletingAccountId === a.id ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <span style={{ fontSize: 13, color: '#ef4444', flex: 1 }}>
+                      Supprimer <strong>{a.name}</strong> et toutes ses transactions ?
+                    </span>
+                    <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12, borderColor: 'rgba(239,68,68,0.5)', color: '#ef4444' }} onClick={() => deleteAccount(a.id)}>Confirmer</button>
+                    <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => setDeletingAccountId(null)}>Annuler</button>
+                  </div>
+                ) : editingCurrency?.id === a.id ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
+                    <select value={editingCurrency.currency} onChange={(e) => setEditingCurrency({ id: a.id, currency: e.target.value })} style={{ padding: '4px 8px', fontSize: 12 }}>
+                      {CURRENCIES.map((c) => <option key={c}>{c}</option>)}
+                    </select>
+                    <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={saveCurrency}>OK</button>
+                    <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => setEditingCurrency(null)}>✕</button>
+                  </div>
                 ) : (
                   <>
                     <div>
                       <span style={{ fontWeight: 500 }}>{a.name}</span>
                       {a.bank && <span className="text-muted" style={{ marginLeft: 8, fontSize: 12 }}>{a.bank}</span>}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <span className="badge badge-success">{a.currency}</span>
-                      <button
-                        className="btn btn-secondary"
-                        style={{ padding: '4px 10px', fontSize: 12 }}
-                        onClick={() => setEditingAccount({ id: a.id, name: a.name })}
-                      >
-                        Renommer
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditingCurrency({ id: a.id, currency: a.currency })}>
+                        {a.currency}
                       </button>
+                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditingAccount({ id: a.id, name: a.name })}>Renommer</button>
+                      <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12, borderColor: 'rgba(239,68,68,0.3)', color: '#ef4444' }} onClick={() => setDeletingAccountId(a.id)}>✕</button>
                     </div>
                   </>
                 )}
@@ -381,6 +424,27 @@ export default function SettingsPage(): JSX.Element {
         </div>
         {exportStatus === 'ok' && (
           <p style={{ marginTop: 10, fontSize: 13, color: '#22c55e' }}>Fichier exporté avec succès.</p>
+        )}
+      </div>
+
+      {/* Version & mises à jour */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ marginBottom: 4 }}>Application</h3>
+            {appVersion && <p className="text-muted text-sm">Version {appVersion}</p>}
+          </div>
+          <button className="btn btn-secondary" onClick={checkForUpdates} disabled={updateChecking}>
+            {updateChecking ? 'Vérification…' : '↻ Vérifier les mises à jour'}
+          </button>
+        </div>
+        {updateResult && (
+          <div style={{ marginTop: 12, fontSize: 13, padding: '8px 12px', borderRadius: 6, background: updateResult.status === 'up-to-date' ? 'rgba(34,197,94,0.08)' : updateResult.status === 'error' ? 'rgba(239,68,68,0.08)' : 'rgba(99,102,241,0.08)', color: updateResult.status === 'up-to-date' ? '#22c55e' : updateResult.status === 'error' ? '#ef4444' : '#6366f1' }}>
+            {updateResult.status === 'up-to-date' && '✓ Application à jour'}
+            {updateResult.status === 'available' && `Mise à jour disponible : v${updateResult.version} — téléchargement en cours…`}
+            {updateResult.status === 'downloading' && `Téléchargement de la v${updateResult.version} en cours…`}
+            {updateResult.status === 'error' && `Erreur : ${updateResult.message}`}
+          </div>
         )}
       </div>
 
