@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.1](https://github.com/jessux/Banquier/compare/v1.9.0...v1.9.1) (2026-06-27)
+
+
+### Corrections de bugs
+
+* **settings:** fragment React manquant autour de la modal de sync ([e2fa37c](https://github.com/jessux/Banquier/commit/e2fa37c3be651a82095713a9e62b51e4ad27477a))
+
 ## [1.9.0](https://github.com/jessux/Banquier/compare/v1.8.0...v1.9.0) (2026-06-27)
 
 
