@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/jessux/Banquier/compare/v1.7.0...v1.8.0) (2026-06-27)
+
+
+### Nouvelles fonctionnalités
+
+* **settings:** vider toutes les transactions avec double confirmation ([#16](https://github.com/jessux/Banquier/issues/16)) ([a06432a](https://github.com/jessux/Banquier/commit/a06432ac70978468bf7e8d64f845bc36dca10de3))
+
 ## [1.7.0](https://github.com/jessux/Banquier/compare/v1.6.1...v1.7.0) (2026-06-27)
 
 
