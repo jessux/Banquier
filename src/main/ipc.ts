@@ -372,7 +372,10 @@ export function registerIpcHandlers(): void {
       throw new Error(result.errorDescription || `Connexion refusée (${result.error}).`)
     }
 
-    return importPowens(creds, token)
+    const oneYearAgo = new Date()
+    oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1)
+    const minDate = oneYearAgo.toISOString().slice(0, 10)
+    return importPowens(creds, token, minDate)
   })
 
   ipcMain.handle('powens-sync', async (): Promise<PowensSyncResult> => {
@@ -463,7 +466,11 @@ export function registerIpcHandlers(): void {
 // --- Helpers Powens ---
 
 /** Récupère comptes + transactions Powens et les importe dans la base locale. */
-async function importPowens(creds: PowensCreds, token: string): Promise<PowensSyncResult> {
+async function importPowens(
+  creds: PowensCreds,
+  token: string,
+  minDate?: string
+): Promise<PowensSyncResult> {
   // Powens récupère les données de la banque de façon asynchrone : on attend
   // qu'au moins un compte apparaisse (jusqu'à ~30 s).
   let accounts = await getPowensAccounts(creds, token)
@@ -471,7 +478,8 @@ async function importPowens(creds: PowensCreds, token: string): Promise<PowensSy
     await new Promise((r) => setTimeout(r, 3000))
     accounts = await getPowensAccounts(creds, token)
   }
-  const transactions = accounts.length > 0 ? await getPowensTransactions(creds, token) : []
+  const transactions =
+    accounts.length > 0 ? await getPowensTransactions(creds, token, minDate) : []
 
   // Mappe chaque compte Powens vers un compte Banquier (clé : bank = "powens:<id>").
   const existing = db.getAccounts()

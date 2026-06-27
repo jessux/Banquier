@@ -114,12 +114,14 @@ export interface PowensTransaction {
   coming?: boolean
 }
 
-export async function getTransactions(creds: PowensCreds, token: string): Promise<PowensTransaction[]> {
-  const json = await api<{ transactions: PowensTransaction[] }>(
-    creds.domain,
-    '/users/me/transactions?limit=1000',
-    { token }
-  )
+export async function getTransactions(
+  creds: PowensCreds,
+  token: string,
+  minDate?: string
+): Promise<PowensTransaction[]> {
+  let path = '/users/me/transactions?limit=1000'
+  if (minDate) path += `&min_date=${minDate}`
+  const json = await api<{ transactions: PowensTransaction[] }>(creds.domain, path, { token })
   return json.transactions ?? []
 }
 
