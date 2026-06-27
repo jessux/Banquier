@@ -101,6 +101,8 @@ export interface PowensSyncResult {
   accounts: number
   /** Transactions automatiquement catégorisées par les règles lors de l'import. */
   categorized: number
+  /** Date la plus ancienne disponible côté Powens/banque (YYYY-MM-DD), null si inconnue. */
+  firstDate?: string | null
 }
 
 // --- Patrimoine ---

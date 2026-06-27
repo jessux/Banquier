@@ -114,32 +114,50 @@ export interface PowensTransaction {
   coming?: boolean
 }
 
+export interface PowensTransactionsResult {
+  transactions: PowensTransaction[]
+  firstDate: string | null
+}
+
 export async function getTransactions(
   creds: PowensCreds,
   token: string,
   minDate?: string,
   maxDate?: string
-): Promise<PowensTransaction[]> {
-  const PAGE = 500
+): Promise<PowensTransactionsResult> {
+  const PAGE = 1000
   const all: PowensTransaction[] = []
-  let offset = 0
+  let firstDate: string | null = null
 
-  while (true) {
-    const params = new URLSearchParams({ limit: String(PAGE), offset: String(offset) })
-    if (minDate) params.set('min_date', minDate)
-    if (maxDate) params.set('max_date', maxDate)
-    const json = await api<{ transactions: PowensTransaction[]; total: number }>(
-      creds.domain,
-      `/users/me/transactions?${params.toString()}`,
-      { token }
-    )
+  const initialParams = new URLSearchParams({ limit: String(PAGE) })
+  if (minDate) initialParams.set('min_date', minDate)
+  if (maxDate) initialParams.set('max_date', maxDate)
+
+  let nextPath: string | null = `/users/me/transactions?${initialParams.toString()}`
+
+  while (nextPath) {
+    const json = await api<{
+      transactions: PowensTransaction[]
+      total: number
+      first_date?: string
+      _links?: { next?: { href: string } }
+    }>(creds.domain, nextPath, { token })
+
     const page = json.transactions ?? []
     all.push(...page)
-    if (all.length >= (json.total ?? 0) || page.length < PAGE) break
-    offset += PAGE
+
+    if (json.first_date && !firstDate) firstDate = json.first_date
+
+    const nextHref = json._links?.next?.href
+    if (nextHref) {
+      const u = new URL(nextHref)
+      nextPath = u.pathname.replace('/2.0', '') + u.search
+    } else {
+      nextPath = null
+    }
   }
 
-  return all
+  return { transactions: all, firstDate }
 }
 
 interface WebviewResult {

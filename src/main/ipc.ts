@@ -485,8 +485,11 @@ async function importPowens(
     await new Promise((r) => setTimeout(r, 3000))
     accounts = await getPowensAccounts(creds, token)
   }
-  let transactions =
-    accounts.length > 0 ? await getPowensTransactions(creds, token, minDate, maxDate) : []
+  const result = accounts.length > 0
+    ? await getPowensTransactions(creds, token, minDate, maxDate)
+    : { transactions: [], firstDate: null }
+  let transactions = result.transactions
+  const firstDate = result.firstDate
   if (minDate) transactions = transactions.filter((t) => (t.rdate || t.date || '').slice(0, 10) >= minDate)
   if (maxDate) transactions = transactions.filter((t) => (t.rdate || t.date || '').slice(0, 10) <= maxDate)
 
@@ -515,7 +518,7 @@ async function importPowens(
     }))
     .filter((r) => r.date && r.amount != null)
 
-  if (rows.length === 0) return { imported: 0, duplicates: 0, accounts: accounts.length, categorized: 0 }
+  if (rows.length === 0) return { imported: 0, duplicates: 0, accounts: accounts.length, categorized: 0, firstDate }
 
   const importRecord = db.createImport('Powens', rows.length)
   const withImport = rows.map((r) => ({ ...r, import_id: importRecord.id }))
@@ -529,7 +532,7 @@ async function importPowens(
   const targetIds = new Set<number>(insertedIds)
   for (const id of db.getUncategorizedTransactionIds(accountIds)) targetIds.add(id)
   const categorized = targetIds.size > 0 ? db.applyRulesToTransactions([...targetIds]) : 0
-  return { imported, duplicates, accounts: accounts.length, categorized }
+  return { imported, duplicates, accounts: accounts.length, categorized, firstDate }
 }
 
 // --- Helpers DCA (investissement programmé) ---

@@ -34,6 +34,7 @@ export default function SettingsPage(): JSX.Element {
     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10)
   })
   const [syncMaxDate, setSyncMaxDate] = useState(() => new Date().toISOString().slice(0, 10))
+  const [powensFirstDate, setPowensFirstDate] = useState<string | null>(null)
 
   useEffect(() => {
     window.api.getSettings().then(setSettings)
@@ -63,6 +64,10 @@ export default function SettingsPage(): JSX.Element {
     setPowensMsg('Synchronisation…')
     try {
       const res = await window.api.powensSync(minDate, maxDate)
+      if (res.firstDate) {
+        setPowensFirstDate(res.firstDate)
+        setSyncMinDate(res.firstDate)
+      }
       setPowensMsg(`Synchronisé : ${res.imported} nouvelles transactions, ${res.duplicates} doublons.`)
     } catch (e) {
       setPowensMsg(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
@@ -420,10 +425,15 @@ export default function SettingsPage(): JSX.Element {
     {showSyncModal && (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
         <div style={{ background: '#1a1d27', border: '1px solid #2e3147', borderRadius: 10, padding: 28, width: 360 }}>
-          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 20 }}>Plage de dates à synchroniser</div>
+          <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Plage de dates à synchroniser</div>
+          {powensFirstDate && (
+            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 16 }}>
+              Données disponibles depuis le {new Date(powensFirstDate + 'T00:00:00').toLocaleDateString('fr-FR')}
+            </div>
+          )}
           <div className="form-group">
             <label>Date de début</label>
-            <input type="date" value={syncMinDate} onChange={(e) => setSyncMinDate(e.target.value)} />
+            <input type="date" value={syncMinDate} min={powensFirstDate ?? undefined} onChange={(e) => setSyncMinDate(e.target.value)} />
           </div>
           <div className="form-group">
             <label>Date de fin</label>
