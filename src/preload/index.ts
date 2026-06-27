@@ -33,6 +33,7 @@ const api = {
   setInternalByCategory: (category: string, isInternal: boolean) =>
     ipcRenderer.invoke('set-internal-by-category', category, isInternal),
   deleteTransaction: (id: number) => ipcRenderer.invoke('delete-transaction', id),
+  clearAllTransactions: () => ipcRenderer.invoke('clear-all-transactions'),
   findDuplicates: () => ipcRenderer.invoke('find-duplicates'),
   getCategoryRulesAll: () => ipcRenderer.invoke('get-category-rules-all'),
   deleteCategoryRule: (id: number) => ipcRenderer.invoke('delete-category-rule', id),

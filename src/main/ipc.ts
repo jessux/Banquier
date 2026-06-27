@@ -94,6 +94,7 @@ export function registerIpcHandlers(): void {
     db.setTransactionInternalByCategory(category, isInternal)
   )
   ipcMain.handle('delete-transaction', (_, id: number) => db.deleteTransaction(id))
+  ipcMain.handle('clear-all-transactions', () => db.clearAllTransactions())
   ipcMain.handle('find-duplicates', () => db.findDuplicateTransactions())
   ipcMain.handle('get-category-rules-all', () => db.getCategoryRulesWithId())
   ipcMain.handle('delete-category-rule', (_, id: number) => db.deleteCategoryRule(id))

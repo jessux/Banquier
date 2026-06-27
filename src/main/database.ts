@@ -803,6 +803,11 @@ export function deleteTransaction(id: number): void {
   db.run('DELETE FROM transactions WHERE id = ?', [id])
 }
 
+export function clearAllTransactions(): void {
+  db.run('DELETE FROM transactions')
+  db.run('DELETE FROM imports')
+}
+
 export function exportDb(destPath: string): void {
   db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
   fs.copyFileSync(path.join(app.getPath('userData'), 'banquier.db'), destPath)

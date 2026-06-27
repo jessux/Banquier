@@ -18,6 +18,8 @@ export default function SettingsPage(): JSX.Element {
   const [editingAccount, setEditingAccount] = useState<{ id: number; name: string } | null>(null)
   const [showKey, setShowKey] = useState(false)
   const [exportStatus, setExportStatus] = useState<'idle' | 'ok' | 'err'>('idle')
+  const [clearStep, setClearStep] = useState<0 | 1 | 2>(0)
+  const [clearBusy, setClearBusy] = useState(false)
   const [mobileServer, setMobileServer] = useState<MobileServerInfo | null>(null)
   const [mobileLoading, setMobileLoading] = useState(false)
   const [urlCopied, setUrlCopied] = useState(false)
@@ -98,6 +100,17 @@ export default function SettingsPage(): JSX.Element {
     await window.api.saveSettings(settings)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
+  }
+
+  const clearAllTransactions = async (): Promise<void> => {
+    if (clearStep === 0) { setClearStep(1); return }
+    setClearBusy(true)
+    try {
+      await window.api.clearAllTransactions()
+      setClearStep(0)
+    } finally {
+      setClearBusy(false)
+    }
   }
 
   const doExport = async (type: 'db' | 'csv'): Promise<void> => {
@@ -357,6 +370,43 @@ export default function SettingsPage(): JSX.Element {
         </div>
         {exportStatus === 'ok' && (
           <p style={{ marginTop: 10, fontSize: 13, color: '#22c55e' }}>Fichier exporté avec succès.</p>
+        )}
+      </div>
+
+      {/* Zone danger */}
+      <div className="card" style={{ marginBottom: 20, borderColor: 'rgba(239,68,68,0.3)' }}>
+        <h3 style={{ marginBottom: 8, color: '#ef4444' }}>Zone danger</h3>
+        <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+          Ces actions sont irréversibles. Assurez-vous d'avoir exporté vos données avant de continuer.
+        </p>
+        {clearStep === 0 && (
+          <button
+            className="btn btn-secondary"
+            style={{ borderColor: 'rgba(239,68,68,0.5)', color: '#ef4444' }}
+            onClick={clearAllTransactions}
+          >
+            Vider toutes les transactions
+          </button>
+        )}
+        {clearStep === 1 && (
+          <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '12px 16px' }}>
+            <p className="text-sm" style={{ marginBottom: 12, color: '#ef4444', fontWeight: 500 }}>
+              Toutes les transactions et l'historique d'imports seront supprimés définitivement. Cette action est irréversible.
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                className="btn btn-secondary"
+                style={{ borderColor: 'rgba(239,68,68,0.5)', color: '#ef4444' }}
+                onClick={clearAllTransactions}
+                disabled={clearBusy}
+              >
+                {clearBusy ? 'Suppression…' : 'Oui, tout supprimer'}
+              </button>
+              <button className="btn btn-secondary" onClick={() => setClearStep(0)} disabled={clearBusy}>
+                Annuler
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
