@@ -81,20 +81,27 @@ function findHeaderRow(rows: string[][]): number {
 
 function parseDate(raw: string, format: string): string {
   raw = raw.trim()
+  if (!raw) return ''
   // Strip time component if present (e.g. "2025-12-31 16:34:10" → "2025-12-31")
   if (/^\d{4}-\d{2}-\d{2}[ T]/.test(raw)) return raw.slice(0, 10)
   if (format === 'YYYY-MM-DD') return raw.slice(0, 10)
+  // Auto-detect separator: support '/', '.', '-' so "01.06.2025" works with DD/MM/YYYY mapping
+  const sep = raw.includes('/') ? '/' : raw.includes('.') ? '.' : '-'
+  const parts = raw.split(sep)
   if (format === 'DD/MM/YYYY') {
-    const [d, m, y] = raw.split('/')
+    const [d, m, y] = parts
+    if (!d || !m || !y) return raw
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
   if (format === 'DD/MM/YY') {
-    const [d, m, y] = raw.split('/')
+    const [d, m, y] = parts
+    if (!d || !m || !y) return raw
     const fullYear = parseInt(y) > 50 ? `19${y}` : `20${y}`
     return `${fullYear}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
   if (format === 'MM/DD/YYYY') {
-    const [m, d, y] = raw.split('/')
+    const [m, d, y] = parts
+    if (!m || !d || !y) return raw
     return `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`
   }
   return raw
