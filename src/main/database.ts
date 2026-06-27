@@ -713,6 +713,15 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
   }
 }
 
+export function getLatestPowensTransactionDate(): string | null {
+  const row = db.get(
+    `SELECT MAX(t.date) AS d FROM transactions t
+     JOIN accounts a ON t.account_id = a.id
+     WHERE a.bank LIKE 'powens:%'`
+  ) as { d: string | null } | undefined
+  return row?.d ?? null
+}
+
 export function getDistinctCategories(): string[] {
   const rows = db.all(
     'SELECT DISTINCT category FROM transactions WHERE category IS NOT NULL ORDER BY category'

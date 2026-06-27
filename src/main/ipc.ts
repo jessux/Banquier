@@ -394,7 +394,13 @@ export function registerIpcHandlers(): void {
     const token = store.get('settings').powensToken
     if (!token) return null
     try {
-      return await importPowens(POWENS_CREDS, token)
+      // Partir de la date de la dernière transaction Powens connue (- 2 jours
+      // pour couvrir les transactions rétroactives), ou sans limite si la base est vide.
+      const latest = db.getLatestPowensTransactionDate()
+      const minDate = latest
+        ? new Date(new Date(latest + 'T00:00:00Z').getTime() - 2 * 86400000).toISOString().slice(0, 10)
+        : undefined
+      return await importPowens(POWENS_CREDS, token, minDate)
     } catch (err) {
       console.error('[powens-startup-sync]', err)
       return null
