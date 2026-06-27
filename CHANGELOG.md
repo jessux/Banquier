@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.11.0](https://github.com/jessux/Banquier/compare/v1.10.1...v1.11.0) (2026-06-27)
+
+
+### Nouvelles fonctionnalités
+
+* **settings:** version, vérification MAJ, suppression et devise des comptes ([8289a57](https://github.com/jessux/Banquier/commit/8289a575e395d38d19c60be7c528e68c4a916373))
+
+
+### Corrections de bugs
+
+* **dashboard:** afficher dépenses et revenus par catégorie en même temps ([d10698e](https://github.com/jessux/Banquier/commit/d10698e0d9d39b90739676d995ef8abf2d41409b))
+
 ## [1.10.1](https://github.com/jessux/Banquier/compare/v1.10.0...v1.10.1) (2026-06-27)
 
 
