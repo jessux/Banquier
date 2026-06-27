@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.2](https://github.com/jessux/Banquier/compare/v1.9.1...v1.9.2) (2026-06-27)
+
+
+### Corrections de bugs
+
+* **powens:** filtre local par minDate manquant lors de la sync manuelle ([9c05353](https://github.com/jessux/Banquier/commit/9c05353cdcef841bdc272096e1391e1226448c42))
+
 ## [1.9.1](https://github.com/jessux/Banquier/compare/v1.9.0...v1.9.1) (2026-06-27)
 
 
