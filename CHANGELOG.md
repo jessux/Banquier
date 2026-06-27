@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/jessux/Banquier/compare/v1.6.1...v1.7.0) (2026-06-27)
+
+
+### Nouvelles fonctionnalités
+
+* **powens:** historique 1 an à la première connexion bancaire ([#14](https://github.com/jessux/Banquier/issues/14)) ([e8a6430](https://github.com/jessux/Banquier/commit/e8a6430b668556a5b90309d8e1ede44fa2efe819))
+
 ## [1.6.1](https://github.com/jessux/Banquier/compare/v1.6.0...v1.6.1) (2026-06-26)
 
 
