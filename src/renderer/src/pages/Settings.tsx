@@ -143,6 +143,7 @@ export default function SettingsPage(): JSX.Element {
   }
 
   return (
+    <>
     <div style={{ maxWidth: 600 }}>
       <div className="page-header">
         <h1 className="page-title">Paramètres</h1>
@@ -440,5 +441,6 @@ export default function SettingsPage(): JSX.Element {
         </div>
       </div>
     )}
+    </>
   )
 }
