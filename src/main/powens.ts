@@ -114,13 +114,30 @@ export interface PowensTransaction {
   coming?: boolean
 }
 
-export async function getTransactions(creds: PowensCreds, token: string): Promise<PowensTransaction[]> {
-  const json = await api<{ transactions: PowensTransaction[] }>(
-    creds.domain,
-    '/users/me/transactions?limit=1000',
-    { token }
-  )
-  return json.transactions ?? []
+export async function getTransactions(
+  creds: PowensCreds,
+  token: string,
+  minDate?: string
+): Promise<PowensTransaction[]> {
+  const PAGE = 500
+  const all: PowensTransaction[] = []
+  let offset = 0
+
+  while (true) {
+    const params = new URLSearchParams({ limit: String(PAGE), offset: String(offset) })
+    if (minDate) params.set('min_date', minDate)
+    const json = await api<{ transactions: PowensTransaction[]; total: number }>(
+      creds.domain,
+      `/users/me/transactions?${params.toString()}`,
+      { token }
+    )
+    const page = json.transactions ?? []
+    all.push(...page)
+    if (all.length >= (json.total ?? 0) || page.length < PAGE) break
+    offset += PAGE
+  }
+
+  return all
 }
 
 interface WebviewResult {
