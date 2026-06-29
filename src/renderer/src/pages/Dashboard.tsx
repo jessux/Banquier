@@ -28,6 +28,7 @@ function PieTooltip({ active, payload }: { active?: boolean; payload?: { name: s
 }
 
 type Period = 'mois' | '3m' | '6m' | '1a' | 'tout' | 'custom'
+type CatView = 'depenses' | 'combined' | 'revenus'
 
 const PERIODS: { key: Period; label: string }[] = [
   { key: 'mois',   label: 'Ce mois'     },
@@ -104,6 +105,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
   const [excludedCats, setExcludedCats] = useState<Set<string>>(new Set())
   const [hoveredCat, setHoveredCat] = useState<string | null>(null)
   const [budgets, setBudgets] = useState<BudgetWithSpent[]>([])
+  const [catView, setCatView] = useState<CatView>('depenses')
 
   useEffect(() => {
     if (period === 'custom' && (!customStart || !customEnd)) return
@@ -392,73 +394,161 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
         </div>
       </div>
 
-      {(summary.topCategories.length > 0 || summary.topIncomeCategories.length > 0) && (
-        <div className="grid-2" style={{ marginBottom: 24 }}>
-          {(['depenses', 'revenus'] as const).map((v) => {
-            const items = v === 'depenses' ? summary.topCategories : summary.topIncomeCategories
-            if (items.length === 0) return null
-            return (
-              <div key={v} className="card">
-                <div className="card-title" style={{ marginBottom: 16, color: v === 'depenses' ? '#ef4444' : '#22c55e' }}>
-                  {v === 'depenses' ? 'Dépenses' : 'Revenus'} par catégorie
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {items.map((c, i) => {
-                    const max = items[0]?.total ?? 1
-                    const color = v === 'depenses' ? COLORS[i % COLORS.length] : '#22c55e'
-                    const isHovered = hoveredCat === `${v}/${c.category}`
-                    return (
-                      <div key={c.category}>
-                        <div
-                          className="flex justify-between"
-                          onClick={() => toggleCat(c.category)}
-                          onMouseEnter={() => setHoveredCat(`${v}/${c.category}`)}
-                          onMouseLeave={() => setHoveredCat(null)}
-                          style={{ marginBottom: 4, cursor: 'pointer', borderRadius: 4, padding: '2px 4px', marginLeft: -4, background: isHovered ? '#2e314733' : 'transparent', transition: 'background 0.15s' }}
-                          title="Cliquer pour exclure du calcul"
-                        >
-                          <span style={{ fontSize: 13, fontWeight: 600 }}>{c.category}</span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <span style={{ fontSize: 11, color: '#64748b', opacity: isHovered ? 1 : 0, transition: 'opacity 0.15s' }}>exclure</span>
-                            <span className={v === 'depenses' ? 'amount-negative' : 'amount-positive'}>{formatEur(c.total)}</span>
-                          </div>
-                        </div>
-                        <div style={{ background: '#242736', borderRadius: 4, height: 6, overflow: 'hidden', marginBottom: c.subcategories.length ? 6 : 0 }}>
-                          <div style={{ width: `${(c.total / max) * 100}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.3s ease' }} />
-                        </div>
-                        {c.subcategories.length > 0 && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 12, borderLeft: `2px solid ${color}33` }}>
-                            {c.subcategories.sort((a, b) => b.total - a.total).map((s) => {
-                              const isSubHovered = hoveredCat === `${v}/${c.category}/${s.category}`
-                              return (
-                                <div
-                                  key={s.category}
-                                  className="flex justify-between"
-                                  onClick={() => toggleCat(s.category)}
-                                  onMouseEnter={() => setHoveredCat(`${v}/${c.category}/${s.category}`)}
-                                  onMouseLeave={() => setHoveredCat(null)}
-                                  style={{ fontSize: 12, color: '#94a3b8', cursor: 'pointer', borderRadius: 3, padding: '1px 4px', marginLeft: -4, background: isSubHovered ? '#2e314744' : 'transparent', transition: 'background 0.15s' }}
-                                  title="Cliquer pour exclure du calcul"
-                                >
-                                  <span>{s.category}</span>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                    <span style={{ fontSize: 10, color: '#475569', opacity: isSubHovered ? 1 : 0, transition: 'opacity 0.15s' }}>exclure</span>
-                                    <span>{formatEur(s.total)}</span>
-                                  </div>
-                                </div>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
+      {(summary.topCategories.length > 0 || summary.topIncomeCategories.length > 0) && (() => {
+        const depItems = summary.topCategories
+        const revItems = summary.topIncomeCategories
+
+        // Combined: net balance per category (revenus − dépenses)
+        const netMap = new Map<string, { income: number; expense: number; subcategories: typeof depItems[0]['subcategories'] }>()
+        for (const c of depItems) {
+          const e = netMap.get(c.category) ?? { income: 0, expense: 0, subcategories: c.subcategories }
+          netMap.set(c.category, { ...e, expense: c.total, subcategories: c.subcategories })
+        }
+        for (const c of revItems) {
+          const e = netMap.get(c.category) ?? { income: 0, expense: 0, subcategories: c.subcategories }
+          netMap.set(c.category, { ...e, income: c.total })
+        }
+        const netItems = Array.from(netMap.entries())
+          .map(([cat, d]) => ({ category: cat, net: d.income - d.expense, income: d.income, expense: d.expense, subcategories: d.subcategories }))
+          .sort((a, b) => b.net - a.net)
+
+        const depWithColor = depItems.map((c, i) => ({ ...c, catType: 'depense' as const, color: COLORS[i % COLORS.length] }))
+        const revWithColor = revItems.map(c => ({ ...c, catType: 'revenu' as const, color: '#22c55e' }))
+
+        return (
+          <div className="card" style={{ marginBottom: 24 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div className="card-title" style={{
+                marginBottom: 0,
+                color: catView === 'depenses' ? '#ef4444' : catView === 'revenus' ? '#22c55e' : undefined
+              }}>
+                {catView === 'depenses' ? 'Dépenses par catégorie' : catView === 'revenus' ? 'Revenus par catégorie' : 'Solde net par catégorie'}
               </div>
-            )
-          })}
-        </div>
-      )}
+              <div style={{ display: 'flex', gap: 4 }}>
+                {(['depenses', 'combined', 'revenus'] as CatView[]).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setCatView(v)}
+                    style={{
+                      padding: '4px 12px', borderRadius: 16, border: 'none', cursor: 'pointer',
+                      fontSize: 12, fontWeight: catView === v ? 600 : 400,
+                      background: catView === v
+                        ? (v === 'depenses' ? '#ef444420' : v === 'revenus' ? '#22c55e20' : '#6366f120')
+                        : '#242736',
+                      color: catView === v
+                        ? (v === 'depenses' ? '#ef4444' : v === 'revenus' ? '#22c55e' : '#6366f1')
+                        : '#94a3b8',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    {v === 'depenses' ? 'Dépenses' : v === 'revenus' ? 'Revenus' : 'Combiné'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {catView === 'combined' ? (
+              netItems.length === 0 ? (
+                <p className="text-muted" style={{ fontSize: 13 }}>Aucune donnée.</p>
+              ) : (() => {
+                const maxAbs = Math.max(...netItems.map(c => Math.abs(c.net)), 1)
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {netItems.map((c) => {
+                      const isPos = c.net >= 0
+                      const color = isPos ? '#22c55e' : '#ef4444'
+                      const isHovered = hoveredCat === `net/${c.category}`
+                      return (
+                        <div key={c.category}>
+                          <div
+                            className="flex justify-between"
+                            onClick={() => toggleCat(c.category)}
+                            onMouseEnter={() => setHoveredCat(`net/${c.category}`)}
+                            onMouseLeave={() => setHoveredCat(null)}
+                            style={{ marginBottom: 4, cursor: 'pointer', borderRadius: 4, padding: '2px 4px', marginLeft: -4, background: isHovered ? '#2e314733' : 'transparent', transition: 'background 0.15s' }}
+                            title="Cliquer pour exclure du calcul"
+                          >
+                            <span style={{ fontSize: 13, fontWeight: 600 }}>{c.category}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 10, color: '#475569', opacity: isHovered ? 1 : 0, transition: 'opacity 0.15s' }}>exclure ×</span>
+                              {(c.income > 0 || c.expense > 0) && (
+                                <span style={{ fontSize: 11, color: '#64748b' }}>
+                                  {c.income > 0 && `+${formatEur(c.income)}`}{c.income > 0 && c.expense > 0 && ' / '}{c.expense > 0 && `-${formatEur(c.expense)}`}
+                                </span>
+                              )}
+                              <span style={{ color, fontWeight: 600, fontSize: 13 }}>{isPos ? '+' : ''}{formatEur(c.net)}</span>
+                            </div>
+                          </div>
+                          <div style={{ background: '#242736', borderRadius: 4, height: 6, overflow: 'hidden' }}>
+                            <div style={{ width: `${(Math.abs(c.net) / maxAbs) * 100}%`, height: '100%', background: color, borderRadius: 4, transition: 'width 0.3s ease' }} />
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )
+              })()
+            ) : (() => {
+              const activeItems = catView === 'depenses' ? depWithColor : revWithColor
+              return activeItems.length === 0 ? (
+                <p className="text-muted" style={{ fontSize: 13 }}>Aucune donnée pour cette vue.</p>
+              ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                {activeItems.map((c) => {
+                  const max = activeItems[0]?.total ?? 1
+                  const isExpense = c.catType === 'depense'
+                  const isHovered = hoveredCat === `cat/${c.category}`
+                  return (
+                    <div key={`${c.catType}/${c.category}`}>
+                      <div
+                        className="flex justify-between"
+                        onClick={() => toggleCat(c.category)}
+                        onMouseEnter={() => setHoveredCat(`cat/${c.category}`)}
+                        onMouseLeave={() => setHoveredCat(null)}
+                        style={{ marginBottom: 4, cursor: 'pointer', borderRadius: 4, padding: '2px 4px', marginLeft: -4, background: isHovered ? '#2e314733' : 'transparent', transition: 'background 0.15s' }}
+                        title="Cliquer pour exclure du calcul"
+                      >
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>{c.category}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, color: '#64748b', opacity: isHovered ? 1 : 0, transition: 'opacity 0.15s' }}>exclure ×</span>
+                          <span className={isExpense ? 'amount-negative' : 'amount-positive'}>{formatEur(c.total)}</span>
+                        </div>
+                      </div>
+                      <div style={{ background: '#242736', borderRadius: 4, height: 6, overflow: 'hidden', marginBottom: c.subcategories.length ? 6 : 0 }}>
+                        <div style={{ width: `${(c.total / max) * 100}%`, height: '100%', background: c.color, borderRadius: 4, transition: 'width 0.3s ease' }} />
+                      </div>
+                      {c.subcategories.length > 0 && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 12, borderLeft: `2px solid ${c.color}33` }}>
+                          {c.subcategories.sort((a, b) => b.total - a.total).map((s) => {
+                            const isSubHovered = hoveredCat === `cat/${c.category}/${s.category}`
+                            return (
+                              <div
+                                key={s.category}
+                                className="flex justify-between"
+                                onClick={() => toggleCat(`${c.category} > ${s.category}`)}
+                                onMouseEnter={() => setHoveredCat(`cat/${c.category}/${s.category}`)}
+                                onMouseLeave={() => setHoveredCat(null)}
+                                style={{ fontSize: 12, color: '#94a3b8', cursor: 'pointer', borderRadius: 3, padding: '1px 4px', marginLeft: -4, background: isSubHovered ? '#2e314744' : 'transparent', transition: 'background 0.15s' }}
+                                title="Cliquer pour exclure du calcul"
+                              >
+                                <span>{s.category}</span>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  <span style={{ fontSize: 10, color: '#475569', opacity: isSubHovered ? 1 : 0, transition: 'opacity 0.15s' }}>exclure ×</span>
+                                  <span>{formatEur(s.total)}</span>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )})()}
+          </div>
+        )
+      })()}
 
       {/* Widget budgets */}
       {budgets.length > 0 && (

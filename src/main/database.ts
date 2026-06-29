@@ -571,6 +571,23 @@ export function getMonthlyStats(months = 6, anchorEnd?: string): MonthlyStats[] 
   ) as MonthlyStats[]
 }
 
+function buildExclClause(excludeCategories?: string[]): { clause: string; params: unknown[] } {
+  if (!excludeCategories?.length) return { clause: '', params: [] }
+  // 'Non catégorisé' represents NULL categories — handle separately
+  const excludeNull = excludeCategories.includes('Non catégorisé')
+  const real = excludeCategories.filter(c => c !== 'Non catégorisé')
+  const parents = real.filter(c => !c.includes(' > '))
+  const p: unknown[] = []
+  const parts: string[] = []
+  if (real.length) { parts.push(`t.category NOT IN (${real.map(() => '?').join(',')})`); p.push(...real) }
+  for (const parent of parents) { parts.push(`t.category NOT LIKE ?`); p.push(`${parent} > %`) }
+
+  if (excludeNull && parts.length === 0) return { clause: 'AND t.category IS NOT NULL', params: [] }
+  if (excludeNull) return { clause: `AND t.category IS NOT NULL AND ${parts.join(' AND ')}`, params: p }
+  if (parts.length === 0) return { clause: '', params: [] }
+  return { clause: `AND (t.category IS NULL OR (${parts.join(' AND ')}))`, params: p }
+}
+
 export function getCategoryStats(startDate?: string, endDate?: string, excludeCategories?: string[]): CategoryStats[] {
   const conditions: string[] = ['t.amount < 0', 't.is_internal = 0']
   const params: unknown[] = []
@@ -578,8 +595,9 @@ export function getCategoryStats(startDate?: string, endDate?: string, excludeCa
   if (startDate) { conditions.push('t.date >= ?'); params.push(startDate) }
   if (endDate) { conditions.push('t.date <= ?'); params.push(endDate) }
   if (excludeCategories?.length) {
-    conditions.push(`(t.category IS NULL OR t.category NOT IN (${excludeCategories.map(() => '?').join(',')}))`)
-    params.push(...excludeCategories)
+    const { clause, params: ep } = buildExclClause(excludeCategories)
+    conditions.push(clause.replace(/^AND /, ''))
+    params.push(...ep)
   }
 
   return db.all(
@@ -603,8 +621,9 @@ export function getCreditCategoryStats(startDate?: string, endDate?: string, exc
   if (startDate) { conditions.push('t.date >= ?'); params.push(startDate) }
   if (endDate) { conditions.push('t.date <= ?'); params.push(endDate) }
   if (excludeCategories?.length) {
-    conditions.push(`(t.category IS NULL OR t.category NOT IN (${excludeCategories.map(() => '?').join(',')}))`)
-    params.push(...excludeCategories)
+    const { clause, params: ep } = buildExclClause(excludeCategories)
+    conditions.push(clause.replace(/^AND /, ''))
+    params.push(...ep)
   }
 
   return db.all(
@@ -683,10 +702,7 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
   let prevStart: string
   let prevEnd: string
 
-  const exclClause = excludeCategories?.length
-    ? `AND (t.category IS NULL OR t.category NOT IN (${excludeCategories.map(() => '?').join(',')}))`
-    : ''
-  const exclParams: unknown[] = excludeCategories?.length ? excludeCategories : []
+  const { clause: exclClause, params: exclParams } = buildExclClause(excludeCategories)
 
   if (startDate) {
     effectiveStart = startDate
