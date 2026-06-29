@@ -89,6 +89,8 @@ export interface Settings {
   mobileServerEnabled?: boolean
   /** Token d'accès Powens permanent obtenu après la première connexion (interne). */
   powensToken?: string
+  /** Mis à true après que l'utilisateur a terminé ou passé l'onboarding. */
+  onboardingDone?: boolean
 }
 
 /** État de la connexion Powens. */

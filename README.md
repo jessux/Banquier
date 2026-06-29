@@ -27,6 +27,7 @@ Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elle
 
 | Fonctionnalité | Détail |
 |---|---|
+| 🚀 **Onboarding** | Assistant pas-à-pas : connexion Powens, transactions, catégorisation, IA |
 | 📥 **Import** | CSV et PDF depuis n'importe quelle banque française |
 | 🤖 **Catégorisation IA** | OpenRouter classe vos transactions en un clic |
 | 📋 **Règles automatiques** | "AMAZON → Shopping" pour ne jamais recatégoriser deux fois |

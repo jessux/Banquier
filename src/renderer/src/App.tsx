@@ -10,6 +10,8 @@ import Rules from './pages/Rules'
 import Recurring from './pages/Recurring'
 import Patrimoine from './pages/Patrimoine'
 import Budget from './pages/Budget'
+import OnboardingModal from './components/OnboardingModal'
+import type { Settings as SettingsType } from '../../../shared/types'
 
 export type Page = 'dashboard' | 'transactions' | 'recurring' | 'patrimoine' | 'budget' | 'import' | 'chat' | 'categories' | 'rules' | 'settings'
 
@@ -28,8 +30,15 @@ export default function App(): JSX.Element {
   const [page, setPage] = useState<Page>('dashboard')
   const [syncNotif, setSyncNotif] = useState<SyncNotif | null>(null)
   const [budgetAlert, setBudgetAlert] = useState<BudgetAlert | null>(null)
+  const [showOnboarding, setShowOnboarding] = useState(false)
+  const [loadedSettings, setLoadedSettings] = useState<SettingsType | null>(null)
 
   useEffect(() => {
+    window.api.getSettings().then((s) => {
+      setLoadedSettings(s)
+      if (!s.onboardingDone) setShowOnboarding(true)
+    })
+
     window.api.powensStartupSync().then((result) => {
       if (!result) return
       if (result.error) {
@@ -72,10 +81,22 @@ export default function App(): JSX.Element {
 
   const uncategorized = syncNotif ? syncNotif.imported - syncNotif.categorized : 0
 
+  const handleOnboardingDone = async (saved: Partial<SettingsType>): Promise<void> => {
+    await window.api.saveSettings(saved)
+    setShowOnboarding(false)
+  }
+
   return (
     <div className="layout">
       <Sidebar activePage={page} onNavigate={setPage} />
       <main className="main-content">{renderPage()}</main>
+      {showOnboarding && loadedSettings && (
+        <OnboardingModal
+          settings={loadedSettings}
+          onDone={handleOnboardingDone}
+          onNavigate={(p) => { setPage(p as Page); setShowOnboarding(false) }}
+        />
+      )}
       {budgetAlert && (
         <div className="sync-toast" style={{ borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.08)' }}>
           <div className="sync-toast-icon">🎯</div>
