@@ -221,6 +221,21 @@ export interface PatrimoineSummary {
   totalGain: number
 }
 
+// --- Budgets ---
+
+export interface Budget {
+  id: number
+  category: string
+  amount: number
+  period: 'mensuel'
+}
+
+export interface BudgetWithSpent extends Budget {
+  spent: number
+}
+
+// ---
+
 export interface MobileServerInfo {
   url: string
   qrSvg: string

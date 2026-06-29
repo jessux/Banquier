@@ -133,6 +133,14 @@ const api = {
   updateAccountCurrency: (id: number, currency: string) =>
     ipcRenderer.invoke('update-account-currency', id, currency),
 
+  // Budgets
+  getBudgets: () => ipcRenderer.invoke('get-budgets'),
+  getBudgetsWithSpent: (startDate?: string, endDate?: string) =>
+    ipcRenderer.invoke('get-budgets-with-spent', startDate, endDate),
+  upsertBudget: (category: string, amount: number) =>
+    ipcRenderer.invoke('upsert-budget', category, amount),
+  deleteBudget: (id: number) => ipcRenderer.invoke('delete-budget', id),
+
   // Mobile server
   startMobileServer: () => ipcRenderer.invoke('start-mobile-server'),
   stopMobileServer: () => ipcRenderer.invoke('stop-mobile-server'),

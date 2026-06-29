@@ -42,6 +42,7 @@ import type {
   PowensSyncResult
 } from '../shared/types'
 
+
 interface StoreSchema {
   settings: Settings
 }
@@ -494,6 +495,16 @@ export function registerIpcHandlers(): void {
     if (is.dev) return { status: 'error', message: 'Vérification indisponible en mode développement.' }
     return checkForUpdatesManual()
   })
+
+  // --- Budgets ---
+  ipcMain.handle('get-budgets', () => db.getBudgets())
+  ipcMain.handle('get-budgets-with-spent', (_, startDate?: string, endDate?: string) =>
+    db.getBudgetsWithSpent(startDate, endDate)
+  )
+  ipcMain.handle('upsert-budget', (_, category: string, amount: number) =>
+    db.upsertBudget(category, amount)
+  )
+  ipcMain.handle('delete-budget', (_, id: number) => db.deleteBudget(id))
 
   ipcMain.handle('delete-account', (_, id: number) => db.deleteAccount(id))
 

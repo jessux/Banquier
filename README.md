@@ -30,7 +30,8 @@ Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elle
 | 📥 **Import** | CSV et PDF depuis n'importe quelle banque française |
 | 🤖 **Catégorisation IA** | OpenRouter classe vos transactions en un clic |
 | 📋 **Règles automatiques** | "AMAZON → Shopping" pour ne jamais recatégoriser deux fois |
-| 📊 **Dashboard** | Dépenses, revenus, tendances mois par mois |
+| 📊 **Dashboard** | Dépenses, revenus, tendances mois par mois + aperçu des budgets |
+| 🎯 **Budgets** | Plafonds mensuels par catégorie avec barres de progression |
 | 💬 **Chat financier** | Posez des questions en langage naturel sur vos finances |
 | 🏦 **Multi-comptes** | Courant, épargne, multi-devises |
 | 🔒 **Vie privée** | Données 100 % locales, rien dans le cloud |
@@ -70,16 +71,18 @@ Toutes vos données sont dans un seul fichier SQLite. Banquier vous donne deux f
 
 ### Export SQLite (sauvegarde complète)
 
-Exporte une copie exacte de la base : transactions, catégories, règles, comptes. Fichier produit : `banquier-backup-YYYY-MM-DD.db`.
+Exporte une copie exacte de la base : transactions, catégories, règles, comptes, budgets. Fichier produit : `banquier-backup-YYYY-MM-DD.db`.
 
-**Restaurer une sauvegarde** — l'import de `.db` n'est pas encore dans l'interface. Pour restaurer manuellement :
+**Restaurer une sauvegarde** — depuis **Paramètres → Données → Restaurer une sauvegarde…** :
 
-1. Quittez Banquier
-2. Remplacez le fichier `banquier.db` dans le dossier `userData` par votre sauvegarde :
-   ```
-   %APPDATA%\banquier\banquier.db   ← Windows
-   ```
-3. Relancez l'application
+1. Cliquez sur "Restaurer une sauvegarde…" et confirmez
+2. Sélectionnez votre fichier `.db`
+3. L'application recharge automatiquement avec les données restaurées
+
+Vous pouvez aussi restaurer manuellement (application fermée) en remplaçant :
+```
+%APPDATA%\banquier\banquier.db   ← Windows
+```
 
 ### Export CSV (transactions uniquement)
 
@@ -107,12 +110,16 @@ Sans clé API, tout le reste de l'application fonctionne normalement.
 
 ## Proxy d'entreprise
 
+Banquier détecte automatiquement le proxy configuré dans Windows (Internet Options / registre) — aucune action requise dans la plupart des cas.
+
+Si nécessaire, vous pouvez forcer un proxy via variable d'environnement (prioritaire sur le proxy système) :
+
 ```bash
 set HTTPS_PROXY=http://proxy.entreprise.com:8080
 npm run dev
 ```
 
-Les appels OpenRouter passent automatiquement par le proxy.
+Les appels OpenRouter et Powens passent tous les deux par le proxy détecté.
 
 ---
 

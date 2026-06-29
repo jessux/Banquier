@@ -3,7 +3,8 @@ import {
   AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceArea
 } from 'recharts'
-import type { DashboardSummary, CategoryStatsGrouped } from '../../../shared/types'
+import type { DashboardSummary, CategoryStatsGrouped, BudgetWithSpent } from '../../../shared/types'
+import type { Page } from '../App'
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
 
@@ -93,7 +94,7 @@ function pct(current: number, previous: number): string {
   return `${sign}${diff.toFixed(1)}%`
 }
 
-export default function Dashboard(): JSX.Element {
+export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void }): JSX.Element {
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<Period>('mois')
@@ -102,14 +103,19 @@ export default function Dashboard(): JSX.Element {
   const [customEnd, setCustomEnd] = useState('')
   const [excludedCats, setExcludedCats] = useState<Set<string>>(new Set())
   const [hoveredCat, setHoveredCat] = useState<string | null>(null)
+  const [budgets, setBudgets] = useState<BudgetWithSpent[]>([])
 
   useEffect(() => {
     if (period === 'custom' && (!customStart || !customEnd)) return
     setLoading(true)
     const { startDate, endDate } = periodDates(period, customStart, customEnd, monthOffset)
     const excl = excludedCats.size > 0 ? Array.from(excludedCats) : undefined
-    window.api.getDashboardSummary(startDate, endDate, excl).then((s) => {
-      setSummary(s)
+    Promise.all([
+      window.api.getDashboardSummary(startDate, endDate, excl),
+      window.api.getBudgetsWithSpent(startDate, endDate)
+    ]).then(([s, b]) => {
+      setSummary(s as DashboardSummary)
+      setBudgets(b as BudgetWithSpent[])
       setLoading(false)
     })
   }, [period, monthOffset, customStart, customEnd, excludedCats])
@@ -451,6 +457,42 @@ export default function Dashboard(): JSX.Element {
               </div>
             )
           })}
+        </div>
+      )}
+
+      {/* Widget budgets */}
+      {budgets.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div className="card-title">Budgets</div>
+            {onNavigate && (
+              <button
+                onClick={() => onNavigate('budget')}
+                style={{ fontSize: 12, color: '#6366f1', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+              >
+                Gérer →
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {budgets.map((b) => {
+              const pct = b.amount > 0 ? Math.min((b.spent / b.amount) * 100, 100) : 0
+              const over = b.spent > b.amount
+              const color = over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#22c55e'
+              return (
+                <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ fontSize: 13, minWidth: 130, flex: '0 0 auto', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.category}</span>
+                  <div style={{ flex: 1, background: '#242736', borderRadius: 6, height: 7, overflow: 'hidden' }}>
+                    <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 6, transition: 'width 0.3s ease' }} />
+                  </div>
+                  <span style={{ fontSize: 12, color, minWidth: 36, textAlign: 'right', fontWeight: 600 }}>{pct.toFixed(0)}%</span>
+                  <span style={{ fontSize: 12, color: '#64748b', minWidth: 90, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>
+                    {formatEur(b.spent)} / {formatEur(b.amount)}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

@@ -59,6 +59,13 @@ function migrate(): void {
 
 function createTables(): void {
   db.exec(`
+    CREATE TABLE IF NOT EXISTS budgets (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      category TEXT NOT NULL UNIQUE,
+      amount   REAL NOT NULL,
+      period   TEXT NOT NULL DEFAULT 'mensuel'
+    );
+
     CREATE TABLE IF NOT EXISTS accounts (
       id       INTEGER PRIMARY KEY AUTOINCREMENT,
       name     TEXT NOT NULL,
@@ -876,6 +883,60 @@ export function deleteTransaction(id: number): void {
 export function clearAllTransactions(): void {
   db.run('DELETE FROM transactions')
   db.run('DELETE FROM imports')
+}
+
+// --- Budgets ---
+
+export interface BudgetRow {
+  id: number
+  category: string
+  amount: number
+  period: string
+}
+
+export function getBudgets(): BudgetRow[] {
+  return db.all('SELECT * FROM budgets ORDER BY category') as BudgetRow[]
+}
+
+export function upsertBudget(category: string, amount: number): BudgetRow {
+  db.run(
+    'INSERT INTO budgets (category, amount, period) VALUES (?, ?, ?) ON CONFLICT(category) DO UPDATE SET amount = excluded.amount',
+    [category, amount, 'mensuel']
+  )
+  return db.get('SELECT * FROM budgets WHERE category = ?', [category]) as BudgetRow
+}
+
+export function deleteBudget(id: number): void {
+  db.run('DELETE FROM budgets WHERE id = ?', [id])
+}
+
+export function getBudgetsWithSpent(startDate?: string, endDate?: string): (BudgetRow & { spent: number })[] {
+  const budgets = getBudgets()
+  if (budgets.length === 0) return []
+
+  const conditions = ['amount < 0', 'is_internal = 0']
+  const params: unknown[] = []
+  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+
+  const spentRows = db.all(
+    `SELECT COALESCE(category, 'Non catégorisé') AS category, SUM(ABS(amount)) AS total
+     FROM transactions WHERE ${conditions.join(' AND ')}
+     GROUP BY category`,
+    params
+  ) as { category: string; total: number }[]
+
+  const spentMap = new Map(spentRows.map((r) => [r.category, r.total]))
+
+  return budgets.map((b) => {
+    let spent = 0
+    for (const [cat, total] of spentMap) {
+      if (cat === b.category || cat.startsWith(b.category + ' > ')) {
+        spent += total
+      }
+    }
+    return { ...b, spent }
+  })
 }
 
 export function exportDb(destPath: string): void {

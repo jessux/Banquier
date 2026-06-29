@@ -1,6 +1,6 @@
 import nodeFetch from 'node-fetch'
 import { HttpsProxyAgent } from 'https-proxy-agent'
-import { BrowserWindow } from 'electron'
+import { BrowserWindow, session } from 'electron'
 
 /**
  * Intégration Powens (ex-Budget Insight / biapi) — agrégation bancaire.
@@ -38,9 +38,26 @@ export const POWENS_CREDS: PowensCreds = {
   redirectUri: 'http://localhost:8645'
 }
 
-function agent(): HttpsProxyAgent<string> | undefined {
-  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
-  return proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined
+async function resolveAgent(url: string): Promise<HttpsProxyAgent<string> | undefined> {
+  // Env var explicite → prioritaire (cas proxy d'entreprise documenté dans le README)
+  const envProxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
+  if (envProxy) return new HttpsProxyAgent(envProxy)
+
+  // Proxy système (Windows : Internet Options / registre, macOS : Préférences réseau)
+  // Electron résout aussi les PAC/WPAD automatiquement.
+  try {
+    const pac = await session.defaultSession.resolveProxy(url)
+    // Format renvoyé : "PROXY host:port" | "HTTPS host:port" | "SOCKS5 host:port" | "DIRECT"
+    const first = pac.split(';')[0].trim()
+    const m = first.match(/^(?:PROXY|HTTPS|SOCKS5?)\s+(.+)$/i)
+    if (m) {
+      const scheme = first.toUpperCase().startsWith('SOCKS') ? 'socks5' : 'http'
+      return new HttpsProxyAgent(`${scheme}://${m[1]}`)
+    }
+  } catch {
+    // session non disponible (tests unitaires, démarrage anticipé) — ignoré
+  }
+  return undefined
 }
 
 function baseUrl(domain: string): string {
@@ -58,12 +75,13 @@ async function api<T>(
   path: string,
   init: { method?: string; token?: string; body?: unknown } = {}
 ): Promise<T> {
+  const targetUrl = `${baseUrl(domain)}${path}`
   const headers: Record<string, string> = { accept: 'application/json' }
   if (init.body) headers['content-type'] = 'application/json'
   if (init.token) headers['authorization'] = `Bearer ${init.token}`
-  const res = await nodeFetch(`${baseUrl(domain)}${path}`, {
+  const res = await nodeFetch(targetUrl, {
     method: init.method ?? 'GET',
-    agent: agent(),
+    agent: await resolveAgent(targetUrl),
     headers,
     body: init.body ? JSON.stringify(init.body) : undefined
   })

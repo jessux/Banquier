@@ -9,8 +9,9 @@ import Categories from './pages/Categories'
 import Rules from './pages/Rules'
 import Recurring from './pages/Recurring'
 import Patrimoine from './pages/Patrimoine'
+import Budget from './pages/Budget'
 
-export type Page = 'dashboard' | 'transactions' | 'recurring' | 'patrimoine' | 'import' | 'chat' | 'categories' | 'rules' | 'settings'
+export type Page = 'dashboard' | 'transactions' | 'recurring' | 'patrimoine' | 'budget' | 'import' | 'chat' | 'categories' | 'rules' | 'settings'
 
 interface SyncNotif {
   imported: number
@@ -33,10 +34,11 @@ export default function App(): JSX.Element {
 
   const renderPage = (): JSX.Element => {
     switch (page) {
-      case 'dashboard': return <Dashboard />
+      case 'dashboard': return <Dashboard onNavigate={setPage} />
       case 'transactions': return <Transactions onImport={() => setPage('import')} />
       case 'recurring': return <Recurring />
       case 'patrimoine': return <Patrimoine />
+      case 'budget': return <Budget />
       case 'import': return <Import />
       case 'chat': return <Chat />
       case 'categories': return <Categories />
