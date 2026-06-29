@@ -57,6 +57,7 @@ export default function Transactions({ onImport }: { onImport?: () => void }): J
   const [toast, setToast] = useState<string | null>(null)
   const [duplicates, setDuplicates] = useState<DuplicateGroup[] | null>(null)
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
+  const [editingNote, setEditingNote] = useState<{ id: number; note: string; tags: string } | null>(null)
   const editRef = useRef<HTMLInputElement>(null)
   const patternRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -204,6 +205,14 @@ export default function Transactions({ onImport }: { onImport?: () => void }): J
     })
     load()
     showToast('Transaction supprimée')
+  }
+
+  const saveNote = async (): Promise<void> => {
+    if (!editingNote) return
+    await window.api.setTransactionNote(editingNote.id, editingNote.note || null)
+    await window.api.setTransactionTags(editingNote.id, editingNote.tags || null)
+    setEditingNote(null)
+    load()
   }
 
   const toggleSort = (field: typeof sortField) => {
@@ -475,26 +484,49 @@ export default function Transactions({ onImport }: { onImport?: () => void }): J
             <tbody>
               {sorted.map((tx) => {
                 const isInternal = tx.is_internal === 1
+                const hasNote = !!tx.note
+                const txTags = tx.tags ? tx.tags.split(',').map((t) => t.trim()).filter(Boolean) : []
+                const isEditingNote = editingNote?.id === tx.id
                 const toggleInternal = async () => {
                   await window.api.setTransactionInternal(tx.id, !isInternal)
                   load()
                 }
                 return (
+                <>
                 <tr key={tx.id} style={{ background: isInternal ? 'rgba(99,102,241,0.04)' : undefined }}>
                   <td style={{ whiteSpace: 'nowrap', color: 'var(--text2)', fontSize: 13, opacity: isInternal ? 0.5 : 1 }}>
                     {new Date(tx.date).toLocaleDateString('fr-FR')}
                   </td>
-                  <td style={{ maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {isInternal && (
-                      <span style={{
-                        fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
-                        color: '#6366f1', background: 'rgba(99,102,241,0.15)',
-                        borderRadius: 4, padding: '1px 5px', marginRight: 6
-                      }}>
-                        interne
-                      </span>
-                    )}
-                    <span style={{ opacity: isInternal ? 0.45 : 1 }}>{tx.description}</span>
+                  <td style={{ maxWidth: 320 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+                      <div style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {isInternal && (
+                          <span style={{
+                            fontSize: 10, fontWeight: 600, letterSpacing: '0.03em',
+                            color: '#6366f1', background: 'rgba(99,102,241,0.15)',
+                            borderRadius: 4, padding: '1px 5px', marginRight: 6
+                          }}>
+                            interne
+                          </span>
+                        )}
+                        <span style={{ opacity: isInternal ? 0.45 : 1 }}>{tx.description}</span>
+                      </div>
+                      {txTags.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {txTags.map((tag) => (
+                            <span key={tag} style={{
+                              fontSize: 10, padding: '1px 6px', borderRadius: 10,
+                              background: 'rgba(99,102,241,0.15)', color: '#818cf8', fontWeight: 500
+                            }}>{tag}</span>
+                          ))}
+                        </div>
+                      )}
+                      {tx.note && (
+                        <span style={{ fontSize: 11, color: '#64748b', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {tx.note}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td>
                     {editing?.id === tx.id ? (
@@ -532,7 +564,20 @@ export default function Transactions({ onImport }: { onImport?: () => void }): J
                       {formatEur(tx.amount)}
                     </span>
                   </td>
-                  <td style={{ textAlign: 'center' }}>
+                  <td style={{ textAlign: 'center', whiteSpace: 'nowrap' }}>
+                    <button
+                      onClick={() => setEditingNote(isEditingNote ? null : { id: tx.id, note: tx.note ?? '', tags: tx.tags ?? '' })}
+                      title="Ajouter une note ou des tags"
+                      style={{
+                        background: 'none', border: 'none', cursor: 'pointer',
+                        fontSize: 13, padding: '2px 4px', lineHeight: 1,
+                        color: hasNote || txTags.length > 0 ? '#f59e0b' : '#2e3147',
+                        opacity: hasNote || txTags.length > 0 || isEditingNote ? 1 : 0
+                      }}
+                      className="internal-toggle"
+                    >
+                      📝
+                    </button>
                     <button
                       onClick={toggleInternal}
                       title={isInternal ? 'Marquer comme externe' : 'Marquer comme virement interne'}
@@ -548,6 +593,39 @@ export default function Transactions({ onImport }: { onImport?: () => void }): J
                     </button>
                   </td>
                 </tr>
+                {isEditingNote && (
+                  <tr key={`note-${tx.id}`}>
+                    <td colSpan={5} style={{ padding: '0 0 10px 0', background: 'rgba(245,158,11,0.04)', borderBottom: '1px solid rgba(245,158,11,0.15)' }}>
+                      <div style={{ display: 'flex', gap: 10, padding: '10px 12px', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                        <div className="form-group" style={{ marginBottom: 0, flex: '1 1 200px' }}>
+                          <label style={{ fontSize: 11, color: '#94a3b8' }}>Note</label>
+                          <textarea
+                            autoFocus
+                            value={editingNote.note}
+                            onChange={(e) => setEditingNote({ ...editingNote, note: e.target.value })}
+                            rows={2}
+                            style={{ fontSize: 12, resize: 'vertical', minHeight: 48 }}
+                            placeholder="Ajouter une note…"
+                          />
+                        </div>
+                        <div className="form-group" style={{ marginBottom: 0, flex: '1 1 160px' }}>
+                          <label style={{ fontSize: 11, color: '#94a3b8' }}>Tags (séparés par des virgules)</label>
+                          <input
+                            value={editingNote.tags}
+                            onChange={(e) => setEditingNote({ ...editingNote, tags: e.target.value })}
+                            style={{ fontSize: 12 }}
+                            placeholder="remboursement, médecin…"
+                          />
+                        </div>
+                        <div style={{ display: 'flex', gap: 6, paddingTop: 18 }}>
+                          <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 12px' }} onClick={saveNote}>Sauvegarder</button>
+                          <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 8px' }} onClick={() => setEditingNote(null)}>Annuler</button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </>
                 )
               })}
             </tbody>

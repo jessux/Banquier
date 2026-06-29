@@ -31,9 +31,10 @@ Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elle
 | 🤖 **Catégorisation IA** | OpenRouter classe vos transactions en un clic |
 | 📋 **Règles automatiques** | "AMAZON → Shopping" pour ne jamais recatégoriser deux fois |
 | 📊 **Dashboard** | Dépenses, revenus, tendances mois par mois + aperçu des budgets |
-| 🎯 **Budgets** | Plafonds mensuels par catégorie avec barres de progression |
+| 🎯 **Budgets** | Plafonds mensuels par catégorie avec alertes de dépassement |
 | 💬 **Chat financier** | Posez des questions en langage naturel sur vos finances |
-| 🏦 **Multi-comptes** | Courant, épargne, multi-devises |
+| 🏦 **Multi-comptes** | Courant, épargne, multi-devises avec taux de conversion |
+| 📝 **Notes & Tags** | Annotez et taguez vos transactions librement |
 | 🔒 **Vie privée** | Données 100 % locales, rien dans le cloud |
 
 ---

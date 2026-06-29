@@ -132,6 +132,14 @@ const api = {
   deleteAccount: (id: number) => ipcRenderer.invoke('delete-account', id),
   updateAccountCurrency: (id: number, currency: string) =>
     ipcRenderer.invoke('update-account-currency', id, currency),
+  updateAccountFxRate: (id: number, fxRate: number) =>
+    ipcRenderer.invoke('update-account-fx-rate', id, fxRate),
+
+  // Notes / Tags
+  setTransactionNote: (id: number, note: string | null) =>
+    ipcRenderer.invoke('set-transaction-note', id, note),
+  setTransactionTags: (id: number, tags: string | null) =>
+    ipcRenderer.invoke('set-transaction-tags', id, tags),
 
   // Budgets
   getBudgets: () => ipcRenderer.invoke('get-budgets'),

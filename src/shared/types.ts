@@ -9,6 +9,7 @@ export interface Account {
   name: string
   bank: string | null
   currency: string
+  fx_rate: number
 }
 
 export interface Transaction {
@@ -20,6 +21,8 @@ export interface Transaction {
   category: string | null
   import_id: number | null
   is_internal: number
+  note: string | null
+  tags: string | null
 }
 
 export interface Import {

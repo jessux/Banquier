@@ -45,15 +45,15 @@ export function initDatabase(): void {
 }
 
 function migrate(): void {
-  try {
-    db.exec('ALTER TABLE transactions ADD COLUMN is_internal INTEGER NOT NULL DEFAULT 0')
-  } catch {
-    // column already exists
-  }
-  try {
-    db.exec('ALTER TABLE asset_lots ADD COLUMN plan_id INTEGER')
-  } catch {
-    // column already exists (ou table absente, recréée par createTables)
+  const migrations = [
+    'ALTER TABLE transactions ADD COLUMN is_internal INTEGER NOT NULL DEFAULT 0',
+    'ALTER TABLE asset_lots ADD COLUMN plan_id INTEGER',
+    'ALTER TABLE accounts ADD COLUMN fx_rate REAL NOT NULL DEFAULT 1.0',
+    'ALTER TABLE transactions ADD COLUMN note TEXT',
+    'ALTER TABLE transactions ADD COLUMN tags TEXT',
+  ]
+  for (const sql of migrations) {
+    try { db.exec(sql) } catch { /* column already exists */ }
   }
 }
 
@@ -226,6 +226,10 @@ export function updateAccountCurrency(id: number, currency: string): void {
   db.run('UPDATE accounts SET currency = ? WHERE id = ?', [currency, id])
 }
 
+export function updateAccountFxRate(id: number, fxRate: number): void {
+  db.run('UPDATE accounts SET fx_rate = ? WHERE id = ?', [fxRate, id])
+}
+
 // --- Transactions ---
 
 export function getTransactions(filters: TransactionFilters = {}): Transaction[] {
@@ -288,6 +292,14 @@ export function insertTransactions(
   }
 
   return { imported, duplicates, insertedIds }
+}
+
+export function setTransactionNote(id: number, note: string | null): void {
+  db.run('UPDATE transactions SET note = ? WHERE id = ?', [note || null, id])
+}
+
+export function setTransactionTags(id: number, tags: string | null): void {
+  db.run('UPDATE transactions SET tags = ? WHERE id = ?', [tags || null, id])
 }
 
 export function updateTransactionCategory(id: number, category: string, applyToSimilar = false): void {
@@ -528,13 +540,14 @@ export function getMonthlyStats(months = 6, anchorEnd?: string): MonthlyStats[] 
   const anchor = anchorEnd ?? new Date().toISOString().slice(0, 10)
   return db.all(
     `SELECT
-      strftime('%Y-%m', date) AS month,
-      SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) AS total_debit,
-      SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS total_credit
-    FROM transactions
-    WHERE date >= date(?, 'start of month', '-' || ? || ' months')
-      AND date <= date(?, 'start of month', '+1 month', '-1 day')
-      AND is_internal = 0
+      strftime('%Y-%m', t.date) AS month,
+      SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount * COALESCE(a.fx_rate, 1.0)) ELSE 0 END) AS total_debit,
+      SUM(CASE WHEN t.amount > 0 THEN t.amount * COALESCE(a.fx_rate, 1.0) ELSE 0 END) AS total_credit
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
+    WHERE t.date >= date(?, 'start of month', '-' || ? || ' months')
+      AND t.date <= date(?, 'start of month', '+1 month', '-1 day')
+      AND t.is_internal = 0
     GROUP BY month
     ORDER BY month ASC`,
     [anchor, months - 1, anchor]
@@ -542,48 +555,50 @@ export function getMonthlyStats(months = 6, anchorEnd?: string): MonthlyStats[] 
 }
 
 export function getCategoryStats(startDate?: string, endDate?: string, excludeCategories?: string[]): CategoryStats[] {
-  const conditions: string[] = ['amount < 0', 'is_internal = 0']
+  const conditions: string[] = ['t.amount < 0', 't.is_internal = 0']
   const params: unknown[] = []
 
-  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
-  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+  if (startDate) { conditions.push('t.date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('t.date <= ?'); params.push(endDate) }
   if (excludeCategories?.length) {
-    conditions.push(`(category IS NULL OR category NOT IN (${excludeCategories.map(() => '?').join(',')}))`)
+    conditions.push(`(t.category IS NULL OR t.category NOT IN (${excludeCategories.map(() => '?').join(',')}))`)
     params.push(...excludeCategories)
   }
 
   return db.all(
     `SELECT
-      COALESCE(category, 'Non catégorisé') AS category,
-      SUM(ABS(amount)) AS total,
+      COALESCE(t.category, 'Non catégorisé') AS category,
+      SUM(ABS(t.amount * COALESCE(a.fx_rate, 1.0))) AS total,
       COUNT(*) AS count
-    FROM transactions
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
     WHERE ${conditions.join(' AND ')}
-    GROUP BY category
+    GROUP BY t.category
     ORDER BY total DESC`,
     params
   ) as CategoryStats[]
 }
 
 export function getCreditCategoryStats(startDate?: string, endDate?: string, excludeCategories?: string[]): CategoryStats[] {
-  const conditions: string[] = ['amount > 0', 'is_internal = 0']
+  const conditions: string[] = ['t.amount > 0', 't.is_internal = 0']
   const params: unknown[] = []
 
-  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
-  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+  if (startDate) { conditions.push('t.date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('t.date <= ?'); params.push(endDate) }
   if (excludeCategories?.length) {
-    conditions.push(`(category IS NULL OR category NOT IN (${excludeCategories.map(() => '?').join(',')}))`)
+    conditions.push(`(t.category IS NULL OR t.category NOT IN (${excludeCategories.map(() => '?').join(',')}))`)
     params.push(...excludeCategories)
   }
 
   return db.all(
     `SELECT
-      COALESCE(category, 'Non catégorisé') AS category,
-      SUM(amount) AS total,
+      COALESCE(t.category, 'Non catégorisé') AS category,
+      SUM(t.amount * COALESCE(a.fx_rate, 1.0)) AS total,
       COUNT(*) AS count
-    FROM transactions
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
     WHERE ${conditions.join(' AND ')}
-    GROUP BY category
+    GROUP BY t.category
     ORDER BY total DESC`,
     params
   ) as CategoryStats[]
@@ -652,7 +667,7 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
   let prevEnd: string
 
   const exclClause = excludeCategories?.length
-    ? `AND (category IS NULL OR category NOT IN (${excludeCategories.map(() => '?').join(',')}))`
+    ? `AND (t.category IS NULL OR t.category NOT IN (${excludeCategories.map(() => '?').join(',')}))`
     : ''
   const exclParams: unknown[] = excludeCategories?.length ? excludeCategories : []
 
@@ -669,7 +684,7 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
     // « Tout » : pas de date de début → on couvre tout l'historique en
     // calant le début sur la transaction la plus ancienne.
     const firstRow = db.get(
-      `SELECT MIN(date) AS d FROM transactions WHERE is_internal = 0 ${exclClause}`,
+      `SELECT MIN(t.date) AS d FROM transactions t LEFT JOIN accounts a ON t.account_id = a.id WHERE t.is_internal = 0 ${exclClause}`,
       exclParams
     ) as { d: string | null } | undefined
     effectiveStart = firstRow?.d ?? today.toISOString().slice(0, 7) + '-01'
@@ -682,9 +697,11 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
   const periodStats = (s: string, e: string): { total_debit: number; total_credit: number } => {
     const row = db.get(
       `SELECT
-        SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END) AS total_debit,
-        SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS total_credit
-      FROM transactions WHERE date >= ? AND date <= ? AND is_internal = 0 ${exclClause}`,
+        SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount * COALESCE(a.fx_rate, 1.0)) ELSE 0 END) AS total_debit,
+        SUM(CASE WHEN t.amount > 0 THEN t.amount * COALESCE(a.fx_rate, 1.0) ELSE 0 END) AS total_credit
+      FROM transactions t
+      LEFT JOIN accounts a ON t.account_id = a.id
+      WHERE t.date >= ? AND t.date <= ? AND t.is_internal = 0 ${exclClause}`,
       [s, e, ...exclParams]
     ) as { total_debit: number | null; total_credit: number | null } | undefined
     return { total_debit: row?.total_debit ?? 0, total_credit: row?.total_credit ?? 0 }
@@ -914,15 +931,17 @@ export function getBudgetsWithSpent(startDate?: string, endDate?: string): (Budg
   const budgets = getBudgets()
   if (budgets.length === 0) return []
 
-  const conditions = ['amount < 0', 'is_internal = 0']
+  const conditions = ['t.amount < 0', 't.is_internal = 0']
   const params: unknown[] = []
-  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
-  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+  if (startDate) { conditions.push('t.date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('t.date <= ?'); params.push(endDate) }
 
   const spentRows = db.all(
-    `SELECT COALESCE(category, 'Non catégorisé') AS category, SUM(ABS(amount)) AS total
-     FROM transactions WHERE ${conditions.join(' AND ')}
-     GROUP BY category`,
+    `SELECT COALESCE(t.category, 'Non catégorisé') AS category, SUM(ABS(t.amount * COALESCE(a.fx_rate, 1.0))) AS total
+     FROM transactions t
+     LEFT JOIN accounts a ON t.account_id = a.id
+     WHERE ${conditions.join(' AND ')}
+     GROUP BY t.category`,
     params
   ) as { category: string; total: number }[]
 
@@ -1102,16 +1121,18 @@ export function getUncategorized(startDate?: string, endDate?: string, limit = 2
 }
 
 export function getNetBalance(startDate?: string, endDate?: string): NetBalance {
-  const conditions = ['is_internal = 0']
+  const conditions = ['t.is_internal = 0']
   const params: unknown[] = []
-  if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
-  if (endDate) { conditions.push('date <= ?'); params.push(endDate) }
+  if (startDate) { conditions.push('t.date >= ?'); params.push(startDate) }
+  if (endDate) { conditions.push('t.date <= ?'); params.push(endDate) }
 
   const row = db.get(
     `SELECT
-      COALESCE(SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END), 0) AS total_credit,
-      COALESCE(SUM(CASE WHEN amount < 0 THEN ABS(amount) ELSE 0 END), 0) AS total_debit
-    FROM transactions WHERE ${conditions.join(' AND ')}`,
+      COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount * COALESCE(a.fx_rate, 1.0) ELSE 0 END), 0) AS total_credit,
+      COALESCE(SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount * COALESCE(a.fx_rate, 1.0)) ELSE 0 END), 0) AS total_debit
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
+    WHERE ${conditions.join(' AND ')}`,
     params
   ) as { total_credit: number; total_debit: number }
 

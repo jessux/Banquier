@@ -18,9 +18,15 @@ interface SyncNotif {
   categorized: number
 }
 
+interface BudgetAlert {
+  overCount: number
+  overCategories: string[]
+}
+
 export default function App(): JSX.Element {
   const [page, setPage] = useState<Page>('dashboard')
   const [syncNotif, setSyncNotif] = useState<SyncNotif | null>(null)
+  const [budgetAlert, setBudgetAlert] = useState<BudgetAlert | null>(null)
 
   useEffect(() => {
     window.api.powensStartupSync().then((result) => {
@@ -30,6 +36,17 @@ export default function App(): JSX.Element {
         return () => clearTimeout(timer)
       }
     }).catch(() => { /* sync silencieuse */ })
+
+    // Alerte budgets dépassés ce mois-ci
+    const today = new Date()
+    const startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10)
+    const endDate = today.toISOString().slice(0, 10)
+    window.api.getBudgetsWithSpent(startDate, endDate).then((budgets) => {
+      const over = budgets.filter((b) => b.spent > b.amount)
+      if (over.length > 0) {
+        setBudgetAlert({ overCount: over.length, overCategories: over.slice(0, 3).map((b) => b.category) })
+      }
+    }).catch(() => {})
   }, [])
 
   const renderPage = (): JSX.Element => {
@@ -53,6 +70,22 @@ export default function App(): JSX.Element {
     <div className="layout">
       <Sidebar activePage={page} onNavigate={setPage} />
       <main className="main-content">{renderPage()}</main>
+      {budgetAlert && (
+        <div className="sync-toast" style={{ borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.08)' }}>
+          <div className="sync-toast-icon">🎯</div>
+          <div className="sync-toast-body">
+            <strong style={{ color: '#ef4444' }}>Budget{budgetAlert.overCount > 1 ? 's' : ''} dépassé{budgetAlert.overCount > 1 ? 's' : ''}</strong>
+            <span>{budgetAlert.overCategories.join(', ')}{budgetAlert.overCount > 3 ? ` +${budgetAlert.overCount - 3} autre(s)` : ''}</span>
+            <button
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#ef4444', padding: 0, textAlign: 'left' }}
+              onClick={() => { setPage('budget'); setBudgetAlert(null) }}
+            >
+              Voir les budgets →
+            </button>
+          </div>
+          <button className="sync-toast-close" onClick={() => setBudgetAlert(null)}>✕</button>
+        </div>
+      )}
       {syncNotif && (
         <div className="sync-toast">
           <div className="sync-toast-icon">🏦</div>

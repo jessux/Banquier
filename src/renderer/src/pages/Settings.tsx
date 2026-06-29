@@ -28,6 +28,7 @@ export default function SettingsPage(): JSX.Element {
   const [updateResult, setUpdateResult] = useState<{ status: string; version?: string; message?: string } | null>(null)
   const [deletingAccountId, setDeletingAccountId] = useState<number | null>(null)
   const [editingCurrency, setEditingCurrency] = useState<{ id: number; currency: string } | null>(null)
+  const [editingFxRate, setEditingFxRate] = useState<{ id: number; rate: string } | null>(null)
   const [mobileServer, setMobileServer] = useState<MobileServerInfo | null>(null)
   const [mobileLoading, setMobileLoading] = useState(false)
   const [urlCopied, setUrlCopied] = useState(false)
@@ -178,6 +179,15 @@ export default function SettingsPage(): JSX.Element {
     if (!editingCurrency) return
     await window.api.updateAccountCurrency(editingCurrency.id, editingCurrency.currency)
     setEditingCurrency(null)
+    window.api.getAccounts().then(setAccounts)
+  }
+
+  const saveFxRate = async (): Promise<void> => {
+    if (!editingFxRate) return
+    const rate = parseFloat(editingFxRate.rate.replace(',', '.'))
+    if (isNaN(rate) || rate <= 0) return
+    await window.api.updateAccountFxRate(editingFxRate.id, rate)
+    setEditingFxRate(null)
     window.api.getAccounts().then(setAccounts)
   }
 
@@ -368,6 +378,34 @@ export default function SettingsPage(): JSX.Element {
                       <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditingCurrency({ id: a.id, currency: a.currency })}>
                         {a.currency}
                       </button>
+                      {a.currency !== settings.currency && (
+                        editingFxRate?.id === a.id ? (
+                          <>
+                            <span style={{ fontSize: 11, color: '#94a3b8' }}>1 {a.currency} =</span>
+                            <input
+                              autoFocus
+                              type="number"
+                              step="0.0001"
+                              value={editingFxRate.rate}
+                              onChange={(e) => setEditingFxRate({ id: a.id, rate: e.target.value })}
+                              onKeyDown={(e) => { if (e.key === 'Enter') saveFxRate(); if (e.key === 'Escape') setEditingFxRate(null) }}
+                              style={{ width: 72, padding: '3px 6px', fontSize: 12 }}
+                            />
+                            <span style={{ fontSize: 11, color: '#94a3b8' }}>{settings.currency}</span>
+                            <button className="btn btn-primary" style={{ padding: '3px 8px', fontSize: 12 }} onClick={saveFxRate}>OK</button>
+                            <button className="btn btn-secondary" style={{ padding: '3px 6px', fontSize: 12 }} onClick={() => setEditingFxRate(null)}>✕</button>
+                          </>
+                        ) : (
+                          <button
+                            className="btn btn-secondary"
+                            style={{ padding: '4px 10px', fontSize: 12, color: '#f59e0b', borderColor: 'rgba(245,158,11,0.4)' }}
+                            title={`Taux de conversion utilisé dans les statistiques`}
+                            onClick={() => setEditingFxRate({ id: a.id, rate: String(a.fx_rate ?? 1) })}
+                          >
+                            ×{a.fx_rate ?? 1}
+                          </button>
+                        )
+                      )}
                       <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditingAccount({ id: a.id, name: a.name })}>Renommer</button>
                       <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12, borderColor: 'rgba(239,68,68,0.3)', color: '#ef4444' }} onClick={() => setDeletingAccountId(a.id)}>✕</button>
                     </div>

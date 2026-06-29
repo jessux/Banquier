@@ -496,6 +496,14 @@ export function registerIpcHandlers(): void {
     return checkForUpdatesManual()
   })
 
+  // --- Notes / Tags ---
+  ipcMain.handle('set-transaction-note', (_, id: number, note: string | null) =>
+    db.setTransactionNote(id, note)
+  )
+  ipcMain.handle('set-transaction-tags', (_, id: number, tags: string | null) =>
+    db.setTransactionTags(id, tags)
+  )
+
   // --- Budgets ---
   ipcMain.handle('get-budgets', () => db.getBudgets())
   ipcMain.handle('get-budgets-with-spent', (_, startDate?: string, endDate?: string) =>
@@ -511,6 +519,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('update-account-currency', (_, id: number, currency: string) =>
     db.updateAccountCurrency(id, currency)
   )
+
+  ipcMain.handle('update-account-fx-rate', (_, id: number, fxRate: number) =>
+    db.updateAccountFxRate(id, fxRate)
+  )
 }
 
 // --- Helpers Powens ---
@@ -522,16 +534,29 @@ async function importPowens(
   minDate?: string,
   maxDate?: string
 ): Promise<PowensSyncResult> {
-  // Powens récupère les données de la banque de façon asynchrone : on attend
-  // qu'au moins un compte apparaisse (jusqu'à ~30 s).
+  // Powens synchronise la banque de façon asynchrone. On attend :
+  //   1. qu'au moins un compte apparaisse (jusqu'à ~30 s, 10 × 3 s)
+  //   2. que les transactions arrivent (jusqu'à ~60 s supplémentaires, 12 × 5 s)
+  //      — surtout nécessaire lors de la première connexion où l'historique
+  //      est récupéré en arrière-plan par Powens.
   let accounts = await getPowensAccounts(creds, token)
   for (let i = 0; i < 10 && accounts.length === 0; i++) {
     await new Promise((r) => setTimeout(r, 3000))
     accounts = await getPowensAccounts(creds, token)
   }
-  const result = accounts.length > 0
+  let result = accounts.length > 0
     ? await getPowensTransactions(creds, token, minDate, maxDate)
     : { transactions: [], firstDate: null }
+
+  // Si les comptes existent mais que les transactions sont vides, la banque est
+  // encore en cours de synchronisation → on patiente et on réessaie.
+  if (accounts.length > 0 && result.transactions.length === 0) {
+    for (let i = 0; i < 12 && result.transactions.length === 0; i++) {
+      await new Promise((r) => setTimeout(r, 5000))
+      result = await getPowensTransactions(creds, token, minDate, maxDate)
+    }
+  }
+
   let transactions = result.transactions
   const firstDate = result.firstDate
   if (minDate) transactions = transactions.filter((t) => (t.rdate || t.date || '').slice(0, 10) >= minDate)
