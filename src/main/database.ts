@@ -232,16 +232,13 @@ export function updateAccountFxRate(id: number, fxRate: number): void {
 
 // --- Transactions ---
 
-export function getTransactions(filters: TransactionFilters = {}): Transaction[] {
+function buildTransactionWhere(filters: TransactionFilters): { conditions: string[]; params: unknown[] } {
   const conditions: string[] = []
   const params: unknown[] = []
 
   if (filters.search) { conditions.push('t.description LIKE ?'); params.push(`%${filters.search}%`) }
   if (filters.category === '__none__') { conditions.push('t.category IS NULL') }
   else if (filters.category) {
-    // Filtrer sur une catégorie inclut ses sous-catégories : la catégorie d'une
-    // transaction est stockée comme chemin « Parent > Enfant ». On matche donc la
-    // catégorie exacte OU tout chemin descendant « <cat> > … ».
     const escaped = filters.category.replace(/[\\%_]/g, '\\$&')
     conditions.push("(t.category = ? OR t.category LIKE ? ESCAPE '\\')")
     params.push(filters.category, `${escaped} > %`)
@@ -251,12 +248,32 @@ export function getTransactions(filters: TransactionFilters = {}): Transaction[]
   if (filters.endDate) { conditions.push('t.date <= ?'); params.push(filters.endDate) }
   if (filters.minAmount !== undefined) { conditions.push('t.amount >= ?'); params.push(filters.minAmount) }
   if (filters.maxAmount !== undefined) { conditions.push('t.amount <= ?'); params.push(filters.maxAmount) }
+  if (filters.tags) { conditions.push('t.tags LIKE ?'); params.push(`%${filters.tags}%`) }
   if (filters.isInternal !== undefined) { conditions.push('t.is_internal = ?'); params.push(filters.isInternal ? 1 : 0) }
 
+  return { conditions, params }
+}
+
+const SORT_COLS: Record<string, string> = {
+  date: 't.date', amount: 't.amount', description: 't.description', category: 't.category'
+}
+
+export function getTransactions(filters: TransactionFilters = {}): Transaction[] {
+  const { conditions, params } = buildTransactionWhere(filters)
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
-  const limitClause = filters.limit ? `LIMIT ${Math.min(filters.limit, 500)}` : ''
-  const sql = `SELECT t.* FROM transactions t ${where} ORDER BY t.date DESC, t.id DESC ${limitClause}`
+  const orderCol = SORT_COLS[filters.sortField ?? 'date'] ?? 't.date'
+  const orderDir = filters.sortDir === 'asc' ? 'ASC' : 'DESC'
+  const orderBy = `ORDER BY ${orderCol} ${orderDir}${orderCol !== 't.date' ? ', t.date DESC' : ''}, t.id DESC`
+  const limitClause = filters.limit ? `LIMIT ${filters.limit} OFFSET ${filters.offset ?? 0}` : ''
+  const sql = `SELECT t.* FROM transactions t ${where} ${orderBy} ${limitClause}`
   return db.all(sql, params) as Transaction[]
+}
+
+export function countTransactions(filters: TransactionFilters = {}): number {
+  const { conditions, params } = buildTransactionWhere(filters)
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+  const row = db.get(`SELECT COUNT(*) AS n FROM transactions t ${where}`, params) as { n: number }
+  return row.n
 }
 
 export function insertTransactions(

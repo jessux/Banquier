@@ -15,6 +15,8 @@ const api = {
   // Transactions
   getTransactions: (filters?: TransactionFilters) =>
     ipcRenderer.invoke('get-transactions', filters),
+  countTransactions: (filters?: TransactionFilters) =>
+    ipcRenderer.invoke('count-transactions', filters),
   updateTransactionCategory: (id: number, category: string, applyToSimilar?: boolean) =>
     ipcRenderer.invoke('update-transaction-category', id, category, applyToSimilar),
   deleteTransactions: (importId: number) => ipcRenderer.invoke('delete-transactions', importId),

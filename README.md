@@ -30,6 +30,8 @@ Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elle
 | 📥 **Import** | CSV et PDF depuis n'importe quelle banque française |
 | 🤖 **Catégorisation IA** | OpenRouter classe vos transactions en un clic |
 | 📋 **Règles automatiques** | "AMAZON → Shopping" pour ne jamais recatégoriser deux fois |
+| 🔍 **Filtres avancés** | Recherche, catégorie, compte, date, montant min/max, tags |
+| 📄 **Pagination** | Affichage 75 transactions/page, navigation rapide — fluide même sur 10 000+ entrées |
 | 📊 **Dashboard** | Dépenses, revenus, tendances mois par mois + aperçu des budgets |
 | 🎯 **Budgets** | Plafonds mensuels par catégorie avec alertes de dépassement |
 | 💬 **Chat financier** | Posez des questions en langage naturel sur vos finances |

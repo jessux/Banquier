@@ -70,6 +70,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('get-transactions', (_, filters?: TransactionFilters) =>
     db.getTransactions(filters)
   )
+  ipcMain.handle('count-transactions', (_, filters?: TransactionFilters) =>
+    db.countTransactions(filters)
+  )
   ipcMain.handle('update-transaction-category', (_, id: number, category: string, applyToSimilar?: boolean) =>
     db.updateTransactionCategory(id, category, applyToSimilar)
   )
@@ -397,8 +400,6 @@ export function registerIpcHandlers(): void {
     const token = store.get('settings').powensToken
     if (!token) return null
     try {
-      // Partir de la date de la dernière transaction Powens connue (- 2 jours
-      // pour couvrir les transactions rétroactives), ou sans limite si la base est vide.
       const latest = db.getLatestPowensTransactionDate()
       const minDate = latest
         ? new Date(new Date(latest + 'T00:00:00Z').getTime() - 2 * 86400000).toISOString().slice(0, 10)
@@ -406,7 +407,8 @@ export function registerIpcHandlers(): void {
       return await importPowens(POWENS_CREDS, token, minDate)
     } catch (err) {
       console.error('[powens-startup-sync]', err)
-      return null
+      const msg = err instanceof Error ? err.message : String(err)
+      return { imported: 0, duplicates: 0, accounts: 0, categorized: 0, firstDate: null, error: msg }
     }
   })
 

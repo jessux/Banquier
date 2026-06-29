@@ -16,6 +16,7 @@ export type Page = 'dashboard' | 'transactions' | 'recurring' | 'patrimoine' | '
 interface SyncNotif {
   imported: number
   categorized: number
+  error?: string
 }
 
 interface BudgetAlert {
@@ -30,7 +31,12 @@ export default function App(): JSX.Element {
 
   useEffect(() => {
     window.api.powensStartupSync().then((result) => {
-      if (result && result.imported > 0) {
+      if (!result) return
+      if (result.error) {
+        setSyncNotif({ imported: -1, categorized: 0, error: result.error })
+        return
+      }
+      if (result.imported > 0) {
         setSyncNotif({ imported: result.imported, categorized: result.categorized })
         const timer = setTimeout(() => setSyncNotif(null), 8000)
         return () => clearTimeout(timer)
@@ -86,7 +92,23 @@ export default function App(): JSX.Element {
           <button className="sync-toast-close" onClick={() => setBudgetAlert(null)}>✕</button>
         </div>
       )}
-      {syncNotif && (
+      {syncNotif && syncNotif.error && (
+        <div className="sync-toast" style={{ borderColor: 'rgba(239,68,68,0.4)', background: 'rgba(239,68,68,0.08)' }}>
+          <div className="sync-toast-icon">🏦</div>
+          <div className="sync-toast-body">
+            <strong style={{ color: '#ef4444' }}>Synchronisation Powens échouée</strong>
+            <span style={{ fontSize: 11, color: '#94a3b8' }}>{syncNotif.error.slice(0, 120)}</span>
+            <button
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#ef4444', padding: 0, textAlign: 'left' }}
+              onClick={() => { setPage('settings'); setSyncNotif(null) }}
+            >
+              Reconnecter dans les paramètres →
+            </button>
+          </div>
+          <button className="sync-toast-close" onClick={() => setSyncNotif(null)}>✕</button>
+        </div>
+      )}
+      {syncNotif && !syncNotif.error && (
         <div className="sync-toast">
           <div className="sync-toast-icon">🏦</div>
           <div className="sync-toast-body">

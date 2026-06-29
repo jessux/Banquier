@@ -38,6 +38,7 @@ export default function SettingsPage(): JSX.Element {
   const [powens, setPowens] = useState<PowensStatus>({ configured: false, connected: false })
   const [powensBusy, setPowensBusy] = useState(false)
   const [powensMsg, setPowensMsg] = useState<string | null>(null)
+  const [powensError, setPowensError] = useState<string | null>(null)
   const [showSyncModal, setShowSyncModal] = useState(false)
   const [syncMinDate, setSyncMinDate] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10)
@@ -55,6 +56,7 @@ export default function SettingsPage(): JSX.Element {
   const connectPowens = async (): Promise<void> => {
     setPowensBusy(true)
     setPowensMsg("Connexion… autorisez l'accès dans la fenêtre de votre banque.")
+    setPowensError(null)
     try {
       const res = await window.api.powensConnect()
       setPowensMsg(
@@ -63,7 +65,9 @@ export default function SettingsPage(): JSX.Element {
       window.api.powensStatus().then(setPowens)
       window.api.getAccounts().then(setAccounts)
     } catch (e) {
-      setPowensMsg(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+      const msg = String(e instanceof Error ? e.message : e)
+      setPowensError(msg)
+      setPowensMsg(null)
     } finally {
       setPowensBusy(false)
     }
@@ -72,6 +76,7 @@ export default function SettingsPage(): JSX.Element {
   const syncPowens = async (minDate?: string, maxDate?: string): Promise<void> => {
     setPowensBusy(true)
     setPowensMsg('Synchronisation…')
+    setPowensError(null)
     try {
       const res = await window.api.powensSync(minDate, maxDate)
       if (res.firstDate) {
@@ -80,7 +85,9 @@ export default function SettingsPage(): JSX.Element {
       }
       setPowensMsg(`Synchronisé : ${res.imported} nouvelles transactions, ${res.duplicates} doublons.`)
     } catch (e) {
-      setPowensMsg(`Erreur : ${String(e instanceof Error ? e.message : e)}`)
+      const msg = String(e instanceof Error ? e.message : e)
+      setPowensError(msg)
+      setPowensMsg(null)
     } finally {
       setPowensBusy(false)
     }
@@ -433,8 +440,17 @@ export default function SettingsPage(): JSX.Element {
               </>
             )}
           </div>
-          {powensMsg && (
-            <p className="text-sm" style={{ marginTop: 10, color: powensMsg.startsWith('Erreur') ? '#ef4444' : 'var(--text2)' }}>
+          {powensError && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: '#ef4444', marginBottom: 4 }}>Erreur de synchronisation</div>
+              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10 }}>{powensError}</div>
+              <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 14px', background: 'rgba(239,68,68,0.2)', borderColor: 'rgba(239,68,68,0.5)', color: '#ef4444' }} onClick={connectPowens} disabled={powensBusy}>
+                Reconnecter ma banque
+              </button>
+            </div>
+          )}
+          {powensMsg && !powensError && (
+            <p className="text-sm" style={{ marginTop: 10, color: 'var(--text2)' }}>
               {powensMsg}
             </p>
           )}

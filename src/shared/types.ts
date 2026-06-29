@@ -106,6 +106,8 @@ export interface PowensSyncResult {
   categorized: number
   /** Date la plus ancienne disponible côté Powens/banque (YYYY-MM-DD), null si inconnue. */
   firstDate?: string | null
+  /** Message d'erreur si la sync a échoué (token expiré, réseau…). */
+  error?: string
 }
 
 // --- Patrimoine ---
@@ -402,7 +404,11 @@ export interface TransactionFilters {
   endDate?: string
   minAmount?: number
   maxAmount?: number
+  tags?: string
   limit?: number
+  offset?: number
+  sortField?: 'date' | 'amount' | 'description' | 'category'
+  sortDir?: 'asc' | 'desc'
   isInternal?: boolean
 }
 

@@ -41,6 +41,7 @@ declare global {
 
       // Transactions
       getTransactions: (filters?: TransactionFilters) => Promise<Transaction[]>
+      countTransactions: (filters?: TransactionFilters) => Promise<number>
       updateTransactionCategory: (id: number, category: string, applyToSimilar?: boolean) => Promise<void>
       deleteTransactions: (importId: number) => Promise<void>
       deleteTransaction: (id: number) => Promise<void>
