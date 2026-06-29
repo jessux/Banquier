@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.12.0](https://github.com/jessux/Banquier/compare/v1.11.0...v1.12.0) (2026-06-29)
+
+
+### Nouvelles fonctionnalités
+
+* **budgets:** implement budget management features including CRUD operations and UI integration ([e8aee77](https://github.com/jessux/Banquier/commit/e8aee77fc9d7fac05d0ee373ea0cb5037726ba2a))
+* **database:** add restore database functionality and IPC handler ([e9c4e50](https://github.com/jessux/Banquier/commit/e9c4e5046304e71674651b6f0aaab75a5e85c7f6))
+* **transactions:** add note and tags functionality for transactions with alerts for budget overspending ([a9db8a5](https://github.com/jessux/Banquier/commit/a9db8a577b13f66c9f303b334251e7095760d76d))
+* **transactions:** implement pagination and advanced filtering options ([f4ef4c2](https://github.com/jessux/Banquier/commit/f4ef4c2d70dd62e76e4bb463ad44efcaed6c2dde))
+
 ## [1.11.0](https://github.com/jessux/Banquier/compare/v1.10.1...v1.11.0) (2026-06-27)
 
 
