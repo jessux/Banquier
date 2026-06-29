@@ -883,6 +883,19 @@ export function exportDb(destPath: string): void {
   fs.copyFileSync(path.join(app.getPath('userData'), 'banquier.db'), destPath)
 }
 
+export function restoreDb(sourcePath: string): void {
+  db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
+  db.close()
+  const dbPath = path.join(app.getPath('userData'), 'banquier.db')
+  fs.copyFileSync(sourcePath, dbPath)
+  db = new Database(dbPath)
+  db.exec('PRAGMA journal_mode = WAL')
+  db.exec('PRAGMA foreign_keys = ON')
+  createTables()
+  migrate()
+  seedCategories()
+}
+
 export function exportTransactionsToCsv(): string {
   const rows = db.all(`
     SELECT t.date, t.description, t.amount, t.category, a.name AS account

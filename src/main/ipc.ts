@@ -455,6 +455,24 @@ export function registerIpcHandlers(): void {
     return { success: true }
   })
 
+  ipcMain.handle('restore-db', async () => {
+    const win = BrowserWindow.getFocusedWindow()
+    if (!win) return { success: false }
+    const result = await dialog.showOpenDialog(win, {
+      title: 'Restaurer une sauvegarde',
+      properties: ['openFile'],
+      filters: [{ name: 'SQLite Database', extensions: ['db'] }]
+    })
+    if (result.canceled || !result.filePaths[0]) return { success: false }
+    try {
+      db.restoreDb(result.filePaths[0])
+      win.webContents.reload()
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: String(e instanceof Error ? e.message : e) }
+    }
+  })
+
   ipcMain.handle('export-csv', async () => {
     const win = BrowserWindow.getFocusedWindow()
     if (!win) return { success: false }

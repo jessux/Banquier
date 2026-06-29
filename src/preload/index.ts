@@ -119,9 +119,10 @@ const api = {
     ipcRenderer.invoke('preview-symbol', type, symbol),
   refreshQuotes: () => ipcRenderer.invoke('refresh-quotes'),
 
-  // Export
+  // Export / Restore
   exportDb: () => ipcRenderer.invoke('export-db') as Promise<{ success: boolean }>,
   exportCsv: () => ipcRenderer.invoke('export-csv') as Promise<{ success: boolean }>,
+  restoreDb: () => ipcRenderer.invoke('restore-db') as Promise<{ success: boolean; error?: string }>,
 
   // App info & updates
   getAppVersion: () => ipcRenderer.invoke('get-app-version') as Promise<string>,

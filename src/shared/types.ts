@@ -332,6 +332,9 @@ export interface IpcApi {
   // Accounts
   getAccounts: () => Promise<Account[]>
   createAccount: (name: string, bank: string, currency: string) => Promise<Account>
+  renameAccount: (id: number, name: string) => Promise<void>
+  deleteAccount: (id: number) => Promise<void>
+  updateAccountCurrency: (id: number, currency: string) => Promise<void>
 
   // Transactions
   getTransactions: (filters?: TransactionFilters) => Promise<Transaction[]>
@@ -367,6 +370,10 @@ export interface IpcApi {
   // File dialog
   openFileDialog: (filters: { name: string; extensions: string[] }[]) => Promise<string | null>
 
+  // Export / Restore
+  exportDb: () => Promise<{ success: boolean }>
+  exportCsv: () => Promise<{ success: boolean }>
+  restoreDb: () => Promise<{ success: boolean; error?: string }>
 }
 
 export interface TransactionFilters {

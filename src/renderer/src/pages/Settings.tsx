@@ -18,6 +18,9 @@ export default function SettingsPage(): JSX.Element {
   const [editingAccount, setEditingAccount] = useState<{ id: number; name: string } | null>(null)
   const [showKey, setShowKey] = useState(false)
   const [exportStatus, setExportStatus] = useState<'idle' | 'ok' | 'err'>('idle')
+  const [restoreStep, setRestoreStep] = useState<0 | 1>(0)
+  const [restoreStatus, setRestoreStatus] = useState<'idle' | 'err'>('idle')
+  const [restoreError, setRestoreError] = useState('')
   const [clearStep, setClearStep] = useState<0 | 1 | 2>(0)
   const [clearBusy, setClearBusy] = useState(false)
   const [appVersion, setAppVersion] = useState('')
@@ -127,6 +130,18 @@ export default function SettingsPage(): JSX.Element {
     } finally {
       setClearBusy(false)
     }
+  }
+
+  const doRestore = async (): Promise<void> => {
+    if (restoreStep === 0) { setRestoreStep(1); return }
+    setRestoreStatus('idle')
+    const result = await window.api.restoreDb()
+    if (!result.success) {
+      setRestoreStatus('err')
+      setRestoreError(result.error ?? 'Erreur inconnue')
+      setRestoreStep(0)
+    }
+    // Si succès, la fenêtre se recharge automatiquement côté main
   }
 
   const doExport = async (type: 'db' | 'csv'): Promise<void> => {
@@ -412,18 +427,30 @@ export default function SettingsPage(): JSX.Element {
         </div>
       </div>
 
-      {/* Export */}
+      {/* Export / Restauration */}
       <div className="card" style={{ marginBottom: 20 }}>
-        <h3 style={{ marginBottom: 8 }}>Exporter</h3>
+        <h3 style={{ marginBottom: 8 }}>Données</h3>
         <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
-          Sauvegardez vos données ou exportez vos transactions dans un tableur.
+          Sauvegardez vos données, exportez vos transactions ou restaurez une sauvegarde précédente.
         </p>
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button className="btn btn-secondary" onClick={() => doExport('db')}>Backup SQLite (.db)</button>
           <button className="btn btn-secondary" onClick={() => doExport('csv')}>Transactions CSV</button>
+          {restoreStep === 0 ? (
+            <button className="btn btn-secondary" onClick={doRestore}>Restaurer une sauvegarde…</button>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 13, color: '#f59e0b' }}>L'application va recharger. Continuer ?</span>
+              <button className="btn btn-secondary" style={{ fontSize: 12, borderColor: 'rgba(245,158,11,0.5)', color: '#f59e0b' }} onClick={doRestore}>Choisir le fichier</button>
+              <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => setRestoreStep(0)}>Annuler</button>
+            </div>
+          )}
         </div>
         {exportStatus === 'ok' && (
           <p style={{ marginTop: 10, fontSize: 13, color: '#22c55e' }}>Fichier exporté avec succès.</p>
+        )}
+        {restoreStatus === 'err' && (
+          <p style={{ marginTop: 10, fontSize: 13, color: '#ef4444' }}>Erreur lors de la restauration : {restoreError}</p>
         )}
       </div>
 
