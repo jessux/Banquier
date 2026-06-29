@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.13.0](https://github.com/jessux/Banquier/compare/v1.12.0...v1.13.0) (2026-06-29)
+
+
+### Nouvelles fonctionnalités
+
+* **onboarding:** add external link functionality and onboarding review option ([5abf34b](https://github.com/jessux/Banquier/commit/5abf34b223fc7386c07655bab0516787ae8a165d))
+* **onboarding:** add onboarding modal and settings integration ([bacd757](https://github.com/jessux/Banquier/commit/bacd757601eb37e0c4b8cf1a2523c51ba470aac8))
+
 ## [1.12.0](https://github.com/jessux/Banquier/compare/v1.11.0...v1.12.0) (2026-06-29)
 
 
