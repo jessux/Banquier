@@ -106,6 +106,7 @@ declare global {
 
       // File dialog
       openFileDialog: (filters: { name: string; extensions: string[] }[]) => Promise<string | null>
+      openExternal: (url: string) => Promise<void>
 
       // Export / Restore
       exportDb: () => Promise<{ success: boolean }>

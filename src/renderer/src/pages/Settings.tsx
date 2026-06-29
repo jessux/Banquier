@@ -508,6 +508,25 @@ export default function SettingsPage(): JSX.Element {
         )}
       </div>
 
+      {/* Onboarding */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ marginBottom: 4 }}>Guide de démarrage</h3>
+            <p className="text-muted text-sm">Revoir le wizard d'introduction pas-à-pas.</p>
+          </div>
+          <button
+            className="btn btn-secondary"
+            onClick={async () => {
+              await window.api.saveSettings({ onboardingDone: false })
+              window.location.reload()
+            }}
+          >
+            Revoir l'onboarding
+          </button>
+        </div>
+      </div>
+
       {/* Version & mises à jour */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

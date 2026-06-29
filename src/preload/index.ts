@@ -101,6 +101,7 @@ const api = {
   // File dialog
   openFileDialog: (filters: { name: string; extensions: string[] }[]) =>
     ipcRenderer.invoke('open-file-dialog', filters),
+  openExternal: (url: string) => ipcRenderer.invoke('shell-open-external', url),
 
   // Powens (agrégation bancaire)
   powensStatus: () => ipcRenderer.invoke('powens-status'),

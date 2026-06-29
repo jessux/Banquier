@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow, app } from 'electron'
+import { ipcMain, dialog, BrowserWindow, app, shell } from 'electron'
 import fs from 'fs'
 import Store from 'electron-store'
 import path from 'path'
@@ -490,6 +490,8 @@ export function registerIpcHandlers(): void {
     fs.writeFileSync(result.filePath, csv, 'utf8')
     return { success: true }
   })
+
+  ipcMain.handle('shell-open-external', (_, url: string) => shell.openExternal(url))
 
   ipcMain.handle('get-app-version', () => app.getVersion())
 

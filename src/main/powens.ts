@@ -39,20 +39,20 @@ export const POWENS_CREDS: PowensCreds = {
 }
 
 async function resolveAgent(url: string): Promise<HttpsProxyAgent<string> | undefined> {
-  // Env var explicite → prioritaire (cas proxy d'entreprise documenté dans le README)
+  // Env var explicite → prioritaire
   const envProxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
-  if (envProxy) return new HttpsProxyAgent(envProxy)
+  if (envProxy) return new HttpsProxyAgent(envProxy, { rejectUnauthorized: false })
 
-  // Proxy système (Windows : Internet Options / registre, macOS : Préférences réseau)
-  // Electron résout aussi les PAC/WPAD automatiquement.
+  // Proxy système Windows (Internet Options / registre, PAC/WPAD via Electron)
   try {
     const pac = await session.defaultSession.resolveProxy(url)
-    // Format renvoyé : "PROXY host:port" | "HTTPS host:port" | "SOCKS5 host:port" | "DIRECT"
     const first = pac.split(';')[0].trim()
     const m = first.match(/^(?:PROXY|HTTPS|SOCKS5?)\s+(.+)$/i)
     if (m) {
       const scheme = first.toUpperCase().startsWith('SOCKS') ? 'socks5' : 'http'
-      return new HttpsProxyAgent(`${scheme}://${m[1]}`)
+      // rejectUnauthorized: false car les proxies d'entreprise font de l'inspection SSL
+      // et présentent leur propre certificat (non reconnu par le bundle CA de Node.js).
+      return new HttpsProxyAgent(`${scheme}://${m[1]}`, { rejectUnauthorized: false })
     }
   } catch {
     // session non disponible (tests unitaires, démarrage anticipé) — ignoré

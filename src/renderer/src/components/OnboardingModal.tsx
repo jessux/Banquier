@@ -185,15 +185,55 @@ function StepAI({
     { value: 'google/gemini-flash-1.5', label: 'Gemini Flash 1.5' },
   ]
 
+  const openLink = (): void => {
+    window.api.openExternal('https://openrouter.ai/workspaces/default/keys')
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ border: '1px solid #2e3147', borderRadius: 10, padding: '16px 18px', background: 'rgba(99,102,241,0.04)' }}>
-        <div style={{ fontSize: 13, color: '#94a3b8', marginBottom: 16, lineHeight: 1.6 }}>
-          OpenRouter donne accès à Claude, GPT-4, Gemini et d'autres modèles via une seule clé API.
-          Le plan gratuit (<strong style={{ color: '#e2e8f0' }}>openrouter/free</strong>) suffit pour la catégorisation.
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* Explication */}
+      <div style={{ border: '1px solid #2e3147', borderRadius: 10, padding: '14px 16px', background: 'rgba(99,102,241,0.04)' }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 8, color: '#e2e8f0' }}>Qu'est-ce qu'OpenRouter ?</div>
+        <div style={{ fontSize: 13, color: '#94a3b8', lineHeight: 1.65 }}>
+          OpenRouter est un service qui donne accès à des dizaines de modèles d'IA (Claude, GPT-4, Gemini…)
+          via <strong style={{ color: '#e2e8f0' }}>une seule clé API</strong>.
+          Banquier l'utilise pour catégoriser vos transactions automatiquement.
         </div>
-        <div className="form-group" style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 12 }}>Clé API OpenRouter</label>
+        <div style={{ marginTop: 10, fontSize: 13, color: '#94a3b8', lineHeight: 1.65 }}>
+          Le modèle <strong style={{ color: '#818cf8' }}>openrouter/free</strong> est <strong style={{ color: '#e2e8f0' }}>entièrement gratuit</strong> et
+          largement suffisant pour la catégorisation.
+        </div>
+      </div>
+
+      {/* Étapes pour obtenir la clé */}
+      <div style={{ border: '1px solid #2e3147', borderRadius: 10, padding: '14px 16px' }}>
+        <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 12, color: '#e2e8f0' }}>Comment obtenir votre clé ?</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {[
+            { n: '1', text: 'Créez un compte gratuit sur openrouter.ai' },
+            { n: '2', text: 'Allez dans Workspaces → Keys' },
+            { n: '3', text: 'Cliquez "Create key" et copiez la clé générée' },
+          ].map(({ n, text }) => (
+            <div key={n} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#1e2130', border: '1px solid #2e3147', color: '#6366f1', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{n}</div>
+              <span style={{ fontSize: 13, color: '#94a3b8' }}>{text}</span>
+            </div>
+          ))}
+        </div>
+        <button
+          onClick={openLink}
+          style={{ marginTop: 14, display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.4)', borderRadius: 8, padding: '7px 14px', cursor: 'pointer', color: '#818cf8', fontSize: 13, fontWeight: 500 }}
+        >
+          <span>Ouvrir openrouter.ai/keys</span>
+          <span style={{ fontSize: 11 }}>↗</span>
+        </button>
+      </div>
+
+      {/* Saisie */}
+      <div style={{ display: 'flex', gap: 12 }}>
+        <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+          <label style={{ fontSize: 12 }}>Votre clé API</label>
           <input
             type="password"
             value={apiKey}
@@ -201,20 +241,17 @@ function StepAI({
             placeholder="sk-or-v1-…"
             style={{ fontSize: 13 }}
           />
-          <p style={{ fontSize: 11, color: '#475569', marginTop: 4 }}>
-            Obtenez votre clé sur <strong style={{ color: '#818cf8' }}>openrouter.ai</strong>
-          </p>
         </div>
-        <div className="form-group" style={{ marginBottom: 0 }}>
+        <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
           <label style={{ fontSize: 12 }}>Modèle</label>
           <select value={model} onChange={(e) => setModel(e.target.value)} style={{ fontSize: 13 }}>
             {MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-            <option value="__custom__" disabled>— Modèle personnalisé (modifier dans Paramètres)</option>
           </select>
         </div>
       </div>
-      <p style={{ fontSize: 12, color: '#475569', textAlign: 'center' }}>
-        Optionnel — sans clé, tout le reste fonctionne normalement. Vous pourrez la configurer plus tard dans <strong style={{ color: '#64748b' }}>Paramètres → OpenRouter</strong>.
+
+      <p style={{ fontSize: 11, color: '#475569', margin: 0 }}>
+        Optionnel — sans clé, tout le reste de Banquier fonctionne normalement.
       </p>
     </div>
   )
@@ -274,9 +311,10 @@ export default function OnboardingModal({ settings, onDone, onNavigate }: Props)
           </div>
           <button
             onClick={skip}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', fontSize: 13, padding: '4px 0', marginTop: 4 }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', fontSize: 18, padding: '2px 4px', lineHeight: 1 }}
+            title="Fermer l'onboarding"
           >
-            Passer l'onboarding
+            ✕
           </button>
         </div>
 
@@ -309,15 +347,31 @@ export default function OnboardingModal({ settings, onDone, onNavigate }: Props)
             ← Précédent
           </button>
 
-          <div style={{ display: 'flex', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             {step < STEPS.length - 1 ? (
-              <button className="btn btn-primary" onClick={() => setStep((s) => s + 1)}>
-                Suivant →
-              </button>
+              <>
+                <button
+                  onClick={() => setStep((s) => s + 1)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', fontSize: 13, padding: '4px 8px' }}
+                >
+                  Passer cette étape
+                </button>
+                <button className="btn btn-primary" onClick={() => setStep((s) => s + 1)}>
+                  Suivant →
+                </button>
+              </>
             ) : (
-              <button className="btn btn-primary" onClick={finish} style={{ padding: '8px 24px' }}>
-                Commencer 🚀
-              </button>
+              <>
+                <button
+                  onClick={finish}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', fontSize: 13, padding: '4px 8px' }}
+                >
+                  Passer cette étape
+                </button>
+                <button className="btn btn-primary" onClick={finish} style={{ padding: '8px 24px' }}>
+                  Commencer 🚀
+                </button>
+              </>
             )}
           </div>
         </div>
