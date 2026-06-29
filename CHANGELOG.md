@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.0](https://github.com/jessux/Banquier/compare/v1.13.0...v1.14.0) (2026-06-29)
+
+
+### Nouvelles fonctionnalités
+
+* **dashboard:** enhance category stats view with combined net balance and category filtering ([fd5884e](https://github.com/jessux/Banquier/commit/fd5884ed0968ccdcab13f342fb9889a6d820cff8))
+* **simulateur:** add savings simulator page and integrate into navigation ([d5b8cc6](https://github.com/jessux/Banquier/commit/d5b8cc6ed32f252cf9bb892b5c4169a735c8b852))
+
 ## [1.13.0](https://github.com/jessux/Banquier/compare/v1.12.0...v1.13.0) (2026-06-29)
 
 
