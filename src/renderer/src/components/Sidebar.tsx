@@ -12,6 +12,7 @@ const navItems: NavItem[] = [
   { id: 'recurring', label: 'Récurrences', icon: '🔁' },
   { id: 'budget', label: 'Budgets', icon: '🎯' },
   { id: 'patrimoine', label: 'Patrimoine', icon: '💎' },
+  { id: 'simulateur', label: 'Simulateur épargne', icon: '🎓' },
   { id: 'categories', label: 'Catégories', icon: '🏷️' },
   { id: 'rules', label: 'Règles auto', icon: '⚡' },
   { id: 'chat', label: 'Analyser avec IA', icon: '🤖' },
