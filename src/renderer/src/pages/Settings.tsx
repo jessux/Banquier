@@ -247,6 +247,22 @@ export default function SettingsPage(): JSX.Element {
         </div>
       </div>
 
+      {/* Réseau */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <h3 style={{ marginBottom: 16 }}>Réseau</h3>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <label>Proxy HTTP/HTTPS</label>
+          <input
+            value={settings.proxyUrl ?? ''}
+            onChange={(e) => setSettings({ ...settings, proxyUrl: e.target.value })}
+            placeholder="http://proxy.entreprise.com:8080"
+          />
+          <p className="text-muted text-sm" style={{ marginTop: 4 }}>
+            Laisser vide pour la détection automatique. À renseigner si vous êtes derrière un proxy d'entreprise.
+          </p>
+        </div>
+      </div>
+
       {/* Préférences */}
       <div className="card" style={{ marginBottom: 20 }}>
         <h3 style={{ marginBottom: 16 }}>Préférences</h3>

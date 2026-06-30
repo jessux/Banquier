@@ -91,6 +91,8 @@ export interface Settings {
   powensToken?: string
   /** Mis à true après que l'utilisateur a terminé ou passé l'onboarding. */
   onboardingDone?: boolean
+  /** Proxy HTTP/HTTPS configuré manuellement (ex: http://proxy.entreprise.com:8080). */
+  proxyUrl?: string
 }
 
 /** État de la connexion Powens. */

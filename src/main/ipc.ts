@@ -30,6 +30,7 @@ import {
   POWENS_CREDS,
   type PowensCreds
 } from './powens'
+import { setConfiguredProxy } from './proxy'
 import type {
   Settings,
   CsvMapping,
@@ -59,6 +60,8 @@ const store = new Store<StoreSchema>({
 })
 
 export function registerIpcHandlers(): void {
+  // Initialise le proxy configuré dès le démarrage
+  setConfiguredProxy(store.get('settings').proxyUrl)
   // --- Accounts ---
   ipcMain.handle('get-accounts', () => db.getAccounts())
   ipcMain.handle('rename-account', (_, id: number, name: string) => db.renameAccount(id, name))
@@ -285,7 +288,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('get-settings', () => store.get('settings'))
   ipcMain.handle('save-settings', (_, settings: Partial<Settings>) => {
     const current = store.get('settings')
-    store.set('settings', { ...current, ...settings })
+    const merged = { ...current, ...settings }
+    store.set('settings', merged)
+    setConfiguredProxy(merged.proxyUrl)
   })
 
   // --- Patrimoine ---
