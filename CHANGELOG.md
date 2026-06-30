@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.0](https://github.com/jessux/Banquier/compare/v1.14.4...v1.15.0) (2026-06-30)
+
+
+### Nouvelles fonctionnalités
+
+* **settings:** add manual proxy configuration for corporate networks ([3642e70](https://github.com/jessux/Banquier/commit/3642e706b3726c736c375f578cdc8eff2c6eb9a3))
+
 ## [1.14.4](https://github.com/jessux/Banquier/compare/v1.14.3...v1.14.4) (2026-06-30)
 
 
