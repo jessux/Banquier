@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.17.0](https://github.com/jessux/Banquier/compare/v1.16.0...v1.17.0) (2026-06-30)
+
+
+### Nouvelles fonctionnalités
+
+* **index:** ensure proxy-aware behavior is enabled at runtime ([541aae3](https://github.com/jessux/Banquier/commit/541aae37fc31be563be8d88bcf43f2c94f647d95))
+* **powens:** enable insecure TLS agent for self-signed certificates ([541aae3](https://github.com/jessux/Banquier/commit/541aae37fc31be563be8d88bcf43f2c94f647d95))
+* **Simulateur:** add frequency of compounding option and update calculations ([541aae3](https://github.com/jessux/Banquier/commit/541aae37fc31be563be8d88bcf43f2c94f647d95))
+
 ## [1.16.0](https://github.com/jessux/Banquier/compare/v1.15.0...v1.16.0) (2026-06-30)
 
 
