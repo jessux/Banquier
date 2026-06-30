@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.1](https://github.com/jessux/Banquier/compare/v1.17.0...v1.17.1) (2026-06-30)
+
+
+### Corrections de bugs
+
+* **proxy:** ensure NODE_TLS_REJECT_UNAUTHORIZED is set to '0' for self-signed certs ([d1eb57a](https://github.com/jessux/Banquier/commit/d1eb57aed7b88df04aea48e7b162921aadb71a7f))
+
 ## [1.17.0](https://github.com/jessux/Banquier/compare/v1.16.0...v1.17.0) (2026-06-30)
 
 
