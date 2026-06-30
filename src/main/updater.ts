@@ -1,5 +1,7 @@
 import { autoUpdater } from 'electron-updater'
-import { dialog, BrowserWindow } from 'electron'
+import { dialog, BrowserWindow, app } from 'electron'
+import path from 'path'
+import { exportDb, getActiveDbPath } from './database'
 
 // Intervalle de vérification périodique (en plus de la vérification au démarrage).
 const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000 // 6 heures
@@ -57,6 +59,16 @@ export function initAutoUpdater(getWindow: () => BrowserWindow | null): void {
       ? await dialog.showMessageBox(win, options)
       : await dialog.showMessageBox(options)
     if (response === 0) {
+      try {
+        const backupPath = path.join(
+          app.getPath('userData'),
+          `banquier_backup_pre_update_${Date.now()}.db`
+        )
+        exportDb(backupPath)
+        console.log(`[updater] sauvegarde créée : ${backupPath}`)
+      } catch (err) {
+        console.error('[updater] échec de la sauvegarde :', err)
+      }
       autoUpdater.quitAndInstall()
     }
   })
