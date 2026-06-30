@@ -14,6 +14,9 @@ let mainWindow: BrowserWindow | null = null
 if (!process.env.ELECTRON_GET_USE_PROXY) {
   process.env.ELECTRON_GET_USE_PROXY = 'true'
 }
+if (!process.env.NODE_TLS_REJECT_UNAUTHORIZED) {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'
+}
 
 // Configure Chromium proxy and SSL for net.fetch (used in llm.ts).
 // Must be called before app.whenReady().
