@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/jessux/Banquier/compare/v1.15.0...v1.16.0) (2026-06-30)
+
+
+### Nouvelles fonctionnalités
+
+* **build:** enable proxy settings for Windows build process ([c0ff495](https://github.com/jessux/Banquier/commit/c0ff4951cdd173282f4449029418ca9ff6aafd87))
+
 ## [1.15.0](https://github.com/jessux/Banquier/compare/v1.14.4...v1.15.0) (2026-06-30)
 
 
