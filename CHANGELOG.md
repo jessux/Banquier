@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/jessux/Banquier/compare/v1.18.0...v1.19.0) (2026-06-30)
+
+
+### Nouvelles fonctionnalités
+
+* **updater:** add backup functionality before auto-update installation ([a489786](https://github.com/jessux/Banquier/commit/a489786d882a2d547f4e0da33ff6ac95b88d670b))
+
 ## [1.18.0](https://github.com/jessux/Banquier/compare/v1.17.1...v1.18.0) (2026-06-30)
 
 
