@@ -3,6 +3,7 @@ import fs from 'fs'
 import Store from 'electron-store'
 import path from 'path'
 import * as db from './database'
+import * as profiles from './profiles'
 import { previewCsv, parseCsvToTransactions } from './parsers/csv'
 import { extractPdfText, buildPdfParsePrompt, parseLlmJsonResponse } from './parsers/pdf'
 import {
@@ -494,6 +495,17 @@ export function registerIpcHandlers(): void {
     const csv = db.exportTransactionsToCsv()
     fs.writeFileSync(result.filePath, csv, 'utf8')
     return { success: true }
+  })
+
+  // --- Profiles ---
+  ipcMain.handle('get-profiles', () => profiles.getProfiles())
+  ipcMain.handle('create-profile', (_, name: string) => profiles.createProfile(name))
+  ipcMain.handle('rename-profile', (_, id: string, name: string) => profiles.renameProfile(id, name))
+  ipcMain.handle('delete-profile', (_, id: string) => profiles.deleteProfile(id))
+  ipcMain.handle('switch-profile', (_, id: string) => {
+    const newPath = profiles.switchProfile(id)
+    db.initDatabase(newPath)
+    BrowserWindow.getFocusedWindow()?.webContents.reload()
   })
 
   ipcMain.handle('shell-open-external', (_, url: string) => shell.openExternal(url))

@@ -81,6 +81,16 @@ export interface CategoryRule {
   category: string
 }
 
+export interface Profile {
+  id: string
+  name: string
+}
+
+export interface ProfilesState {
+  active: string
+  profiles: Profile[]
+}
+
 export interface Settings {
   openrouterApiKey: string
   openrouterModel: string

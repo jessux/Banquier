@@ -2,7 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type {
   TransactionFilters,
   CsvMapping,
-  Settings
+  Settings,
+  ProfilesState
 } from '../shared/types'
 
 const api = {
@@ -151,6 +152,13 @@ const api = {
   upsertBudget: (category: string, amount: number) =>
     ipcRenderer.invoke('upsert-budget', category, amount),
   deleteBudget: (id: number) => ipcRenderer.invoke('delete-budget', id),
+
+  // Profiles
+  getProfiles: () => ipcRenderer.invoke('get-profiles') as Promise<ProfilesState>,
+  createProfile: (name: string) => ipcRenderer.invoke('create-profile', name) as Promise<ProfilesState>,
+  renameProfile: (id: string, name: string) => ipcRenderer.invoke('rename-profile', id, name) as Promise<ProfilesState>,
+  deleteProfile: (id: string) => ipcRenderer.invoke('delete-profile', id) as Promise<ProfilesState>,
+  switchProfile: (id: string) => ipcRenderer.invoke('switch-profile', id) as Promise<void>,
 
   // Mobile server
   startMobileServer: () => ipcRenderer.invoke('start-mobile-server'),

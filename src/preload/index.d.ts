@@ -25,7 +25,8 @@ import type {
   PowensStatus,
   PowensSyncResult,
   Budget,
-  BudgetWithSpent
+  BudgetWithSpent,
+  ProfilesState
 } from '../shared/types'
 
 declare global {
@@ -130,6 +131,13 @@ declare global {
       deleteAsset: (id: number) => Promise<void>
       previewSymbol: (type: string, symbol: string) => Promise<{ price: number | null; error?: string }>
       refreshQuotes: () => Promise<QuoteRefreshResult>
+
+      // Profiles
+      getProfiles: () => Promise<ProfilesState>
+      createProfile: (name: string) => Promise<ProfilesState>
+      renameProfile: (id: string, name: string) => Promise<ProfilesState>
+      deleteProfile: (id: string) => Promise<ProfilesState>
+      switchProfile: (id: string) => Promise<void>
 
       // Mobile server
       startMobileServer: () => Promise<unknown>

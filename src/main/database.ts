@@ -33,10 +33,15 @@ import type {
 } from '../shared/types'
 
 let db: Database
+let activeDbPath = ''
 
-export function initDatabase(): void {
-  const dbPath = path.join(app.getPath('userData'), 'banquier.db')
-  db = new Database(dbPath)
+export function getActiveDbPath(): string {
+  return activeDbPath
+}
+
+export function initDatabase(dbPath?: string): void {
+  activeDbPath = dbPath ?? path.join(app.getPath('userData'), 'banquier.db')
+  db = new Database(activeDbPath)
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA foreign_keys = ON')
   createTables()
@@ -993,15 +998,14 @@ export function getBudgetsWithSpent(startDate?: string, endDate?: string): (Budg
 
 export function exportDb(destPath: string): void {
   db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
-  fs.copyFileSync(path.join(app.getPath('userData'), 'banquier.db'), destPath)
+  fs.copyFileSync(activeDbPath, destPath)
 }
 
 export function restoreDb(sourcePath: string): void {
   db.exec('PRAGMA wal_checkpoint(TRUNCATE)')
   db.close()
-  const dbPath = path.join(app.getPath('userData'), 'banquier.db')
-  fs.copyFileSync(sourcePath, dbPath)
-  db = new Database(dbPath)
+  fs.copyFileSync(sourcePath, activeDbPath)
+  db = new Database(activeDbPath)
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA foreign_keys = ON')
   createTables()

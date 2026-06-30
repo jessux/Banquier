@@ -3,6 +3,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import Store from 'electron-store'
 import { initDatabase } from './database'
+import { getActiveDbPath } from './profiles'
 import { registerIpcHandlers } from './ipc'
 import { startMobileServer, stopMobileServer } from './mobile-server'
 import { initAutoUpdater } from './updater'
@@ -72,7 +73,7 @@ app.whenReady().then(async () => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  initDatabase()
+  initDatabase(getActiveDbPath())
   registerIpcHandlers()
   createWindow()
 
