@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.3](https://github.com/jessux/Banquier/compare/v1.14.2...v1.14.3) (2026-06-30)
+
+
+### Corrections de bugs
+
+* **build:** enable nsis uninstaller and installation wizard for windows ([dd979d9](https://github.com/jessux/Banquier/commit/dd979d9523fe26950cec95df3051b477316f56b6))
+
 ## [1.14.2](https://github.com/jessux/Banquier/compare/v1.14.1...v1.14.2) (2026-06-30)
 
 
