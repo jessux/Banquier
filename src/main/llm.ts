@@ -1,6 +1,7 @@
 import nodeFetch from 'node-fetch'
-import { HttpsProxyAgent } from 'https-proxy-agent'
+import https from 'https'
 import type { ChatMessage, Settings, Transaction, CategoryStats, MonthlyStats, Account } from '../shared/types'
+import { resolveAgent } from './proxy'
 import type {
   DashboardSummary,
   MerchantStats,
@@ -11,9 +12,18 @@ import type {
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1'
 
-function getAgent(): HttpsProxyAgent<string> | undefined {
-  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
-  return proxyUrl ? new HttpsProxyAgent(proxyUrl) : undefined
+async function fetchWithFallback(url: string, init: Parameters<typeof nodeFetch>[1]): ReturnType<typeof nodeFetch> {
+  const agent = await resolveAgent(url)
+  try {
+    return await nodeFetch(url, { ...init, agent })
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code ?? ''
+    if (/CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ENOTFOUND/i.test(code)) {
+      const fallback = new https.Agent({ rejectUnauthorized: false })
+      return nodeFetch(url, { ...init, agent: fallback })
+    }
+    throw err
+  }
 }
 
 function openRouterHeaders(apiKey: string): Record<string, string> {
@@ -41,10 +51,9 @@ async function streamCompletion(
   settings: Settings,
   onChunk: (chunk: string) => void
 ): Promise<StreamResult> {
-  const response = await nodeFetch(`${OPENROUTER_BASE}/chat/completions`, {
+  const response = await fetchWithFallback(`${OPENROUTER_BASE}/chat/completions`, {
     method: 'POST',
     headers: openRouterHeaders(settings.openrouterApiKey),
-    agent: getAgent(),
     body: JSON.stringify({
       model: settings.openrouterModel || 'openrouter/free',
       messages,
@@ -109,21 +118,15 @@ export async function callOpenRouterOnce(
     throw new Error('Clé API OpenRouter non configurée')
   }
 
-  const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
-  console.log(`[llm] callOpenRouterOnce — model: ${settings.openrouterModel}, proxy: ${proxyUrl ?? 'none'}`)
-
-  const response = await nodeFetch(`${OPENROUTER_BASE}/chat/completions`, {
+  const response = await fetchWithFallback(`${OPENROUTER_BASE}/chat/completions`, {
     method: 'POST',
     headers: openRouterHeaders(settings.openrouterApiKey),
-    agent: getAgent(),
     body: JSON.stringify({
       model: settings.openrouterModel || 'openrouter/free',
       messages,
       stream: false
     })
   })
-
-  console.log(`[llm] response status: ${response.status}`)
 
   if (!response.ok) {
     const err = await response.text()

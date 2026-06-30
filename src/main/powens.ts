@@ -1,7 +1,7 @@
 import nodeFetch from 'node-fetch'
 import https from 'https'
-import { HttpsProxyAgent } from 'https-proxy-agent'
-import { BrowserWindow, session } from 'electron'
+import { BrowserWindow } from 'electron'
+import { resolveAgent } from './proxy'
 
 /**
  * Intégration Powens (ex-Budget Insight / biapi) — agrégation bancaire.
@@ -39,27 +39,6 @@ export const POWENS_CREDS: PowensCreds = {
   redirectUri: 'http://localhost:8645'
 }
 
-async function resolveAgent(url: string): Promise<HttpsProxyAgent<string> | undefined> {
-  // Env var explicite → prioritaire
-  const envProxy = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
-  if (envProxy) return new HttpsProxyAgent(envProxy, { rejectUnauthorized: false })
-
-  // Proxy système Windows (Internet Options / registre, PAC/WPAD via Electron)
-  try {
-    const pac = await session.defaultSession.resolveProxy(url)
-    const first = pac.split(';')[0].trim()
-    const m = first.match(/^(?:PROXY|HTTPS|SOCKS5?)\s+(.+)$/i)
-    if (m) {
-      const scheme = first.toUpperCase().startsWith('SOCKS') ? 'socks5' : 'http'
-      // rejectUnauthorized: false car les proxies d'entreprise font de l'inspection SSL
-      // et présentent leur propre certificat (non reconnu par le bundle CA de Node.js).
-      return new HttpsProxyAgent(`${scheme}://${m[1]}`, { rejectUnauthorized: false })
-    }
-  } catch {
-    // session non disponible (tests unitaires, démarrage anticipé) — ignoré
-  }
-  return undefined
-}
 
 function baseUrl(domain: string): string {
   const name = domain.trim().replace(/\.biapi\.pro\/?$/i, '').replace(/^https?:\/\//, '')
@@ -81,7 +60,7 @@ async function api<T>(
   if (init.body) headers['content-type'] = 'application/json'
   if (init.token) headers['authorization'] = `Bearer ${init.token}`
 
-  const fetchOpts = (agent: https.Agent | HttpsProxyAgent<string> | undefined) =>
+  const fetchOpts = (agent: https.Agent | undefined) =>
     ({
       method: init.method ?? 'GET',
       agent,
@@ -95,11 +74,10 @@ async function api<T>(
   try {
     res = await nodeFetch(targetUrl, fetchOpts(detectedAgent))
   } catch (err: unknown) {
-    // Proxy SSL transparent d'entreprise non détecté par resolveProxy() :
-    // Node.js ne fait pas confiance au certificat auto-signé de la gateway.
-    // On retente sans vérification TLS uniquement si c'est une erreur de cert.
+    // Proxy d'entreprise avec inspection SSL : le certificat présenté n'est pas
+    // dans le bundle CA de Node.js. On retente avec rejectUnauthorized: false.
     const code = (err as NodeJS.ErrnoException).code ?? ''
-    if (!detectedAgent && /CERT|SELF_SIGNED|UNABLE_TO_VERIFY/i.test(code)) {
+    if (/CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ENOTFOUND/i.test(code)) {
       const fallback = new https.Agent({ rejectUnauthorized: false })
       res = await nodeFetch(targetUrl, fetchOpts(fallback))
     } else {
