@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.18.0](https://github.com/jessux/Banquier/compare/v1.17.1...v1.18.0) (2026-06-30)
+
+
+### Nouvelles fonctionnalités
+
+* **profiles:** implement profile management with create, rename, switch, and delete functionalities ([0bcfd8e](https://github.com/jessux/Banquier/commit/0bcfd8e46152fbdcc859b38b200c2f7b0f81976c))
+
 ## [1.17.1](https://github.com/jessux/Banquier/compare/v1.17.0...v1.17.1) (2026-06-30)
 
 
