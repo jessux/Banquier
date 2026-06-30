@@ -9,8 +9,8 @@
     "start": "electron-vite preview",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
-    "build:win": "npm run build && electron-builder --win",
-    "build:win:dir": "npm run build && electron-builder --win --dir"
+    "build:win": "set \"ELECTRON_GET_USE_PROXY=true\" && set \"NODE_TLS_REJECT_UNAUTHORIZED=0\" && npm run build && electron-builder --win",
+    "build:win:dir": "set \"ELECTRON_GET_USE_PROXY=true\" && set \"NODE_TLS_REJECT_UNAUTHORIZED=0\" && npm run build && electron-builder --win --dir"
   },
   "dependencies": {
     "electron-store": "^8.2.0",
