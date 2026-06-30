@@ -78,6 +78,7 @@ interface ScheduleRow {
   index: number
   period: string
   paid: number
+  interest: number
   capital: number
 }
 
@@ -107,9 +108,12 @@ function buildResult(
 
   const schedule: ScheduleRow[] = []
   let cap = initialCapital
+  let prevCap = initialCapital
   for (let i = 0; i < nPayments; i++) {
+    const interest = i === 0 ? 0 : cap - prevCap
     cap += pmt
-    schedule.push({ index: i + 1, period: freq.periodLabel(i), paid: pmt, capital: cap })
+    schedule.push({ index: i + 1, period: freq.periodLabel(i), paid: pmt, interest, capital: cap })
+    prevCap = cap
     if (i < nPayments - 1) cap *= 1 + rPeriod
   }
 
@@ -410,6 +414,7 @@ export default function Simulateur(): JSX.Element {
                   <th style={{ padding: '6px 8px', fontWeight: 500 }}>#</th>
                   <th style={{ padding: '6px 8px', fontWeight: 500 }}>Période</th>
                   <th style={{ padding: '6px 8px', fontWeight: 500 }}>Versement</th>
+                  <th style={{ padding: '6px 8px', fontWeight: 500 }}>Intérêts</th>
                   <th style={{ padding: '6px 8px', fontWeight: 500 }}>Capital acquis</th>
                 </tr>
               </thead>
@@ -418,7 +423,7 @@ export default function Simulateur(): JSX.Element {
                   <>
                     {tooLong && idx === SCHEDULE_HEAD && (
                       <tr key="ellipsis">
-                        <td colSpan={4} style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--text2, #94a3b8)', fontSize: 12 }}>
+                        <td colSpan={5} style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--text2, #94a3b8)', fontSize: 12 }}>
                           ··· {hiddenCount} versements ···
                         </td>
                       </tr>
@@ -433,6 +438,9 @@ export default function Simulateur(): JSX.Element {
                       <td style={{ padding: '6px 8px', color: 'var(--text2, #94a3b8)' }}>{row.index}</td>
                       <td style={{ padding: '6px 8px' }}>{row.period}</td>
                       <td style={{ padding: '6px 8px' }}>{euro(row.paid)}</td>
+                      <td style={{ padding: '6px 8px', color: row.interest > 0 ? '#22c55e' : 'var(--text2, #94a3b8)' }}>
+                        {row.interest > 0 ? `+${euro(row.interest)}` : '—'}
+                      </td>
                       <td style={{ padding: '6px 8px', fontWeight: row.index === result.nPayments ? 700 : undefined }}>
                         {euro(row.capital)}
                       </td>
