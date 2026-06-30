@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.1](https://github.com/jessux/Banquier/compare/v1.14.0...v1.14.1) (2026-06-30)
+
+
+### Corrections de bugs
+
+* **powens:** improve error handling for SSL certificate issues in API requests ([26242f9](https://github.com/jessux/Banquier/commit/26242f9d334f16a3e54775ea46e0d31f99973d9c))
+
 ## [1.14.0](https://github.com/jessux/Banquier/compare/v1.13.0...v1.14.0) (2026-06-29)
 
 
