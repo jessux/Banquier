@@ -67,8 +67,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "createUninstaller": true,
-      "createDesktopShortcut": true,
+"createDesktopShortcut": true,
       "createStartMenuShortcut": true
     },
     "mac": {
