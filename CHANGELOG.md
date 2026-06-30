@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.2](https://github.com/jessux/Banquier/compare/v1.14.1...v1.14.2) (2026-06-30)
+
+
+### Corrections de bugs
+
+* **simulateur:** add interest column to amortization schedule table ([a42c7d0](https://github.com/jessux/Banquier/commit/a42c7d07a2e70ad7fed3cc52cf396230fbc78c84))
+
 ## [1.14.1](https://github.com/jessux/Banquier/compare/v1.14.0...v1.14.1) (2026-06-30)
 
 
