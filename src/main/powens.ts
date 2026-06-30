@@ -1,4 +1,5 @@
 import nodeFetch from 'node-fetch'
+import https from 'https'
 import { HttpsProxyAgent } from 'https-proxy-agent'
 import { BrowserWindow, session } from 'electron'
 
@@ -79,12 +80,33 @@ async function api<T>(
   const headers: Record<string, string> = { accept: 'application/json' }
   if (init.body) headers['content-type'] = 'application/json'
   if (init.token) headers['authorization'] = `Bearer ${init.token}`
-  const res = await nodeFetch(targetUrl, {
-    method: init.method ?? 'GET',
-    agent: await resolveAgent(targetUrl),
-    headers,
-    body: init.body ? JSON.stringify(init.body) : undefined
-  })
+
+  const fetchOpts = (agent: https.Agent | HttpsProxyAgent<string> | undefined) =>
+    ({
+      method: init.method ?? 'GET',
+      agent,
+      headers,
+      body: init.body ? JSON.stringify(init.body) : undefined
+    }) as Parameters<typeof nodeFetch>[1]
+
+  const detectedAgent = await resolveAgent(targetUrl)
+
+  let res: Awaited<ReturnType<typeof nodeFetch>>
+  try {
+    res = await nodeFetch(targetUrl, fetchOpts(detectedAgent))
+  } catch (err: unknown) {
+    // Proxy SSL transparent d'entreprise non détecté par resolveProxy() :
+    // Node.js ne fait pas confiance au certificat auto-signé de la gateway.
+    // On retente sans vérification TLS uniquement si c'est une erreur de cert.
+    const code = (err as NodeJS.ErrnoException).code ?? ''
+    if (!detectedAgent && /CERT|SELF_SIGNED|UNABLE_TO_VERIFY/i.test(code)) {
+      const fallback = new https.Agent({ rejectUnauthorized: false })
+      res = await nodeFetch(targetUrl, fetchOpts(fallback))
+    } else {
+      throw err
+    }
+  }
+
   if (!res.ok) {
     const txt = await res.text()
     throw new Error(`Powens ${res.status} sur ${path} : ${txt.slice(0, 300)}`)
