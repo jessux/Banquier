@@ -97,6 +97,7 @@ function buildResult(
   initialCapital: number,
   durationYears: number,
   freqYears: number,
+  freqCompYears: number,
   annualRate: number,
   rPeriod: number,
   pmt: number,
@@ -106,12 +107,38 @@ function buildResult(
   const nPeriods = Math.floor(durationYears / freqYears + 1e-9)
   const nPayments = nPeriods + 1
 
+  // Show interest only on compounding dates when compounding is less frequent than payments
+  const compRatio = freqCompYears / freqYears
+  const showCompSeparately = freqCompYears > freqYears + 1e-9 && Math.abs(compRatio - Math.round(compRatio)) < 1e-9
+
   const schedule: ScheduleRow[] = []
   let cap = initialCapital
   let prevCap = initialCapital
+  let lastCompoundCap = initialCapital
+  let paymentsSinceLastComp = 0
+
   for (let i = 0; i < nPayments; i++) {
-    const interest = i === 0 ? 0 : cap - prevCap
+    const compPeriodsElapsed = i * freqYears / freqCompYears
+    const isCompDate = showCompSeparately && i > 0 && Math.abs(compPeriodsElapsed % 1) < 1e-9
+
+    let interest = 0
+    if (isCompDate) {
+      interest = cap - lastCompoundCap - pmt * paymentsSinceLastComp
+    } else if (!showCompSeparately) {
+      interest = i === 0 ? 0 : cap - prevCap
+    }
+
     cap += pmt
+
+    if (showCompSeparately) {
+      if (isCompDate) {
+        lastCompoundCap = cap
+        paymentsSinceLastComp = 1
+      } else {
+        paymentsSinceLastComp++
+      }
+    }
+
     schedule.push({ index: i + 1, period: freq.periodLabel(i), paid: pmt, interest, capital: cap })
     prevCap = cap
     if (i < nPayments - 1) cap *= 1 + rPeriod
@@ -137,6 +164,7 @@ function computeForward(
   targetCapital: number,
   durationYears: number,
   freq: FreqOption,
+  freqCompound: FreqOption,
   annualRate: number,
   initialCapital: number
 ): SimResult | null {
@@ -168,13 +196,14 @@ function computeForward(
     : nPayments
 
   const pmt = (adjustedTarget - adjustedC0) / annuityFactor
-  return buildResult(initialCapital, durationYears, freqYears, annualRate, rPeriod, pmt, targetCapital, freq)
+  return buildResult(initialCapital, durationYears, freqYears, freqCompound.value, annualRate, rPeriod, pmt, targetCapital, freq)
 }
 
 function computeInverse(
   pmt: number,
   durationYears: number,
   freq: FreqOption,
+  freqCompound: FreqOption,
   annualRate: number,
   initialCapital: number
 ): SimResult | null {
@@ -189,7 +218,7 @@ function computeInverse(
     ? (Math.pow(1 + rPeriod, nPayments) - 1) / rPeriod
     : nPayments
   const targetCapital = (c0AtLastPayment + pmt * annuityFactor) * Math.pow(1 + annualRate, remainder)
-  return buildResult(initialCapital, durationYears, freqYears, annualRate, rPeriod, pmt, targetCapital, freq)
+  return buildResult(initialCapital, durationYears, freqYears, freqCompound.value, annualRate, rPeriod, pmt, targetCapital, freq)
 }
 
 const SCHEDULE_HEAD = 24
@@ -201,19 +230,21 @@ export default function Simulateur(): JSX.Element {
   const [pmtStr, setPmtStr] = useState('100')
   const [durationStr, setDurationStr] = useState('10')
   const [freqKey, setFreqKey] = useState('Mensuel')
+  const [freqCompoundKey, setFreqCompoundKey] = useState('Annuel')
   const [rateStr, setRateStr] = useState('3')
   const [initialStr, setInitialStr] = useState('0')
 
   const freq = FREQ_OPTIONS.find(f => f.label === freqKey) ?? FREQ_OPTIONS[2]
+  const freqCompound = FREQ_OPTIONS.find(f => f.label === freqCompoundKey) ?? FREQ_OPTIONS[5]
 
   const result = useMemo(() => {
     const duration = num(durationStr)
     const rate = num(rateStr) / 100
     const initial = num(initialStr)
     if (duration <= 0) return null
-    if (mode === 'forward') return computeForward(num(targetStr), duration, freq, rate, initial)
-    return computeInverse(num(pmtStr), duration, freq, rate, initial)
-  }, [mode, targetStr, pmtStr, durationStr, freq, rateStr, initialStr])
+    if (mode === 'forward') return computeForward(num(targetStr), duration, freq, freqCompound, rate, initial)
+    return computeInverse(num(pmtStr), duration, freq, freqCompound, rate, initial)
+  }, [mode, targetStr, pmtStr, durationStr, freq, freqCompound, rateStr, initialStr])
 
   const scheduleRows = result?.schedule ?? []
   const tooLong = scheduleRows.length > SCHEDULE_HEAD + SCHEDULE_TAIL
@@ -279,6 +310,14 @@ export default function Simulateur(): JSX.Element {
           <div className="form-group">
             <label>Fréquence des versements</label>
             <select value={freqKey} onChange={(e) => setFreqKey(e.target.value)}>
+              {FREQ_OPTIONS.map((f) => (
+                <option key={f.label} value={f.label}>{f.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="form-group">
+            <label>Fréquence de capitalisation</label>
+            <select value={freqCompoundKey} onChange={(e) => setFreqCompoundKey(e.target.value)}>
               {FREQ_OPTIONS.map((f) => (
                 <option key={f.label} value={f.label}>{f.label}</option>
               ))}

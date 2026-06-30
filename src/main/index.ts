@@ -10,6 +10,11 @@ import type { Settings } from '../shared/types'
 
 let mainWindow: BrowserWindow | null = null
 
+// Keep proxy-aware behavior enabled at runtime as well.
+if (!process.env.ELECTRON_GET_USE_PROXY) {
+  process.env.ELECTRON_GET_USE_PROXY = 'true'
+}
+
 // Configure Chromium proxy and SSL for net.fetch (used in llm.ts).
 // Must be called before app.whenReady().
 const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY

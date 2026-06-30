@@ -39,6 +39,8 @@ export const POWENS_CREDS: PowensCreds = {
   redirectUri: 'http://localhost:8645'
 }
 
+const INSECURE_TLS_AGENT = new https.Agent({ rejectUnauthorized: false })
+
 
 function baseUrl(domain: string): string {
   const name = domain.trim().replace(/\.biapi\.pro\/?$/i, '').replace(/^https?:\/\//, '')
@@ -69,17 +71,17 @@ async function api<T>(
     }) as Parameters<typeof nodeFetch>[1]
 
   const detectedAgent = await resolveAgent(targetUrl)
+  const runtimeAgent = detectedAgent ?? INSECURE_TLS_AGENT
 
   let res: Awaited<ReturnType<typeof nodeFetch>>
   try {
-    res = await nodeFetch(targetUrl, fetchOpts(detectedAgent))
+    res = await nodeFetch(targetUrl, fetchOpts(runtimeAgent))
   } catch (err: unknown) {
     // Proxy d'entreprise avec inspection SSL : le certificat présenté n'est pas
     // dans le bundle CA de Node.js. On retente avec rejectUnauthorized: false.
     const code = (err as NodeJS.ErrnoException).code ?? ''
     if (/CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ENOTFOUND/i.test(code)) {
-      const fallback = new https.Agent({ rejectUnauthorized: false })
-      res = await nodeFetch(targetUrl, fetchOpts(fallback))
+      res = await nodeFetch(targetUrl, fetchOpts(INSECURE_TLS_AGENT))
     } else {
       throw err
     }
