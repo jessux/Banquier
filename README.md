@@ -41,7 +41,11 @@ Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elle
 | 🔒 **Vie privée** | Données 100 % locales, rien dans le cloud |
 
 ---
+## Soutenir le projet
 
+Si Banquier vous est utile, vous pouvez soutenir son développement sur [Ko-fi](https://ko-fi.com/gabrielkahlouche).
+
+---
 ## Stack
 
 ```
@@ -140,12 +144,6 @@ src/
 ├── renderer/       # React — Dashboard, Import, Chat, Transactions…
 └── shared/types.ts # Types partagés main ↔ renderer
 ```
-
----
-
-## Soutenir le projet
-
-Si Banquier vous est utile, vous pouvez soutenir son développement sur [Ko-fi](https://ko-fi.com/gabrielkahlouche).
 
 ---
 
