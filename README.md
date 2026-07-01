@@ -143,4 +143,10 @@ src/
 
 ---
 
+## Soutenir le projet
+
+Si Banquier vous est utile, vous pouvez soutenir son développement sur [Ko-fi](https://ko-fi.com/gabrielkahlouche).
+
+---
+
 *Fait pour ceux qui veulent comprendre où passe leur argent — sans payer pour ça.*
