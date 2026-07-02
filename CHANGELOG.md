@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.20.0](https://github.com/jessux/Banquier/compare/v1.19.0...v1.20.0) (2026-07-02)
+
+
+### Nouvelles fonctionnalités
+
+* **patrimoine:** saisir quantité + ticker au lieu de la valeur pour actions/ETF/crypto ([787b4fc](https://github.com/jessux/Banquier/commit/787b4fc9f86833fe794700a5155e24884fb3a5a0))
+
+
+### Corrections de bugs
+
+* **powens:** la suppression d'un compte Powens ne tenait pas à la prochaine synchro ([787b4fc](https://github.com/jessux/Banquier/commit/787b4fc9f86833fe794700a5155e24884fb3a5a0))
+
+
+### Documentation
+
+* add Ko-fi support link to README ([702785f](https://github.com/jessux/Banquier/commit/702785f050794d5b6988030e38895b81b82d6f6b))
+
 ## [1.19.0](https://github.com/jessux/Banquier/compare/v1.18.0...v1.19.0) (2026-06-30)
 
 
