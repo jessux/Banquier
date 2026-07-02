@@ -170,6 +170,11 @@ function createTables(): void {
       fees       REAL NOT NULL DEFAULT 0,
       active     INTEGER NOT NULL DEFAULT 1
     );
+
+    CREATE TABLE IF NOT EXISTS excluded_powens_accounts (
+      powens_id  TEXT PRIMARY KEY,
+      deleted_at TEXT NOT NULL
+    );
   `)
 }
 
@@ -223,8 +228,24 @@ export function renameAccount(id: number, name: string): void {
 }
 
 export function deleteAccount(id: number): void {
+  const account = db.get('SELECT * FROM accounts WHERE id = ?', [id]) as Account | undefined
+  // Un compte Powens réapparaîtrait à la prochaine synchro si on ne mémorise pas
+  // qu'il a été supprimé volontairement (Powens le renvoie toujours dans la liste).
+  if (account?.bank?.startsWith('powens:')) {
+    const powensId = account.bank.slice('powens:'.length)
+    db.run(
+      `INSERT INTO excluded_powens_accounts (powens_id, deleted_at) VALUES (?, ?)
+       ON CONFLICT(powens_id) DO UPDATE SET deleted_at = excluded.deleted_at`,
+      [powensId, new Date().toISOString()]
+    )
+  }
   db.run('DELETE FROM transactions WHERE account_id = ?', [id])
   db.run('DELETE FROM accounts WHERE id = ?', [id])
+}
+
+export function getExcludedPowensAccountIds(): Set<string> {
+  const rows = db.all('SELECT powens_id FROM excluded_powens_accounts') as { powens_id: string }[]
+  return new Set(rows.map((r) => r.powens_id))
 }
 
 export function updateAccountCurrency(id: number, currency: string): void {

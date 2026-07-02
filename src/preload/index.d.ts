@@ -22,6 +22,7 @@ import type {
   PatrimoineSummary,
   DcaPlan,
   QuoteRefreshResult,
+  SymbolSuggestion,
   PowensStatus,
   PowensSyncResult,
   Budget,
@@ -129,6 +130,7 @@ declare global {
       createAsset: (input: AssetInput) => Promise<Asset>
       updateAsset: (id: number, input: AssetInput) => Promise<void>
       deleteAsset: (id: number) => Promise<void>
+      searchSymbol: (type: string, query: string) => Promise<SymbolSuggestion[]>
       previewSymbol: (type: string, symbol: string) => Promise<{ price: number | null; error?: string }>
       refreshQuotes: () => Promise<QuoteRefreshResult>
 

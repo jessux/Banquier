@@ -1,6 +1,6 @@
 import nodeFetch from 'node-fetch'
 import { HttpsProxyAgent } from 'https-proxy-agent'
-import type { AssetType } from '../shared/types'
+import type { AssetType, SymbolSuggestion } from '../shared/types'
 
 /**
  * Cotations gratuites, sans clé API :
@@ -12,6 +12,7 @@ import type { AssetType } from '../shared/types'
 
 const COINGECKO = 'https://api.coingecko.com/api/v3'
 const YAHOO = 'https://query1.finance.yahoo.com/v8/finance/chart'
+const YAHOO_SEARCH = 'https://query1.finance.yahoo.com/v1/finance/search'
 
 function agent(): HttpsProxyAgent<string> | undefined {
   const proxyUrl = process.env.HTTPS_PROXY || process.env.HTTP_PROXY
@@ -44,6 +45,42 @@ export async function resolveCryptoId(symbol: string): Promise<string | null> {
   const id = (exact[0] ?? data.coins[0])?.id ?? null
   if (id) cryptoIdCache.set(key, id)
   return id
+}
+
+// --- Recherche de tickers (pour la liste déroulante du formulaire) ---
+
+interface YahooSearchResult {
+  quotes?: {
+    symbol: string
+    shortname?: string
+    longname?: string
+    exchDisp?: string
+    quoteType?: string
+  }[]
+}
+
+interface CoinGeckoSearchResult {
+  coins: { id: string; symbol: string; name: string; market_cap_rank: number | null }[]
+}
+
+/** Suggestions de tickers correspondant à une recherche texte, pour le sélecteur du formulaire. */
+export async function searchSymbols(type: AssetType, query: string): Promise<SymbolSuggestion[]> {
+  const q = query.trim()
+  if (q.length < 1) return []
+  if (type === 'crypto') {
+    const data = await getJson<CoinGeckoSearchResult>(`${COINGECKO}/search?query=${encodeURIComponent(q)}`)
+    return data.coins
+      .slice()
+      .sort((a, b) => (a.market_cap_rank ?? 1e9) - (b.market_cap_rank ?? 1e9))
+      .slice(0, 15)
+      .map((c) => ({ symbol: c.symbol.toUpperCase(), name: c.name }))
+  }
+  const data = await getJson<YahooSearchResult>(
+    `${YAHOO_SEARCH}?q=${encodeURIComponent(q)}&quotesCount=15&newsCount=0`
+  )
+  return (data.quotes ?? [])
+    .filter((r) => r.symbol)
+    .map((r) => ({ symbol: r.symbol, name: r.longname || r.shortname || r.symbol, exchange: r.exchDisp }))
 }
 
 // --- Change vers l'euro ---
