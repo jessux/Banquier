@@ -119,6 +119,8 @@ const api = {
   createAsset: (input: unknown) => ipcRenderer.invoke('create-asset', input),
   updateAsset: (id: number, input: unknown) => ipcRenderer.invoke('update-asset', id, input),
   deleteAsset: (id: number) => ipcRenderer.invoke('delete-asset', id),
+  searchSymbol: (type: string, query: string) =>
+    ipcRenderer.invoke('search-symbol', type, query),
   previewSymbol: (type: string, symbol: string) =>
     ipcRenderer.invoke('preview-symbol', type, symbol),
   refreshQuotes: () => ipcRenderer.invoke('refresh-quotes'),

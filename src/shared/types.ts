@@ -214,6 +214,13 @@ export interface DcaPlanInput {
   fees: number
 }
 
+/** Suggestion de ticker retournée par la recherche de symboles boursiers/crypto. */
+export interface SymbolSuggestion {
+  symbol: string
+  name: string
+  exchange?: string
+}
+
 /** Résultat d'un rafraîchissement des cours. */
 export interface QuoteRefreshResult {
   updated: { id: number; label: string; value: number }[]

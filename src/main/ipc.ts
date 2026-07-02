@@ -20,7 +20,8 @@ import {
   getCurrentPriceEur,
   getHistoricalSeriesEur,
   priceAt,
-  isMarketType
+  isMarketType,
+  searchSymbols
 } from './quotes'
 import {
   initAuth,
@@ -319,6 +320,15 @@ export function registerIpcHandlers(): void {
     }
   })
 
+  // Suggestions de tickers pour la liste déroulante de recherche du formulaire.
+  ipcMain.handle('search-symbol', async (_, type: AssetType, query: string) => {
+    try {
+      return await searchSymbols(type, query)
+    } catch {
+      return []
+    }
+  })
+
   // Aperçu d'un cours pour valider un ticker dans le formulaire.
   ipcMain.handle('preview-symbol', async (_, type: AssetType, symbol: string) => {
     try {
@@ -583,10 +593,13 @@ async function importPowens(
   if (minDate) transactions = transactions.filter((t) => (t.rdate || t.date || '').slice(0, 10) >= minDate)
   if (maxDate) transactions = transactions.filter((t) => (t.rdate || t.date || '').slice(0, 10) <= maxDate)
 
-  // Mappe chaque compte Powens vers un compte Banquier (clé : bank = "powens:<id>").
+  // Mappe chaque compte Powens vers un compte Banquier (clé : bank = "powens:<id>"),
+  // en ignorant les comptes que l'utilisateur a explicitement supprimés côté Banquier.
+  const excludedPowensIds = db.getExcludedPowensAccountIds()
   const existing = db.getAccounts()
   const accountIdByPowens = new Map<number, number>()
   for (const acc of accounts) {
+    if (excludedPowensIds.has(String(acc.id))) continue
     const key = `powens:${acc.id}`
     const found = existing.find((a) => a.bank === key)
     accountIdByPowens.set(
@@ -597,6 +610,7 @@ async function importPowens(
 
   const rows = transactions
     .filter((t) => !t.coming)
+    .filter((t) => !excludedPowensIds.has(String(t.id_account)))
     .map((t) => ({
       account_id: accountIdByPowens.get(t.id_account) ?? null,
       date: (t.rdate || t.date || '').slice(0, 10),

@@ -12,6 +12,7 @@ import type {
   DcaFrequency,
   DcaPlanInput
 } from '../../../shared/types'
+import TickerPicker from '../components/TickerPicker'
 
 const ASSET_TYPES: { type: AssetType; label: string; icon: string }[] = [
   { type: 'immobilier', label: 'Immobilier', icon: '🏠' },
@@ -65,6 +66,9 @@ export default function Patrimoine(): JSX.Element {
   const [dcaFeesStr, setDcaFeesStr] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [quoteMsg, setQuoteMsg] = useState<string | null>(null)
+  const [unitPrice, setUnitPrice] = useState<number | null>(null)
+  const [priceLoading, setPriceLoading] = useState(false)
+  const [priceError, setPriceError] = useState<string | null>(null)
 
   const isMarket = MARKET_TYPES.includes(form.type)
 
@@ -73,11 +77,40 @@ export default function Patrimoine(): JSX.Element {
   }
   useEffect(() => { load() }, [])
 
+  // Cours en direct du ticker sélectionné, pour calculer automatiquement la valeur du poste.
+  useEffect(() => {
+    if (!isMarket || !showForm) { setUnitPrice(null); setPriceError(null); setPriceLoading(false); return }
+    const symbol = (form.symbol ?? '').trim()
+    if (!symbol) { setUnitPrice(null); setPriceError(null); setPriceLoading(false); return }
+    let cancelled = false
+    setPriceLoading(true)
+    setPriceError(null)
+    const timer = setTimeout(async () => {
+      try {
+        const res = await window.api.previewSymbol(form.type, symbol)
+        if (cancelled) return
+        setUnitPrice(res.price)
+        if (res.price == null) setPriceError(res.error ?? 'Cours introuvable pour ce ticker')
+      } catch (e) {
+        if (!cancelled) setPriceError(String(e instanceof Error ? e.message : e))
+      } finally {
+        if (!cancelled) setPriceLoading(false)
+      }
+    }, 500)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [isMarket, showForm, form.symbol, form.type])
+
   const resetDca = (): void => {
     setDcaEnabled(false)
     setDca({ amount: 0, frequency: 'mensuel', day_ref: 1, start_date: '', fees: 0 })
     setDcaAmountStr('')
     setDcaFeesStr('')
+  }
+
+  const resetPrice = (): void => {
+    setUnitPrice(null)
+    setPriceError(null)
+    setPriceLoading(false)
   }
 
   const openNew = (): void => {
@@ -87,6 +120,7 @@ export default function Patrimoine(): JSX.Element {
     setQtyStr('')
     setLots([])
     resetDca()
+    resetPrice()
     setShowForm(true)
   }
 
@@ -104,6 +138,7 @@ export default function Patrimoine(): JSX.Element {
     setValueStr(String(a.value))
     setQtyStr(a.quantity != null ? String(a.quantity) : '')
     resetDca()
+    resetPrice()
     const plan = await window.api.getDcaPlan(a.id)
     if (plan) {
       setDcaEnabled(true)
@@ -140,7 +175,9 @@ export default function Patrimoine(): JSX.Element {
     [lots]
   )
   const formLotQty = useMemo(() => lots.reduce((s, l) => s + l.quantity, 0), [lots])
-  const formValue = num(valueStr)
+  const marketQty = formLotQty > 0 ? formLotQty : num(qtyStr)
+  const marketValue = unitPrice != null ? marketQty * unitPrice : 0
+  const formValue = isMarket ? marketValue : num(valueStr)
   const formGain = formValue - formCostBasis
 
   const updateLot = (i: number, patch: Partial<AssetLotInput>): void =>
@@ -161,14 +198,20 @@ export default function Patrimoine(): JSX.Element {
       : null
     const payload: AssetInput = {
       ...form,
-      value: useDca ? 0 : formValue, // pour le DCA, la valeur est calculée côté serveur
-      quantity: isMarket ? null : qtyStr.trim() ? num(qtyStr) : null,
+      // Pour le DCA la valeur est calculée côté serveur ; pour les autres actifs boursiers,
+      // elle est déduite automatiquement du cours en direct × la quantité détenue.
+      value: useDca ? 0 : formValue,
+      quantity: isMarket
+        ? useDca || cleanLots.length > 0 ? null : qtyStr.trim() ? num(qtyStr) : null
+        : qtyStr.trim() ? num(qtyStr) : null,
       lots: cleanLots,
       dca: dcaPayload
     }
     if (!payload.label.trim()) return
     if (useDca) {
       if (!payload.symbol || !dcaPayload!.amount || !dcaPayload!.start_date) return
+    } else if (isMarket) {
+      if (!payload.symbol || marketQty <= 0 || unitPrice == null) return
     } else if (payload.value <= 0) return
 
     setRefreshing(true)
@@ -378,22 +421,48 @@ export default function Patrimoine(): JSX.Element {
               <label>Libellé</label>
               <input value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} placeholder={isMarket ? 'Apple, Bitcoin, MSCI World…' : 'Appartement Paris 11e'} />
             </div>
-            {!useDca && (
+            {!isMarket && (
               <div className="form-group">
                 <label>Valeur actuelle totale (€)</label>
                 <input value={valueStr} onChange={(e) => setValueStr(e.target.value)} placeholder="250000" inputMode="decimal" />
               </div>
             )}
-            {!isMarket && (
+            <div className="form-group">
+              <label>Symbole / Ticker{isMarket ? '' : ' (optionnel)'}</label>
+              {isMarket ? (
+                <TickerPicker
+                  type={form.type}
+                  value={form.symbol ?? ''}
+                  onChange={(v) => setForm({ ...form, symbol: v || null })}
+                  placeholder="Rechercher : AAPL, Bitcoin, MSCI World…"
+                />
+              ) : (
+                <input value={form.symbol ?? ''} onChange={(e) => setForm({ ...form, symbol: e.target.value || null })} placeholder="AAPL, BTC, CW8.PA…" />
+              )}
+              {isMarket && (form.symbol ?? '').trim() && (
+                <p className="text-muted text-sm" style={{ marginTop: 4 }}>
+                  {priceLoading
+                    ? 'Recherche du cours…'
+                    : priceError
+                      ? `⚠ ${priceError}`
+                      : unitPrice != null
+                        ? `Cours actuel : ${euro2(unitPrice, form.currency)}`
+                        : null}
+                </p>
+              )}
+            </div>
+            {(!isMarket || (!useDca && formLotQty === 0)) && (
               <div className="form-group">
-                <label>Quantité (optionnel)</label>
-                <input value={qtyStr} onChange={(e) => setQtyStr(e.target.value)} placeholder="nb de parts/unités" inputMode="decimal" />
+                <label>{isMarket ? 'Quantité possédée' : 'Quantité (optionnel)'}</label>
+                <input value={qtyStr} onChange={(e) => setQtyStr(e.target.value)} placeholder={isMarket ? "nb d'actions/parts" : 'nb de parts/unités'} inputMode="decimal" />
               </div>
             )}
-            <div className="form-group">
-              <label>Symbole / Ticker{useDca ? '' : ' (optionnel)'}</label>
-              <input value={form.symbol ?? ''} onChange={(e) => setForm({ ...form, symbol: e.target.value || null })} placeholder="AAPL, BTC, CW8.PA…" />
-            </div>
+            {isMarket && !useDca && marketQty > 0 && unitPrice != null && (
+              <div className="form-group">
+                <label>Valeur estimée</label>
+                <div style={{ padding: '9px 0', fontWeight: 600 }}>{euro2(marketValue, form.currency)}</div>
+              </div>
+            )}
             <div className="form-group">
               <label>Note (optionnel)</label>
               <input value={form.notes ?? ''} onChange={(e) => setForm({ ...form, notes: e.target.value || null })} placeholder="PEA, compte-titres…" />
@@ -457,7 +526,7 @@ export default function Patrimoine(): JSX.Element {
           {/* Lots d'achat manuels (actifs boursiers, hors DCA) */}
           {isMarket && !useDca && (
             <div style={{ marginTop: 8 }}>
-              <div className="card-title" style={{ marginBottom: 8 }}>Lots d'achat (prix de revient)</div>
+              <div className="card-title" style={{ marginBottom: 8 }}>Lots d'achat (optionnel, pour suivre le prix de revient)</div>
               <table style={{ width: '100%', fontSize: 13 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: 'var(--text2, #94a3b8)' }}>
@@ -517,10 +586,12 @@ export default function Patrimoine(): JSX.Element {
                 !form.label.trim() ||
                 (useDca
                   ? !form.symbol || !dcaAmountStr.trim() || !dca.start_date
-                  : !valueStr.trim())
+                  : isMarket
+                    ? !form.symbol || marketQty <= 0 || priceLoading || unitPrice == null
+                    : !valueStr.trim())
               }
             >
-              {refreshing ? 'Calcul…' : editId != null ? 'Enregistrer' : 'Ajouter'}
+              {refreshing ? 'Calcul…' : priceLoading ? 'Cours…' : editId != null ? 'Enregistrer' : 'Ajouter'}
             </button>
             <button className="btn btn-secondary" onClick={() => setShowForm(false)}>Annuler</button>
           </div>
