@@ -311,7 +311,17 @@ export default function Chat(): JSX.Element {
             </div>
           )}
 
-          {messages.map((msg, i) => (
+          {messages.map((msg, i) => {
+            // Detect rate-limit errors from content (handles DB-loaded messages too)
+            const effectiveRetryText: string | undefined =
+              msg.retryText ??
+              (msg.role === 'assistant' &&
+               (msg.content.includes('429') || /RateLimitCapacity/i.test(msg.content)) &&
+               i > 0 && messages[i - 1].role === 'user'
+                ? messages[i - 1].content
+                : undefined)
+
+            return (
             <div key={i} className={`chat-message ${msg.role}`}>
               <div className="chat-avatar">{msg.role === 'user' ? '👤' : '🤖'}</div>
               <div className="chat-bubble">
@@ -350,7 +360,7 @@ export default function Chat(): JSX.Element {
                         ))}
                       </div>
                     )}
-                    {msg.retryText ? (
+                    {effectiveRetryText ? (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{
                           padding: '10px 14px', borderRadius: 8,
@@ -373,7 +383,7 @@ export default function Chat(): JSX.Element {
                         <button
                           className="btn btn-primary"
                           style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6 }}
-                          onClick={() => retry(msg.retryText!)}
+                          onClick={() => retry(effectiveRetryText)}
                           disabled={loading}
                         >
                           🔄 Réessayer
@@ -391,7 +401,8 @@ export default function Chat(): JSX.Element {
                 )}
               </div>
             </div>
-          ))}
+            )
+          })}
           <div ref={messagesEndRef} />
         </div>
 
