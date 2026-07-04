@@ -45,6 +45,7 @@ export default function BudgetPage(): JSX.Element {
   const [newCat, setNewCat] = useState('')
   const [newAmt, setNewAmt] = useState('')
   const [adding, setAdding] = useState(false)
+  const [suggestion, setSuggestion] = useState<{ average: number; monthsWithData: number } | null>(null)
 
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editAmt, setEditAmt] = useState('')
@@ -66,12 +67,21 @@ export default function BudgetPage(): JSX.Element {
 
   useEffect(() => { load() }, [startDate, endDate])
 
+  const selectCategory = async (cat: string): Promise<void> => {
+    setNewCat(cat)
+    if (!cat) { setSuggestion(null); return }
+    const res = await window.api.getCategoryMonthlyAverage(cat, 3)
+    setSuggestion(res.monthsWithData > 0 ? res : null)
+    if (res.monthsWithData > 0) setNewAmt(String(Math.round(res.average)))
+  }
+
   const addBudget = async (): Promise<void> => {
     const amt = parseFloat(newAmt.replace(',', '.'))
     if (!newCat || isNaN(amt) || amt <= 0) return
     await window.api.upsertBudget(newCat, amt)
     setNewCat('')
     setNewAmt('')
+    setSuggestion(null)
     setAdding(false)
     load()
   }
@@ -235,7 +245,7 @@ export default function BudgetPage(): JSX.Element {
           }}>
             <div className="form-group" style={{ marginBottom: 0, flex: '1 1 200px' }}>
               <label style={{ fontSize: 12 }}>Catégorie</label>
-              <select value={newCat} onChange={(e) => setNewCat(e.target.value)} style={{ fontSize: 13 }}>
+              <select value={newCat} onChange={(e) => selectCategory(e.target.value)} style={{ fontSize: 13 }}>
                 <option value="">— Choisir —</option>
                 {categories.map((c) => <option key={c} value={c}>{c}</option>)}
               </select>
@@ -253,8 +263,14 @@ export default function BudgetPage(): JSX.Element {
             </div>
             <div style={{ display: 'flex', gap: 8, paddingBottom: 1 }}>
               <button className="btn btn-primary" onClick={addBudget} disabled={!newCat || !newAmt}>Ajouter</button>
-              <button className="btn btn-secondary" onClick={() => { setAdding(false); setNewCat(''); setNewAmt('') }}>Annuler</button>
+              <button className="btn btn-secondary" onClick={() => { setAdding(false); setNewCat(''); setNewAmt(''); setSuggestion(null) }}>Annuler</button>
             </div>
+            {suggestion && (
+              <div style={{ flexBasis: '100%', fontSize: 12, color: '#818cf8' }}>
+                💡 Montant pré-rempli d'après votre moyenne : {fmt(suggestion.average)}/mois
+                {' '}sur {suggestion.monthsWithData === 1 ? 'le dernier mois' : `les ${suggestion.monthsWithData} derniers mois`}.
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -544,6 +544,9 @@ export function registerIpcHandlers(): void {
     db.upsertBudget(category, amount)
   )
   ipcMain.handle('delete-budget', (_, id: number) => db.deleteBudget(id))
+  ipcMain.handle('get-category-monthly-average', (_, category: string, months?: number) =>
+    db.getCategoryMonthlyAverage(category, months)
+  )
 
   ipcMain.handle('delete-account', (_, id: number) => db.deleteAccount(id))
 

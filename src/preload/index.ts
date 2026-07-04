@@ -154,6 +154,8 @@ const api = {
   upsertBudget: (category: string, amount: number) =>
     ipcRenderer.invoke('upsert-budget', category, amount),
   deleteBudget: (id: number) => ipcRenderer.invoke('delete-budget', id),
+  getCategoryMonthlyAverage: (category: string, months?: number) =>
+    ipcRenderer.invoke('get-category-monthly-average', category, months),
 
   // Profiles
   getProfiles: () => ipcRenderer.invoke('get-profiles') as Promise<ProfilesState>,

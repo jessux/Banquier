@@ -87,6 +87,7 @@ declare global {
       getBudgetsWithSpent: (startDate?: string, endDate?: string) => Promise<BudgetWithSpent[]>
       upsertBudget: (category: string, amount: number) => Promise<Budget>
       deleteBudget: (id: number) => Promise<void>
+      getCategoryMonthlyAverage: (category: string, months?: number) => Promise<{ average: number; monthsWithData: number }>
 
       // AI Categorization
       categorizeAi: (onlyUncategorized: boolean, onProgress: (done: number, total: number) => void) => Promise<{ updated: number }>

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Fragment, useMemo, useState } from 'react'
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts'
@@ -132,8 +132,9 @@ function buildResult(
 
     if (showCompSeparately) {
       if (isCompDate) {
+        // Le versement du jour est déjà inclus dans lastCompoundCap : repartir de zéro.
         lastCompoundCap = cap
-        paymentsSinceLastComp = 1
+        paymentsSinceLastComp = 0
       } else {
         paymentsSinceLastComp++
       }
@@ -459,16 +460,15 @@ export default function Simulateur(): JSX.Element {
               </thead>
               <tbody>
                 {visibleRows.map((row, idx) => (
-                  <>
+                  <Fragment key={row.index}>
                     {tooLong && idx === SCHEDULE_HEAD && (
-                      <tr key="ellipsis">
+                      <tr>
                         <td colSpan={5} style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--text2, #94a3b8)', fontSize: 12 }}>
                           ··· {hiddenCount} versements ···
                         </td>
                       </tr>
                     )}
                     <tr
-                      key={row.index}
                       style={{
                         borderBottom: '1px solid var(--border)',
                         background: row.index === result.nPayments ? 'rgba(99,102,241,0.08)' : undefined
@@ -484,7 +484,7 @@ export default function Simulateur(): JSX.Element {
                         {euro(row.capital)}
                       </td>
                     </tr>
-                  </>
+                  </Fragment>
                 ))}
               </tbody>
             </table>

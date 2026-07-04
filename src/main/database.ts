@@ -908,9 +908,10 @@ export function setTransactionInternal(id: number, isInternal: boolean): void {
 }
 
 export function setTransactionInternalByCategory(category: string, isInternal: boolean): number {
+  const escaped = category.replace(/[\\%_]/g, '\\$&')
   const result = db.run(
-    'UPDATE transactions SET is_internal = ? WHERE category = ?',
-    [isInternal ? 1 : 0, category]
+    "UPDATE transactions SET is_internal = ? WHERE (category = ? OR category LIKE ? ESCAPE '\\')",
+    [isInternal ? 1 : 0, category, `${escaped} > %`]
   )
   return result.changes as number
 }
@@ -1015,6 +1016,28 @@ export function getBudgetsWithSpent(startDate?: string, endDate?: string): (Budg
     }
     return { ...b, spent }
   })
+}
+
+/** Dépense mensuelle moyenne d'une catégorie (sous-catégories incluses) sur les N derniers mois complets. */
+export function getCategoryMonthlyAverage(
+  category: string,
+  months = 3
+): { average: number; monthsWithData: number } {
+  const escaped = category.replace(/[\\%_]/g, '\\$&')
+  const rows = db.all(
+    `SELECT strftime('%Y-%m', t.date) AS month, SUM(ABS(t.amount * COALESCE(a.fx_rate, 1.0))) AS total
+     FROM transactions t
+     LEFT JOIN accounts a ON t.account_id = a.id
+     WHERE t.amount < 0 AND t.is_internal = 0
+       AND (t.category = ? OR t.category LIKE ? ESCAPE '\\')
+       AND t.date >= date('now', 'start of month', '-' || ? || ' months')
+       AND t.date < date('now', 'start of month')
+     GROUP BY month`,
+    [category, `${escaped} > %`, months]
+  ) as { month: string; total: number }[]
+  if (rows.length === 0) return { average: 0, monthsWithData: 0 }
+  const total = rows.reduce((s, r) => s + r.total, 0)
+  return { average: total / rows.length, monthsWithData: rows.length }
 }
 
 export function exportDb(destPath: string): void {

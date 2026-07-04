@@ -65,6 +65,7 @@ export default function Patrimoine(): JSX.Element {
   const [dcaAmountStr, setDcaAmountStr] = useState('')
   const [dcaFeesStr, setDcaFeesStr] = useState('')
   const [refreshing, setRefreshing] = useState(false)
+  const [histPeriod, setHistPeriod] = useState<'3m' | '6m' | '1y' | 'all'>('all')
   const [quoteMsg, setQuoteMsg] = useState<string | null>(null)
   const [unitPrice, setUnitPrice] = useState<number | null>(null)
   const [priceLoading, setPriceLoading] = useState(false)
@@ -225,8 +226,9 @@ export default function Patrimoine(): JSX.Element {
     }
   }
 
-  const remove = async (id: number): Promise<void> => {
-    await window.api.deleteAsset(id)
+  const remove = async (a: Asset): Promise<void> => {
+    if (!window.confirm(`Supprimer « ${a.label} » (${euro2(a.value, a.currency)}) ?`)) return
+    await window.api.deleteAsset(a.id)
     load()
   }
 
@@ -243,6 +245,23 @@ export default function Patrimoine(): JSX.Element {
     }
     return groups
   }, [summary])
+
+  const filteredHistory = useMemo(() => {
+    const history = summary?.history ?? []
+    if (histPeriod === 'all') return history
+    const months = histPeriod === '3m' ? 3 : histPeriod === '6m' ? 6 : 12
+    const cutoff = new Date()
+    cutoff.setMonth(cutoff.getMonth() - months)
+    const iso = cutoff.toISOString().slice(0, 10)
+    return history.filter((h) => h.date >= iso)
+  }, [summary, histPeriod])
+
+  const histVariation = useMemo(() => {
+    if (filteredHistory.length < 2) return null
+    const first = filteredHistory[0].value
+    const last = filteredHistory[filteredHistory.length - 1].value
+    return { delta: last - first, pct: first > 0 ? ((last - first) / first) * 100 : null }
+  }, [filteredHistory])
 
   if (!summary) {
     return (
@@ -337,10 +356,33 @@ export default function Patrimoine(): JSX.Element {
 
             {/* Évolution */}
             <div className="card">
-              <div className="card-title" style={{ marginBottom: 12 }}>Évolution de la valeur nette</div>
-              {summary.history.length > 1 ? (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                <div className="card-title" style={{ marginBottom: 0 }}>Évolution de la valeur nette</div>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  {([['3m', '3 mois'], ['6m', '6 mois'], ['1y', '1 an'], ['all', 'Tout']] as const).map(([k, lbl]) => (
+                    <button
+                      key={k}
+                      className={`btn ${histPeriod === k ? 'btn-primary' : 'btn-secondary'}`}
+                      style={{ padding: '2px 10px', fontSize: 12 }}
+                      onClick={() => setHistPeriod(k)}
+                    >
+                      {lbl}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {histVariation && (
+                <div className="text-sm" style={{ marginBottom: 8 }}>
+                  <span className="text-muted">Variation sur la période : </span>
+                  <span style={{ color: gainColor(histVariation.delta), fontWeight: 600 }}>
+                    {histVariation.delta >= 0 ? '+' : ''}{euro2(histVariation.delta)}
+                    {histVariation.pct != null && ` (${histVariation.pct >= 0 ? '+' : ''}${histVariation.pct.toFixed(1)} %)`}
+                  </span>
+                </div>
+              )}
+              {filteredHistory.length > 1 ? (
                 <ResponsiveContainer width="100%" height={240}>
-                  <AreaChart data={summary.history}>
+                  <AreaChart data={filteredHistory}>
                     <defs>
                       <linearGradient id="nw" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
@@ -356,17 +398,35 @@ export default function Patrimoine(): JSX.Element {
                 </ResponsiveContainer>
               ) : (
                 <p className="text-muted text-sm" style={{ padding: '40px 0', textAlign: 'center' }}>
-                  L'historique se construit au fil du temps, à chaque mise à jour de vos actifs.
+                  {summary.history.length > 1
+                    ? 'Pas assez de points sur cette période. Essayez une période plus longue.'
+                    : "L'historique se construit au fil du temps, à chaque mise à jour de vos actifs."}
                 </p>
               )}
             </div>
           </div>
 
           {/* Liste des actifs */}
-          {[...assetsByType.entries()].map(([type, assets]) => (
+          {[...assetsByType.entries()].map(([type, assets]) => {
+            const groupTotal = assets.reduce((s, a) => s + a.value, 0)
+            const groupTracked = assets.filter((a) => a.cost_basis > 0)
+            const groupBasis = groupTracked.reduce((s, a) => s + a.cost_basis, 0)
+            const groupGain = groupTracked.reduce((s, a) => s + (a.value - a.cost_basis), 0)
+            return (
             <div className="card" style={{ marginBottom: 16 }} key={type}>
-              <div className="card-title" style={{ marginBottom: 12 }}>
-                {typeMeta(type).icon} {typeMeta(type).label}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+                <div className="card-title" style={{ marginBottom: 0 }}>
+                  {typeMeta(type).icon} {typeMeta(type).label}
+                  <span className="text-muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>
+                    {assets.length} actif{assets.length > 1 ? 's' : ''} · {summary.totalValue > 0 ? Math.round((groupTotal / summary.totalValue) * 100) : 0}% du patrimoine
+                  </span>
+                </div>
+                <div style={{ fontSize: 14 }}>
+                  {groupBasis > 0 && (
+                    <span style={{ color: gainColor(groupGain), fontWeight: 500, marginRight: 12 }}>{gainLabel(groupGain, groupBasis)}</span>
+                  )}
+                  <span style={{ fontWeight: 600 }}>{euro(groupTotal)}</span>
+                </div>
               </div>
               {assets.map((a) => {
                 const gain = a.value - a.cost_basis
@@ -390,17 +450,23 @@ export default function Patrimoine(): JSX.Element {
                         </div>
                       )}
                       {a.notes && <div className="text-muted text-sm" style={{ marginTop: 2 }}>{a.notes}</div>}
+                      <div className="text-muted" style={{ fontSize: 11, marginTop: 2 }}>
+                        {summary.totalValue > 0 && `${((a.value / summary.totalValue) * 100).toFixed(1)}% du patrimoine`}
+                        {qty != null && qty > 0 && ` · ${euro2(a.value / qty, a.currency)}/unité`}
+                        {a.updated_at && ` · MAJ le ${new Date(a.updated_at).toLocaleDateString('fr-FR')}`}
+                      </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <span style={{ fontWeight: 600 }}>{euro2(a.value, a.currency)}</span>
                       <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => openEdit(a)}>Modifier</button>
-                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => remove(a.id)}>Supprimer</button>
+                      <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => remove(a)}>Supprimer</button>
                     </div>
                   </div>
                 )
               })}
             </div>
-          ))}
+            )
+          })}
         </>
       )}
 
