@@ -1,6 +1,6 @@
 # 🏦 Banquier
 
-> **Vos relevés bancaires enfin sous contrôle — localement, intelligemment, sans abonnement.**
+> **Vos relevés bancaires enfin sous contrôle — sans abonnement, sans revente de données.**
 
 ### ⬇️ Télécharger Banquier
 
@@ -15,11 +15,14 @@ Banquier est une application de bureau qui importe vos relevés (CSV, PDF), les 
 
 ## Pourquoi Banquier ?
 
-Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elles revendent vos données, augmentent leurs tarifs, ou ferment. Banquier prend le contre-pied : **open source, 100 % local, zéro abonnement**.
+Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elles revendent vos données, augmentent leurs tarifs, ou ferment. Banquier prend le contre-pied : **open source, zéro abonnement, vos données sous votre contrôle**.
 
 - Vos relevés restent sur votre machine (SQLite dans `AppData`)
-- Aucun compte à créer, aucun serveur tiers
-- L'IA est optionnelle et vous choisissez votre modèle
+- Le cœur de l'application fonctionne **100 % hors ligne** (import CSV/PDF, catégories, règles, budgets)
+- Deux fonctionnalités optionnelles font appel à des services externes :
+  - **Powens (OpenBanking)** — synchronisation automatique depuis votre banque via l'API Powens
+  - **IA (OpenRouter)** — catégorisation automatique et chat financier via un LLM externe
+- Sans ces options, aucune donnée ne quitte votre machine
 
 ---
 
@@ -38,7 +41,7 @@ Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elle
 | 💬 **Chat financier** | Posez des questions en langage naturel sur vos finances |
 | 🏦 **Multi-comptes** | Courant, épargne, multi-devises avec taux de conversion |
 | 📝 **Notes & Tags** | Annotez et taguez vos transactions librement |
-| 🔒 **Vie privée** | Données 100 % locales, rien dans le cloud |
+| 🔒 **Vie privée** | Données stockées localement (SQLite) — les fonctions IA et OpenBanking sont optionnelles et font appel à des APIs externes |
 
 ---
 ## Soutenir le projet
