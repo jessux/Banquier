@@ -13,6 +13,7 @@ import type {
   CategoryStatsGrouped,
   DashboardSummary,
   ChatThread,
+  ChatMemory,
   StoredChatMessage,
   MerchantStats,
   PeriodComparison,
@@ -56,6 +57,7 @@ function migrate(): void {
     'ALTER TABLE accounts ADD COLUMN fx_rate REAL NOT NULL DEFAULT 1.0',
     'ALTER TABLE transactions ADD COLUMN note TEXT',
     'ALTER TABLE transactions ADD COLUMN tags TEXT',
+    'ALTER TABLE chat_messages ADD COLUMN reasoning TEXT',
   ]
   for (const sql of migrations) {
     try { db.exec(sql) } catch { /* column already exists */ }
@@ -129,6 +131,12 @@ function createTables(): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id);
+
+    CREATE TABLE IF NOT EXISTS chat_memories (
+      id         INTEGER PRIMARY KEY AUTOINCREMENT,
+      content    TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
 
     CREATE TABLE IF NOT EXISTS assets (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1387,13 +1395,14 @@ export function getChatMessages(threadId: number): StoredChatMessage[] {
   const rows = db.all(
     'SELECT * FROM chat_messages WHERE thread_id = ? ORDER BY id ASC',
     [threadId]
-  ) as { id: number; thread_id: number; role: string; content: string; tool_calls: string | null; created_at: string }[]
+  ) as { id: number; thread_id: number; role: string; content: string; tool_calls: string | null; reasoning: string | null; created_at: string }[]
   return rows.map((r) => ({
     id: r.id,
     thread_id: r.thread_id,
     role: r.role as 'user' | 'assistant',
     content: r.content,
     toolCalls: parseToolCalls(r.tool_calls),
+    reasoning: r.reasoning ?? undefined,
     created_at: r.created_at
   }))
 }
@@ -1402,12 +1411,13 @@ export function addChatMessage(
   threadId: number,
   role: 'user' | 'assistant',
   content: string,
-  toolCalls?: string[]
+  toolCalls?: string[],
+  reasoning?: string
 ): void {
   const now = new Date().toISOString()
   db.run(
-    'INSERT INTO chat_messages (thread_id, role, content, tool_calls, created_at) VALUES (?, ?, ?, ?, ?)',
-    [threadId, role, content, toolCalls?.length ? JSON.stringify(toolCalls) : null, now]
+    'INSERT INTO chat_messages (thread_id, role, content, tool_calls, reasoning, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [threadId, role, content, toolCalls?.length ? JSON.stringify(toolCalls) : null, reasoning || null, now]
   )
   db.run('UPDATE chat_threads SET updated_at = ? WHERE id = ?', [now, threadId])
 }
@@ -1427,6 +1437,25 @@ export function renameChatThread(id: number, title: string): void {
 export function deleteChatThread(id: number): void {
   db.run('DELETE FROM chat_messages WHERE thread_id = ?', [id])
   db.run('DELETE FROM chat_threads WHERE id = ?', [id])
+}
+
+// --- Mémoire IA (informations importantes, base du RAG) ---
+
+export function addChatMemory(content: string): ChatMemory {
+  const now = new Date().toISOString()
+  const result = db.run('INSERT INTO chat_memories (content, created_at) VALUES (?, ?)', [
+    content.trim(),
+    now
+  ])
+  return db.get('SELECT * FROM chat_memories WHERE id = ?', [result.lastInsertRowid]) as ChatMemory
+}
+
+export function getChatMemories(): ChatMemory[] {
+  return db.all('SELECT * FROM chat_memories ORDER BY id DESC') as ChatMemory[]
+}
+
+export function deleteChatMemory(id: number): void {
+  db.run('DELETE FROM chat_memories WHERE id = ?', [id])
 }
 
 /** IDs des transactions encore non catégorisées pour les comptes donnés. */

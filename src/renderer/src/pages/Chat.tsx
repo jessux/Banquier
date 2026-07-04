@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import type { ChatMessage, ChatThread } from '../../../shared/types'
+import type { ChatMemory, ChatMessage, ChatThread } from '../../../shared/types'
 
 type DisplayMessage = ChatMessage & { toolCalls?: string[] }
 
@@ -22,13 +22,15 @@ const TOOL_LABELS: Record<string, string> = {
   get_largest_transactions: '💸 Grosses dépenses',
   compare_periods: '⚖️ Comparaison',
   get_uncategorized: '❓ Non catégorisé',
-  get_net_balance: '💰 Solde net'
+  get_net_balance: '💰 Solde net',
+  save_memory: '🧠 Mémorisation'
 }
 
 export default function Chat(): JSX.Element {
   const [threads, setThreads] = useState<ChatThread[]>([])
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null)
   const [messages, setMessages] = useState<DisplayMessage[]>([])
+  const [memories, setMemories] = useState<ChatMemory[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
@@ -46,13 +48,21 @@ export default function Chat(): JSX.Element {
         setActiveThreadId(list[0].id)
         await loadMessages(list[0].id)
       }
+      setMemories(await window.api.memoriesList())
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const loadMessages = async (threadId: number): Promise<void> => {
     const stored = await window.api.chatThreadMessages(threadId)
-    setMessages(stored.map((m) => ({ role: m.role, content: m.content, toolCalls: m.toolCalls })))
+    setMessages(
+      stored.map((m) => ({ role: m.role, content: m.content, toolCalls: m.toolCalls, reasoning: m.reasoning }))
+    )
+  }
+
+  const deleteMemory = async (id: number): Promise<void> => {
+    await window.api.memoryDelete(id)
+    setMemories(await window.api.memoriesList())
   }
 
   const selectThread = async (threadId: number): Promise<void> => {
@@ -105,10 +115,14 @@ export default function Chat(): JSX.Element {
     setLoading(true)
 
     let fullResponse = ''
+    let fullReasoning = ''
     let collectedToolCalls: string[] = []
 
     const updateAssistant = (): void => {
-      setMessages([...newMessages, { role: 'assistant', content: fullResponse, toolCalls: collectedToolCalls }])
+      setMessages([
+        ...newMessages,
+        { role: 'assistant', content: fullResponse, toolCalls: collectedToolCalls, reasoning: fullReasoning || undefined }
+      ])
     }
 
     try {
@@ -122,11 +136,17 @@ export default function Chat(): JSX.Element {
         (name) => {
           collectedToolCalls = [...collectedToolCalls, TOOL_LABELS[name] ?? name]
           updateAssistant()
+        },
+        (chunk) => {
+          fullReasoning += chunk
+          updateAssistant()
         }
       )
-      // Rafraîchit la liste (titre auto + ordre par dernière activité).
+      // Rafraîchit la liste (titre auto + ordre par dernière activité) et la
+      // mémoire IA (le modèle a pu enregistrer de nouvelles informations).
       const list = await window.api.chatThreadsList()
       setThreads(list)
+      setMemories(await window.api.memoriesList())
     } catch (e) {
       setMessages([...newMessages, { role: 'assistant', content: `Erreur : ${String(e)}` }])
     } finally {
@@ -170,6 +190,40 @@ export default function Chat(): JSX.Element {
             </div>
           ))}
         </div>
+
+        {memories.length > 0 && (
+          <div style={{ marginTop: 12, borderTop: '1px solid #2e3147', paddingTop: 10 }}>
+            <p style={{ fontSize: 12, color: '#64748b', margin: '0 4px 6px' }}>
+              🧠 Mémoire IA ({memories.length})
+            </p>
+            <div style={{ maxHeight: 180, overflowY: 'auto' }}>
+              {memories.map((m) => (
+                <div
+                  key={m.id}
+                  title={m.content}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '4px 6px', borderRadius: 6, fontSize: 11, color: '#8b93a7'
+                  }}
+                >
+                  <span style={{
+                    flex: 1, overflow: 'hidden', textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    {m.content}
+                  </span>
+                  <button
+                    className="thread-delete"
+                    title="Oublier"
+                    onClick={() => deleteMemory(m.id)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </aside>
 
       <div className="chat-container">
@@ -203,6 +257,25 @@ export default function Chat(): JSX.Element {
               <div className="chat-bubble">
                 {msg.role === 'assistant' ? (
                   <>
+                    {msg.reasoning && (
+                      <details
+                        open={loading && i === messages.length - 1 && !msg.content}
+                        style={{
+                          marginBottom: 10, padding: '6px 10px', borderRadius: 8,
+                          background: '#161927', border: '1px solid #2e3147'
+                        }}
+                      >
+                        <summary style={{ cursor: 'pointer', fontSize: 12, color: '#64748b', userSelect: 'none' }}>
+                          🧠 Raisonnement du modèle
+                        </summary>
+                        <div style={{
+                          marginTop: 6, fontSize: 12, color: '#8b93a7', fontStyle: 'italic',
+                          whiteSpace: 'pre-wrap', maxHeight: 240, overflowY: 'auto'
+                        }}>
+                          {msg.reasoning}
+                        </div>
+                      </details>
+                    )}
                     {msg.toolCalls && msg.toolCalls.length > 0 && (
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: msg.content ? 10 : 0 }}>
                         {msg.toolCalls.map((tc, j) => (

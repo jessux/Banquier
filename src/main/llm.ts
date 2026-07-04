@@ -1,7 +1,17 @@
-import nodeFetch from 'node-fetch'
-import https from 'https'
+import { ChatOpenAI } from '@langchain/openai'
+import { tool, type StructuredToolInterface } from '@langchain/core/tools'
+import {
+  AIMessage,
+  HumanMessage,
+  SystemMessage,
+  ToolMessage,
+  type AIMessageChunk,
+  type BaseMessage,
+  type MessageContent
+} from '@langchain/core/messages'
+import { z } from 'zod'
 import type { ChatMessage, Settings, Transaction, CategoryStats, MonthlyStats, Account } from '../shared/types'
-import { resolveAgent } from './proxy'
+import { proxyFetch } from './proxy'
 import type {
   DashboardSummary,
   MerchantStats,
@@ -12,102 +22,53 @@ import type {
 
 const OPENROUTER_BASE = 'https://openrouter.ai/api/v1'
 
-async function fetchWithFallback(url: string, init: Parameters<typeof nodeFetch>[1]): ReturnType<typeof nodeFetch> {
-  const agent = await resolveAgent(url)
-  try {
-    return await nodeFetch(url, { ...init, agent })
-  } catch (err: unknown) {
-    const code = (err as NodeJS.ErrnoException).code ?? ''
-    if (/CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ENOTFOUND/i.test(code)) {
-      const fallback = new https.Agent({ rejectUnauthorized: false })
-      return nodeFetch(url, { ...init, agent: fallback })
+/**
+ * Construit le modèle de chat LangChain pointé sur OpenRouter (API compatible
+ * OpenAI). Le fetch custom porte la résolution proxy et le fallback TLS.
+ */
+function createChatModel(settings: Settings): ChatOpenAI {
+  return new ChatOpenAI({
+    model: settings.openrouterModel || 'openrouter/free',
+    apiKey: settings.openrouterApiKey,
+    // Nécessaire pour lire delta.reasoning (OpenRouter), non mappé par LangChain.
+    __includeRawResponse: true,
+    configuration: {
+      baseURL: OPENROUTER_BASE,
+      defaultHeaders: {
+        'HTTP-Referer': 'banquier-app',
+        'X-Title': 'Banquier'
+      },
+      fetch: proxyFetch as unknown as typeof globalThis.fetch
     }
-    throw err
-  }
+  })
 }
 
-function openRouterHeaders(apiKey: string): Record<string, string> {
-  return {
-    Authorization: `Bearer ${apiKey}`,
-    'Content-Type': 'application/json',
-    'HTTP-Referer': 'banquier-app',
-    'X-Title': 'Banquier'
-  }
-}
-
-interface StreamResult {
-  content: string
-  toolCalls: { id: string; name: string; arguments: string }[]
-  finishReason: string | null
+function messageText(content: MessageContent): string {
+  if (typeof content === 'string') return content
+  return content
+    .map((block) => {
+      if (typeof block === 'string') return block
+      if (block.type === 'text' && 'text' in block && typeof block.text === 'string') return block.text
+      return ''
+    })
+    .join('')
 }
 
 /**
- * Effectue UNE requête streamée vers OpenRouter (avec les outils déclarés).
- * Émet le texte token par token via `onChunk` et accumule les éventuels
- * appels d'outils streamés (deltas indexés) pour les retourner.
+ * Extrait le texte de raisonnement d'un chunk streamé. OpenRouter normalise le
+ * raisonnement des modèles (DeepSeek R1, o3, Gemini thinking…) dans
+ * `delta.reasoning`, que LangChain ne mappe pas — on le lit via la réponse
+ * brute. Fallback sur `reasoning_content` (style DeepSeek) mappé par LangChain.
  */
-async function streamCompletion(
-  messages: OpenRouterMessage[],
-  settings: Settings,
-  onChunk: (chunk: string) => void
-): Promise<StreamResult> {
-  const response = await fetchWithFallback(`${OPENROUTER_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: openRouterHeaders(settings.openrouterApiKey),
-    body: JSON.stringify({
-      model: settings.openrouterModel || 'openrouter/free',
-      messages,
-      tools: FINANCIAL_TOOLS,
-      stream: true
-    })
-  })
-
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`OpenRouter error ${response.status}: ${err}`)
-  }
-
-  let buffer = ''
-  let content = ''
-  const toolAcc: Record<number, { id: string; name: string; arguments: string }> = {}
-  let finishReason: string | null = null
-
-  for await (const rawChunk of response.body!) {
-    buffer += (rawChunk as Buffer).toString('utf-8')
-    const lines = buffer.split('\n')
-    buffer = lines.pop() ?? ''
-
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue
-      const data = line.slice(6).trim()
-      if (data === '[DONE]') continue
-      try {
-        const parsed = JSON.parse(data)
-        const choice = parsed.choices?.[0]
-        if (!choice) continue
-
-        const delta = choice.delta
-        if (delta?.content) {
-          content += delta.content
-          onChunk(delta.content)
-        }
-        if (Array.isArray(delta?.tool_calls)) {
-          for (const tcDelta of delta.tool_calls) {
-            const idx: number = tcDelta.index ?? 0
-            if (!toolAcc[idx]) toolAcc[idx] = { id: '', name: '', arguments: '' }
-            if (tcDelta.id) toolAcc[idx].id = tcDelta.id
-            if (tcDelta.function?.name) toolAcc[idx].name = tcDelta.function.name
-            if (tcDelta.function?.arguments) toolAcc[idx].arguments += tcDelta.function.arguments
-          }
-        }
-        if (choice.finish_reason) finishReason = choice.finish_reason
-      } catch {
-        // ignore malformed SSE lines
-      }
-    }
-  }
-
-  return { content, toolCalls: Object.values(toolAcc), finishReason }
+function chunkReasoning(chunk: AIMessageChunk): string {
+  const kwargs = chunk.additional_kwargs as Record<string, unknown>
+  const raw = kwargs.__raw_response as
+    | { choices?: { delta?: { reasoning?: unknown } }[] }
+    | undefined
+  const reasoning = raw?.choices?.[0]?.delta?.reasoning
+  if (typeof reasoning === 'string' && reasoning) return reasoning
+  if (typeof kwargs.reasoning_content === 'string') return kwargs.reasoning_content
+  return ''
 }
 
 export async function callOpenRouterOnce(
@@ -118,34 +79,25 @@ export async function callOpenRouterOnce(
     throw new Error('Clé API OpenRouter non configurée')
   }
 
-  const response = await fetchWithFallback(`${OPENROUTER_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: openRouterHeaders(settings.openrouterApiKey),
-    body: JSON.stringify({
-      model: settings.openrouterModel || 'openrouter/free',
-      messages,
-      stream: false
+  const model = createChatModel(settings)
+  const response = await model.invoke(
+    messages.map((m) => {
+      if (m.role === 'system') return new SystemMessage(m.content)
+      if (m.role === 'assistant') return new AIMessage(m.content)
+      return new HumanMessage(m.content)
     })
-  })
+  )
 
-  if (!response.ok) {
-    const err = await response.text()
-    throw new Error(`OpenRouter error ${response.status}: ${err}`)
-  }
-
-  const json = (await response.json()) as {
-    choices?: { message: { content: string } }[]
-    error?: { message?: string; code?: number }
-  }
-  if (json.error) {
-    throw new Error(`OpenRouter: ${json.error.message ?? JSON.stringify(json.error)}`)
-  }
-  const content = json.choices?.[0]?.message?.content ?? ''
+  const content = messageText(response.content)
   console.log(`[llm] response content length: ${content.length} chars`)
   return content
 }
 
-export function buildFinancialSystemPrompt(summary: DashboardSummary, currency: string): string {
+export function buildFinancialSystemPrompt(
+  summary: DashboardSummary,
+  currency: string,
+  memories: string[] = []
+): string {
   const fmt = (n: number) =>
     n.toLocaleString('fr-FR', { style: 'currency', currency: currency || 'EUR' })
 
@@ -177,162 +129,13 @@ ${categoriesText || '  Aucune catégorie renseignée'}
 ${trendText || '  Pas encore de données'}
 
 **Total transactions en base :** ${summary.totalTransactions}
-
+${memories.length > 0 ? `\n**Informations mémorisées sur l'utilisateur (pertinentes pour cette question) :**\n${memories.map((m) => `  - ${m}`).join('\n')}\n` : ''}
 Tu as accès à des outils pour interroger les données réelles en temps réel : \`get_transactions\`, \`get_category_stats\`, \`get_monthly_stats\`, \`get_accounts\`, \`get_top_merchants\` (principaux marchands), \`get_largest_transactions\` (plus grosses dépenses/revenus), \`compare_periods\` (comparer deux périodes), \`get_uncategorized\` (transactions non classées) et \`get_net_balance\` (solde net). **Appelle systématiquement ces outils** dès qu'une question porte sur des montants, des périodes ou des transactions précises — ne devine jamais les chiffres. Le contexte ci-dessus ne couvre que le mois courant ; pour toute autre période, interroge les outils.
+
+Tu disposes aussi de l'outil \`save_memory\` : appelle-le dès que l'utilisateur exprime une information durable qui mérite d'être retenue pour les prochaines conversations (objectif d'épargne, projet, situation familiale ou professionnelle, préférence d'analyse…). Formule chaque mémoire de façon autonome et concise. Ne mémorise pas les chiffres déjà présents en base ni les demandes ponctuelles.
 
 Réponds **toujours en français** et **en Markdown** (titres ##, listes -, tableaux, **gras**, \`code\`). Sois concis mais précis, et donne des conseils concrets basés sur les données réelles. Si l'utilisateur pose une question hors contexte financier, réponds poliment que tu es spécialisé dans l'analyse financière.`
 }
-
-export type LlmToolName =
-  | 'get_transactions'
-  | 'get_category_stats'
-  | 'get_monthly_stats'
-  | 'get_accounts'
-  | 'get_top_merchants'
-  | 'get_largest_transactions'
-  | 'compare_periods'
-  | 'get_uncategorized'
-  | 'get_net_balance'
-
-export interface LlmToolCall {
-  id: string
-  name: LlmToolName
-  arguments: Record<string, unknown>
-}
-
-export const FINANCIAL_TOOLS = [
-  {
-    type: 'function',
-    function: {
-      name: 'get_transactions',
-      description: `Récupère des transactions bancaires individuelles. Utilise cet outil UNIQUEMENT pour afficher des exemples concrets ou rechercher une transaction précise. Pour calculer des totaux, des moyennes ou analyser une catégorie, préfère get_category_stats ou get_monthly_stats qui sont beaucoup plus rapides. Par défaut, limite à 20 résultats — augmente limit si l'utilisateur demande explicitement plus.`,
-      parameters: {
-        type: 'object',
-        properties: {
-          search: { type: 'string', description: 'Recherche textuelle dans la description (ex: "AMAZON", "CARREFOUR")' },
-          category: { type: 'string', description: 'Filtrer par catégorie exacte (ex: "Alimentation > Épicerie")' },
-          startDate: { type: 'string', description: 'Date de début YYYY-MM-DD' },
-          endDate: { type: 'string', description: 'Date de fin YYYY-MM-DD' },
-          minAmount: { type: 'number', description: 'Montant minimum (négatif = dépense, positif = revenu)' },
-          maxAmount: { type: 'number', description: 'Montant maximum' },
-          limit: { type: 'number', description: 'Nombre max de résultats à retourner (défaut: 20, max: 100)' }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_category_stats',
-      description: 'Retourne les totaux et nombre de transactions par catégorie pour une période. Outil rapide — préférable à get_transactions pour toute question sur les montants par catégorie.',
-      parameters: {
-        type: 'object',
-        properties: {
-          startDate: { type: 'string', description: 'Date de début YYYY-MM-DD' },
-          endDate: { type: 'string', description: 'Date de fin YYYY-MM-DD' }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_monthly_stats',
-      description: 'Retourne dépenses et revenus agrégés par mois sur N mois. Outil rapide — préférable à get_transactions pour analyser les tendances.',
-      parameters: {
-        type: 'object',
-        properties: {
-          months: { type: 'number', description: 'Nombre de mois à récupérer (défaut: 6)' }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_accounts',
-      description: 'Liste les comptes bancaires enregistrés.',
-      parameters: { type: 'object', properties: {} }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_top_merchants',
-      description: 'Retourne les principaux marchands/bénéficiaires par montant dépensé cumulé sur une période (descriptions regroupées et normalisées). Idéal pour « chez qui je dépense le plus ».',
-      parameters: {
-        type: 'object',
-        properties: {
-          startDate: { type: 'string', description: 'Date de début YYYY-MM-DD' },
-          endDate: { type: 'string', description: 'Date de fin YYYY-MM-DD' },
-          limit: { type: 'number', description: 'Nombre de marchands à retourner (défaut: 15, max: 50)' }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_largest_transactions',
-      description: 'Retourne les plus grosses transactions (par montant absolu) sur une période. Utile pour repérer les dépenses ou revenus exceptionnels.',
-      parameters: {
-        type: 'object',
-        properties: {
-          startDate: { type: 'string', description: 'Date de début YYYY-MM-DD' },
-          endDate: { type: 'string', description: 'Date de fin YYYY-MM-DD' },
-          direction: { type: 'string', enum: ['debit', 'credit'], description: 'debit = dépenses (défaut), credit = revenus' },
-          limit: { type: 'number', description: 'Nombre de résultats (défaut: 10, max: 50)' }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'compare_periods',
-      description: 'Compare les dépenses de deux périodes par catégorie, avec les écarts en montant et en %. Idéal pour « avril vs mai » ou « ce mois vs le mois dernier ».',
-      parameters: {
-        type: 'object',
-        properties: {
-          aStartDate: { type: 'string', description: 'Début période A YYYY-MM-DD' },
-          aEndDate: { type: 'string', description: 'Fin période A YYYY-MM-DD' },
-          bStartDate: { type: 'string', description: 'Début période B YYYY-MM-DD (la plus récente)' },
-          bEndDate: { type: 'string', description: 'Fin période B YYYY-MM-DD' }
-        },
-        required: ['aStartDate', 'aEndDate', 'bStartDate', 'bEndDate']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_uncategorized',
-      description: 'Retourne le nombre, le total et un échantillon des dépenses non catégorisées sur une période. Utile pour signaler les transactions à classer.',
-      parameters: {
-        type: 'object',
-        properties: {
-          startDate: { type: 'string', description: 'Date de début YYYY-MM-DD' },
-          endDate: { type: 'string', description: 'Date de fin YYYY-MM-DD' },
-          limit: { type: 'number', description: 'Taille de l\'échantillon (défaut: 20, max: 50)' }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_net_balance',
-      description: 'Retourne le solde net (revenus - dépenses) sur une période, avec le total des revenus et des dépenses. Utile pour savoir si l\'utilisateur épargne ou est en déficit.',
-      parameters: {
-        type: 'object',
-        properties: {
-          startDate: { type: 'string', description: 'Date de début YYYY-MM-DD' },
-          endDate: { type: 'string', description: 'Date de fin YYYY-MM-DD' }
-        }
-      }
-    }
-  }
-]
 
 export interface ToolExecutors {
   getTransactions: (filters: Record<string, unknown>) => Transaction[]
@@ -349,141 +152,248 @@ export interface ToolExecutors {
   comparePeriods: (aStart: string, aEnd: string, bStart: string, bEnd: string) => PeriodComparison
   getUncategorized: (startDate?: string, endDate?: string, limit?: number) => UncategorizedSummary
   getNetBalance: (startDate?: string, endDate?: string) => NetBalance
+  saveMemory: (content: string) => void
 }
 
-interface OpenRouterMessage {
-  role: string
-  content: string | null
-  tool_calls?: { id: string; type: string; function: { name: string; arguments: string } }[]
-  tool_call_id?: string
-  name?: string
-}
+const startDateSchema = z.string().optional().describe('Date de début YYYY-MM-DD')
+const endDateSchema = z.string().optional().describe('Date de fin YYYY-MM-DD')
 
-function executeToolCall(call: LlmToolCall, executors: ToolExecutors): string {
-  const args = call.arguments
-  try {
-    let result: unknown
-    if (call.name === 'get_transactions') {
-      const limit = typeof args.limit === 'number' ? Math.min(args.limit, 100) : 20
-      const rows = executors.getTransactions({ ...args, limit })
-      result = {
-        count: rows.length,
-        transactions: rows.map(({ date, description, amount, category }) => ({ date, description, amount, category }))
+/**
+ * Déclare les outils financiers LangChain, chacun fermé sur les exécuteurs
+ * SQLite fournis par ipc.ts. Chaque outil retourne du JSON sérialisé.
+ */
+function buildFinancialTools(executors: ToolExecutors): StructuredToolInterface[] {
+  return [
+    tool(
+      (args) => {
+        const limit = typeof args.limit === 'number' ? Math.min(args.limit, 100) : 20
+        const rows = executors.getTransactions({ ...args, limit })
+        return JSON.stringify({
+          count: rows.length,
+          transactions: rows.map(({ date, description, amount, category }) => ({ date, description, amount, category }))
+        })
+      },
+      {
+        name: 'get_transactions',
+        description: `Récupère des transactions bancaires individuelles. Utilise cet outil UNIQUEMENT pour afficher des exemples concrets ou rechercher une transaction précise. Pour calculer des totaux, des moyennes ou analyser une catégorie, préfère get_category_stats ou get_monthly_stats qui sont beaucoup plus rapides. Par défaut, limite à 20 résultats — augmente limit si l'utilisateur demande explicitement plus.`,
+        schema: z.object({
+          search: z.string().optional().describe('Recherche textuelle dans la description (ex: "AMAZON", "CARREFOUR")'),
+          category: z.string().optional().describe('Filtrer par catégorie exacte (ex: "Alimentation > Épicerie")'),
+          startDate: startDateSchema,
+          endDate: endDateSchema,
+          minAmount: z.number().optional().describe('Montant minimum (négatif = dépense, positif = revenu)'),
+          maxAmount: z.number().optional().describe('Montant maximum'),
+          limit: z.number().optional().describe('Nombre max de résultats à retourner (défaut: 20, max: 100)')
+        })
       }
-    } else if (call.name === 'get_category_stats') {
-      result = executors.getCategoryStats(args.startDate as string | undefined, args.endDate as string | undefined)
-    } else if (call.name === 'get_monthly_stats') {
-      result = executors.getMonthlyStats(args.months as number | undefined)
-    } else if (call.name === 'get_accounts') {
-      result = executors.getAccounts()
-    } else if (call.name === 'get_top_merchants') {
-      result = executors.getTopMerchants(
-        args.startDate as string | undefined,
-        args.endDate as string | undefined,
-        args.limit as number | undefined
-      )
-    } else if (call.name === 'get_largest_transactions') {
-      const rows = executors.getLargestTransactions(
-        args.startDate as string | undefined,
-        args.endDate as string | undefined,
-        args.limit as number | undefined,
-        (args.direction as 'debit' | 'credit' | undefined) ?? 'debit'
-      )
-      result = rows.map(({ date, description, amount, category }) => ({ date, description, amount, category }))
-    } else if (call.name === 'compare_periods') {
-      result = executors.comparePeriods(
-        args.aStartDate as string,
-        args.aEndDate as string,
-        args.bStartDate as string,
-        args.bEndDate as string
-      )
-    } else if (call.name === 'get_uncategorized') {
-      const r = executors.getUncategorized(
-        args.startDate as string | undefined,
-        args.endDate as string | undefined,
-        args.limit as number | undefined
-      )
-      result = {
-        count: r.count,
-        total: r.total,
-        sample: r.sample.map(({ date, description, amount }) => ({ date, description, amount }))
+    ),
+    tool(
+      (args) => JSON.stringify(executors.getCategoryStats(args.startDate, args.endDate)),
+      {
+        name: 'get_category_stats',
+        description:
+          'Retourne les totaux et nombre de transactions par catégorie pour une période. Outil rapide — préférable à get_transactions pour toute question sur les montants par catégorie.',
+        schema: z.object({ startDate: startDateSchema, endDate: endDateSchema })
       }
-    } else if (call.name === 'get_net_balance') {
-      result = executors.getNetBalance(
-        args.startDate as string | undefined,
-        args.endDate as string | undefined
-      )
-    }
-    return JSON.stringify(result)
-  } catch (e) {
-    return JSON.stringify({ error: String(e) })
-  }
+    ),
+    tool(
+      (args) => JSON.stringify(executors.getMonthlyStats(args.months)),
+      {
+        name: 'get_monthly_stats',
+        description:
+          'Retourne dépenses et revenus agrégés par mois sur N mois. Outil rapide — préférable à get_transactions pour analyser les tendances.',
+        schema: z.object({
+          months: z.number().optional().describe('Nombre de mois à récupérer (défaut: 6)')
+        })
+      }
+    ),
+    tool(
+      () => JSON.stringify(executors.getAccounts()),
+      {
+        name: 'get_accounts',
+        description: 'Liste les comptes bancaires enregistrés.',
+        schema: z.object({})
+      }
+    ),
+    tool(
+      (args) => JSON.stringify(executors.getTopMerchants(args.startDate, args.endDate, args.limit)),
+      {
+        name: 'get_top_merchants',
+        description:
+          'Retourne les principaux marchands/bénéficiaires par montant dépensé cumulé sur une période (descriptions regroupées et normalisées). Idéal pour « chez qui je dépense le plus ».',
+        schema: z.object({
+          startDate: startDateSchema,
+          endDate: endDateSchema,
+          limit: z.number().optional().describe('Nombre de marchands à retourner (défaut: 15, max: 50)')
+        })
+      }
+    ),
+    tool(
+      (args) => {
+        const rows = executors.getLargestTransactions(
+          args.startDate,
+          args.endDate,
+          args.limit,
+          args.direction ?? 'debit'
+        )
+        return JSON.stringify(
+          rows.map(({ date, description, amount, category }) => ({ date, description, amount, category }))
+        )
+      },
+      {
+        name: 'get_largest_transactions',
+        description:
+          'Retourne les plus grosses transactions (par montant absolu) sur une période. Utile pour repérer les dépenses ou revenus exceptionnels.',
+        schema: z.object({
+          startDate: startDateSchema,
+          endDate: endDateSchema,
+          direction: z.enum(['debit', 'credit']).optional().describe('debit = dépenses (défaut), credit = revenus'),
+          limit: z.number().optional().describe('Nombre de résultats (défaut: 10, max: 50)')
+        })
+      }
+    ),
+    tool(
+      (args) => JSON.stringify(executors.comparePeriods(args.aStartDate, args.aEndDate, args.bStartDate, args.bEndDate)),
+      {
+        name: 'compare_periods',
+        description:
+          'Compare les dépenses de deux périodes par catégorie, avec les écarts en montant et en %. Idéal pour « avril vs mai » ou « ce mois vs le mois dernier ».',
+        schema: z.object({
+          aStartDate: z.string().describe('Début période A YYYY-MM-DD'),
+          aEndDate: z.string().describe('Fin période A YYYY-MM-DD'),
+          bStartDate: z.string().describe('Début période B YYYY-MM-DD (la plus récente)'),
+          bEndDate: z.string().describe('Fin période B YYYY-MM-DD')
+        })
+      }
+    ),
+    tool(
+      (args) => {
+        const r = executors.getUncategorized(args.startDate, args.endDate, args.limit)
+        return JSON.stringify({
+          count: r.count,
+          total: r.total,
+          sample: r.sample.map(({ date, description, amount }) => ({ date, description, amount }))
+        })
+      },
+      {
+        name: 'get_uncategorized',
+        description:
+          'Retourne le nombre, le total et un échantillon des dépenses non catégorisées sur une période. Utile pour signaler les transactions à classer.',
+        schema: z.object({
+          startDate: startDateSchema,
+          endDate: endDateSchema,
+          limit: z.number().optional().describe("Taille de l'échantillon (défaut: 20, max: 50)")
+        })
+      }
+    ),
+    tool(
+      (args) => JSON.stringify(executors.getNetBalance(args.startDate, args.endDate)),
+      {
+        name: 'get_net_balance',
+        description:
+          "Retourne le solde net (revenus - dépenses) sur une période, avec le total des revenus et des dépenses. Utile pour savoir si l'utilisateur épargne ou est en déficit.",
+        schema: z.object({ startDate: startDateSchema, endDate: endDateSchema })
+      }
+    ),
+    tool(
+      (args) => {
+        executors.saveMemory(args.content)
+        return JSON.stringify({ saved: true })
+      },
+      {
+        name: 'save_memory',
+        description:
+          "Enregistre une information importante et durable sur l'utilisateur (objectif, projet, situation, préférence) dans la mémoire persistante. Elle sera réinjectée dans les prochaines conversations via une recherche de pertinence. N'enregistre PAS les chiffres déjà en base ni les demandes ponctuelles.",
+        schema: z.object({
+          content: z
+            .string()
+            .describe(
+              'L\'information à mémoriser, formulée de façon autonome et concise (ex: "L\'utilisateur épargne pour un apport immobilier de 30 000 € visé fin 2027")'
+            )
+        })
+      }
+    )
+  ]
 }
 
 /**
- * Boucle de chat unifiée : streame la réponse en une seule génération, en
- * intercalant les appels d'outils. Contrairement à l'ancien flux à deux passes
- * (résolution d'outils PUIS re-streaming de la conversation complète), le texte
- * final n'est généré qu'une fois — ce qui évite que le modèle « continue » une
- * réponse déjà terminée et finisse par recracher son prompt système interne.
+ * Boucle de chat unifiée sur LangChain : streame la réponse en une seule
+ * génération, en intercalant les appels d'outils. Le texte final n'est généré
+ * qu'une fois — ce qui évite que le modèle « continue » une réponse déjà
+ * terminée et finisse par recracher son prompt système interne.
  *
- * Retourne le texte final assemblé (pour la persistance en base).
+ * Retourne le texte final assemblé et le raisonnement éventuel du modèle
+ * (pour la persistance en base).
  */
 export async function runFinancialChat(
-  messages: OpenRouterMessage[],
+  messages: BaseMessage[],
   settings: Settings,
   executors: ToolExecutors,
   onChunk: (chunk: string) => void,
-  onToolCall?: (name: string) => void
-): Promise<string> {
+  onToolCall?: (name: string) => void,
+  onReasoning?: (chunk: string) => void
+): Promise<{ text: string; reasoning: string }> {
   if (!settings.openrouterApiKey) {
     const msg = '\n\n*Erreur : clé API OpenRouter non configurée. Allez dans les Paramètres.*'
     onChunk(msg)
-    return msg
+    return { text: msg, reasoning: '' }
   }
 
-  const conversation = [...messages]
+  const tools = buildFinancialTools(executors)
+  const toolsByName = new Map(tools.map((t) => [t.name, t]))
+  const model = createChatModel(settings).bindTools(tools)
+
+  const conversation: BaseMessage[] = [...messages]
   let finalText = ''
+  let reasoning = ''
 
   for (let i = 0; i < 6; i++) {
-    const { content, toolCalls } = await streamCompletion(conversation, settings, onChunk)
+    const stream = await model.stream(conversation)
 
+    let response: AIMessageChunk | undefined
+    for await (const chunk of stream) {
+      const text = messageText(chunk.content)
+      if (text) onChunk(text)
+      const thought = chunkReasoning(chunk)
+      if (thought) {
+        reasoning += thought
+        onReasoning?.(thought)
+      }
+      // La réponse brute ne doit pas être ré-envoyée au modèle ni fusionnée
+      // entre chunks — on la retire avant l'accumulation.
+      delete chunk.additional_kwargs.__raw_response
+      response = response === undefined ? chunk : response.concat(chunk)
+    }
+    if (!response) break
+
+    const toolCalls = response.tool_calls ?? []
     if (toolCalls.length === 0) {
-      finalText = content
+      finalText = messageText(response.content)
       break
     }
 
     // Tour assistant demandant des outils.
-    conversation.push({
-      role: 'assistant',
-      content: content || null,
-      tool_calls: toolCalls.map((tc) => ({
-        id: tc.id,
-        type: 'function',
-        function: { name: tc.name, arguments: tc.arguments }
-      }))
-    })
+    conversation.push(response)
 
     for (const tc of toolCalls) {
       onToolCall?.(tc.name)
-      let parsedArgs: Record<string, unknown> = {}
-      try { parsedArgs = JSON.parse(tc.arguments) } catch { /* empty args */ }
-
-      const toolResult = executeToolCall(
-        { id: tc.id, name: tc.name as LlmToolName, arguments: parsedArgs },
-        executors
-      )
-
-      conversation.push({
-        role: 'tool',
-        content: toolResult,
-        tool_call_id: tc.id,
-        name: tc.name
-      })
+      try {
+        const t = toolsByName.get(tc.name)
+        if (!t) throw new Error(`Outil inconnu: ${tc.name}`)
+        conversation.push((await t.invoke(tc)) as ToolMessage)
+      } catch (e) {
+        conversation.push(
+          new ToolMessage({
+            content: JSON.stringify({ error: String(e) }),
+            tool_call_id: tc.id ?? '',
+            name: tc.name
+          })
+        )
+      }
     }
   }
 
-  return finalText
+  return { text: finalText, reasoning }
 }
 
 const DEFAULT_CATEGORIES = [
@@ -537,9 +447,11 @@ ${lines}`
 export function buildChatMessages(
   history: ChatMessage[],
   systemPrompt: string
-): { role: string; content: string }[] {
+): BaseMessage[] {
   return [
-    { role: 'system', content: systemPrompt },
-    ...history.map((m) => ({ role: m.role, content: m.content }))
+    new SystemMessage(systemPrompt),
+    ...history.map((m) =>
+      m.role === 'user' ? new HumanMessage(m.content) : new AIMessage(m.content)
+    )
   ]
 }

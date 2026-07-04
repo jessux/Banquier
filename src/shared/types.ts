@@ -275,6 +275,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
   toolCalls?: string[]
+  reasoning?: string
 }
 
 export interface ChatThread {
@@ -290,6 +291,14 @@ export interface StoredChatMessage {
   role: 'user' | 'assistant'
   content: string
   toolCalls?: string[]
+  reasoning?: string
+  created_at: string
+}
+
+/** Information importante mémorisée par l'assistant IA (base du RAG). */
+export interface ChatMemory {
+  id: number
+  content: string
   created_at: string
 }
 

@@ -80,17 +80,30 @@ const api = {
   chatThreadDelete: (id: number) => ipcRenderer.invoke('chat-thread-delete', id),
 
   // LLM Chat
-  chat: (threadId: number, content: string, onChunk: (chunk: string) => void, onToolCall?: (name: string) => void) => {
+  chat: (
+    threadId: number,
+    content: string,
+    onChunk: (chunk: string) => void,
+    onToolCall?: (name: string) => void,
+    onReasoning?: (chunk: string) => void
+  ) => {
     ipcRenderer.on('chat-chunk', (_, chunk: string) => onChunk(chunk))
     if (onToolCall) ipcRenderer.on('chat-tool-call', (_, name: string) => onToolCall(name))
+    if (onReasoning) ipcRenderer.on('chat-reasoning', (_, chunk: string) => onReasoning(chunk))
     const promise = ipcRenderer.invoke('chat', threadId, content)
     promise.finally(() => {
       ipcRenderer.removeAllListeners('chat-chunk')
       ipcRenderer.removeAllListeners('chat-tool-call')
+      ipcRenderer.removeAllListeners('chat-reasoning')
       ipcRenderer.removeAllListeners('chat-done')
     })
     return promise
   },
+
+  // Mémoire IA (informations importantes, base du RAG)
+  memoriesList: () => ipcRenderer.invoke('memories-list'),
+  memoryAdd: (content: string) => ipcRenderer.invoke('memory-add', content),
+  memoryDelete: (id: number) => ipcRenderer.invoke('memory-delete', id),
   onChatDone: (cb: () => void) => {
     ipcRenderer.once('chat-done', cb)
   },

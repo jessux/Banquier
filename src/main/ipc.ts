@@ -13,6 +13,7 @@ import {
   buildChatMessages,
   categorizeBatch
 } from './llm'
+import { retrieveRelevantMemories } from './memory'
 import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
 import { checkForUpdatesManual, type UpdateCheckResult } from './updater'
 import { is } from '@electron-toolkit/utils'
@@ -227,6 +228,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('chat-thread-rename', (_, id: number, title: string) => db.renameChatThread(id, title))
   ipcMain.handle('chat-thread-delete', (_, id: number) => db.deleteChatThread(id))
 
+  // --- Mémoire IA (informations importantes, base du RAG) ---
+  ipcMain.handle('memories-list', () => db.getChatMemories())
+  ipcMain.handle('memory-add', (_, content: string) => db.addChatMemory(content))
+  ipcMain.handle('memory-delete', (_, id: number) => db.deleteChatMemory(id))
+
   // --- LLM Chat ---
   ipcMain.handle('chat', async (event, threadId: number, content: string) => {
     const settings = store.get('settings')
@@ -238,7 +244,15 @@ export function registerIpcHandlers(): void {
     // Reconstruit l'historique complet du thread depuis la base.
     const history = db.getChatMessages(threadId)
     const summary = db.getDashboardSummary()
-    const systemPrompt = buildFinancialSystemPrompt(summary, settings.currency)
+
+    // RAG : récupère les mémoires pertinentes pour la question et les injecte
+    // dans le prompt système.
+    const relevantMemories = retrieveRelevantMemories(content, db.getChatMemories())
+    const systemPrompt = buildFinancialSystemPrompt(
+      summary,
+      settings.currency,
+      relevantMemories.map((m) => m.content)
+    )
     const initialMessages = buildChatMessages(history, systemPrompt)
 
     const toolExecutors = {
@@ -259,13 +273,17 @@ export function registerIpcHandlers(): void {
       getUncategorized: (startDate?: string, endDate?: string, limit?: number) =>
         db.getUncategorized(startDate, endDate, limit),
       getNetBalance: (startDate?: string, endDate?: string) =>
-        db.getNetBalance(startDate, endDate)
+        db.getNetBalance(startDate, endDate),
+      saveMemory: (memoryContent: string) => {
+        db.addChatMemory(memoryContent)
+      }
     }
 
     const collectedTools: string[] = []
     let finalText = ''
+    let reasoningText = ''
     try {
-      finalText = await runFinancialChat(
+      const result = await runFinancialChat(
         initialMessages,
         settings,
         toolExecutors,
@@ -273,16 +291,19 @@ export function registerIpcHandlers(): void {
         (name) => {
           collectedTools.push(name)
           event.sender.send('chat-tool-call', name)
-        }
+        },
+        (chunk) => event.sender.send('chat-reasoning', chunk)
       )
+      finalText = result.text
+      reasoningText = result.reasoning
     } catch (e) {
       const errMsg = `\n\n*Erreur : ${String(e)}*`
       event.sender.send('chat-chunk', errMsg)
       finalText += errMsg
     }
 
-    // Persiste la réponse de l'assistant (avec les outils utilisés).
-    db.addChatMessage(threadId, 'assistant', finalText, collectedTools)
+    // Persiste la réponse de l'assistant (avec les outils utilisés et le raisonnement).
+    db.addChatMessage(threadId, 'assistant', finalText, collectedTools, reasoningText || undefined)
     event.sender.send('chat-done')
   })
 

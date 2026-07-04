@@ -14,6 +14,7 @@ import type {
   DashboardSummary,
   Settings,
   ChatThread,
+  ChatMemory,
   StoredChatMessage,
   RecurringSummary,
   Asset,
@@ -100,8 +101,19 @@ declare global {
       chatThreadDelete: (id: number) => Promise<void>
 
       // LLM Chat
-      chat: (threadId: number, content: string, onChunk: (chunk: string) => void, onToolCall?: (name: string) => void) => Promise<void>
+      chat: (
+        threadId: number,
+        content: string,
+        onChunk: (chunk: string) => void,
+        onToolCall?: (name: string) => void,
+        onReasoning?: (chunk: string) => void
+      ) => Promise<void>
       onChatDone: (cb: () => void) => void
+
+      // Mémoire IA (informations importantes, base du RAG)
+      memoriesList: () => Promise<ChatMemory[]>
+      memoryAdd: (content: string) => Promise<ChatMemory>
+      memoryDelete: (id: number) => Promise<void>
 
       // Settings
       getSettings: () => Promise<Settings>
