@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.1](https://github.com/jessux/Banquier/compare/v1.23.0...v1.23.1) (2026-07-04)
+
+
+### Corrections de bugs
+
+* **npmrc:** uncomment electron_get_use_proxy configuration ([6afa85b](https://github.com/jessux/Banquier/commit/6afa85b8a3b81b6d86bf60a2619fc2f6f191f421))
+
 ## [1.23.0](https://github.com/jessux/Banquier/compare/v1.22.0...v1.23.0) (2026-07-04)
 
 
