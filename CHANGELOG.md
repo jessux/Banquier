@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.22.0](https://github.com/jessux/Banquier/compare/v1.21.0...v1.22.0) (2026-07-04)
+
+
+### Nouvelles fonctionnalités
+
+* **chat:** enhance error handling with retry option for rate limits ([0b88470](https://github.com/jessux/Banquier/commit/0b884709b4ae7975fea7b6916ee698e531548226))
+* **chat:** improve retry logic for rate-limit errors in message display ([c1038fb](https://github.com/jessux/Banquier/commit/c1038fb09fbde334ac6155cbf9be604a78f6dd9c))
+* **database:** enhance getMonthlyStats to support category exclusion ([6938c8d](https://github.com/jessux/Banquier/commit/6938c8d72ab2f4b6dec16aba2b81a2b15d29a2a1))
+* implement AI memory retrieval and management ([145723a](https://github.com/jessux/Banquier/commit/145723a4536facc06922e752e22acf39c59c56f0))
+
 ## [1.21.0](https://github.com/jessux/Banquier/compare/v1.20.0...v1.21.0) (2026-07-04)
 
 
