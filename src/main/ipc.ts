@@ -297,9 +297,13 @@ export function registerIpcHandlers(): void {
       finalText = result.text
       reasoningText = result.reasoning
     } catch (e) {
-      const errMsg = `\n\n*Erreur : ${String(e)}*`
+      const errStr = String(e)
+      const errMsg = `\n\n*Erreur : ${errStr}*`
       event.sender.send('chat-chunk', errMsg)
       finalText += errMsg
+      if (errStr.includes('429') || errStr.toLowerCase().includes('ratelimit') || errStr.toLowerCase().includes('rate limit')) {
+        event.sender.send('chat-error', 'rate_limit')
+      }
     }
 
     // Persiste la réponse de l'assistant (avec les outils utilisés et le raisonnement).

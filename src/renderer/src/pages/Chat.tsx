@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type { ChatMemory, ChatMessage, ChatThread } from '../../../shared/types'
 
-type DisplayMessage = ChatMessage & { toolCalls?: string[] }
+type DisplayMessage = ChatMessage & { toolCalls?: string[]; retryText?: string }
 
 const QUICK_QUESTIONS = [
   'Résumé de mes finances ce mois',
@@ -34,6 +34,7 @@ export default function Chat(): JSX.Element {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const lastSentTextRef = useRef('')
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -108,6 +109,7 @@ export default function Chat(): JSX.Element {
       setThreads((prev) => [thread, ...prev])
     }
 
+    lastSentTextRef.current = text.trim()
     const userMessage: DisplayMessage = { role: 'user', content: text.trim() }
     const newMessages = [...messages, userMessage]
     setMessages([...newMessages, { role: 'assistant', content: '' }])
@@ -148,7 +150,65 @@ export default function Chat(): JSX.Element {
       setThreads(list)
       setMemories(await window.api.memoriesList())
     } catch (e) {
-      setMessages([...newMessages, { role: 'assistant', content: `Erreur : ${String(e)}` }])
+      const msg = String(e)
+      const isRateLimit = msg.includes('429') || /ratelimit|rate.limit|rate_limit/i.test(msg)
+      setMessages([
+        ...newMessages,
+        {
+          role: 'assistant',
+          content: `Erreur : ${msg}`,
+          retryText: isRateLimit ? text.trim() : undefined
+        }
+      ])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const retry = async (retryText: string): Promise<void> => {
+    if (loading) return
+    // Remove the error assistant message (last entry); user message stays
+    const withoutError = messages.slice(0, -1)
+    const newMessages = withoutError
+    setMessages([...newMessages, { role: 'assistant', content: '' }])
+    setLoading(true)
+
+    let threadId = activeThreadId
+    if (threadId === null) return
+
+    let fullResponse = ''
+    let fullReasoning = ''
+    let collectedToolCalls: string[] = []
+
+    const updateAssistant = (): void => {
+      setMessages([
+        ...newMessages,
+        { role: 'assistant', content: fullResponse, toolCalls: collectedToolCalls, reasoning: fullReasoning || undefined }
+      ])
+    }
+
+    try {
+      await window.api.chat(
+        threadId,
+        retryText,
+        (chunk) => { fullResponse += chunk; updateAssistant() },
+        (name) => { collectedToolCalls = [...collectedToolCalls, TOOL_LABELS[name] ?? name]; updateAssistant() },
+        (chunk) => { fullReasoning += chunk; updateAssistant() }
+      )
+      const list = await window.api.chatThreadsList()
+      setThreads(list)
+      setMemories(await window.api.memoriesList())
+    } catch (e) {
+      const msg = String(e)
+      const isRateLimit = msg.includes('429') || /ratelimit|rate.limit|rate_limit/i.test(msg)
+      setMessages([
+        ...newMessages,
+        {
+          role: 'assistant',
+          content: `Erreur : ${msg}`,
+          retryText: isRateLimit ? retryText : undefined
+        }
+      ])
     } finally {
       setLoading(false)
     }
@@ -290,7 +350,36 @@ export default function Chat(): JSX.Element {
                         ))}
                       </div>
                     )}
-                    {msg.content
+                    {msg.retryText ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        <div style={{
+                          padding: '10px 14px', borderRadius: 8,
+                          background: '#2a1a1a', border: '1px solid #7f1d1d',
+                          color: '#fca5a5', fontSize: 13
+                        }}>
+                          <strong>⚠️ Limite de taux OpenRouter (429)</strong>
+                          <p style={{ margin: '6px 0 0', lineHeight: 1.5 }}>
+                            Les modèles <strong>gratuits</strong> (suffixe <code>:free</code>) sont limités à :
+                          </p>
+                          <ul style={{ margin: '6px 0 0', paddingLeft: 18, lineHeight: 1.6 }}>
+                            <li><strong>20 requêtes / minute</strong></li>
+                            <li><strong>50 requêtes / jour</strong> si vous n'avez jamais acheté de crédits</li>
+                            <li><strong>1 000 requêtes / jour</strong> si vous avez acheté au moins <strong>$10</strong> de crédits</li>
+                          </ul>
+                          <p style={{ margin: '6px 0 0', lineHeight: 1.5 }}>
+                            Attendez quelques secondes et réessayez, ou passez à un modèle payant dans les <em>Paramètres</em>.
+                          </p>
+                        </div>
+                        <button
+                          className="btn btn-primary"
+                          style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6 }}
+                          onClick={() => retry(msg.retryText!)}
+                          disabled={loading}
+                        >
+                          🔄 Réessayer
+                        </button>
+                      </div>
+                    ) : msg.content
                       ? <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
                       : loading && i === messages.length - 1
                         ? <span className="spinner" />
