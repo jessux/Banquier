@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.21.0](https://github.com/jessux/Banquier/compare/v1.20.0...v1.21.0) (2026-07-04)
+
+
+### Nouvelles fonctionnalités
+
+* **budget:** add getCategoryMonthlyAverage API and integrate into Budget page ([d3f692a](https://github.com/jessux/Banquier/commit/d3f692a28c65613ad30e7a0b42c6225259ed9ac5))
+* **patrimoine:** implement historical data filtering and variation calculation ([d3f692a](https://github.com/jessux/Banquier/commit/d3f692a28c65613ad30e7a0b42c6225259ed9ac5))
+
+
+### Corrections de bugs
+
+* **simulateur:** correct payment count reset logic and improve rendering ([d3f692a](https://github.com/jessux/Banquier/commit/d3f692a28c65613ad30e7a0b42c6225259ed9ac5))
+
 ## [1.20.0](https://github.com/jessux/Banquier/compare/v1.19.0...v1.20.0) (2026-07-02)
 
 
