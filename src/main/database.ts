@@ -585,10 +585,11 @@ export function getPatrimoineSummary(): PatrimoineSummary {
 
 // --- Stats ---
 
-export function getMonthlyStats(months = 6, anchorEnd?: string): MonthlyStats[] {
+export function getMonthlyStats(months = 6, anchorEnd?: string, excludeCategories?: string[]): MonthlyStats[] {
   // Fenêtre de `months` mois calendaires se terminant au mois de `anchorEnd`
   // (par défaut le mois courant). Permet de décaler la tendance selon le filtre.
   const anchor = anchorEnd ?? new Date().toISOString().slice(0, 10)
+  const { clause: exclClause, params: exclParams } = buildExclClause(excludeCategories)
   return db.all(
     `SELECT
       strftime('%Y-%m', t.date) AS month,
@@ -598,10 +599,10 @@ export function getMonthlyStats(months = 6, anchorEnd?: string): MonthlyStats[] 
     LEFT JOIN accounts a ON t.account_id = a.id
     WHERE t.date >= date(?, 'start of month', '-' || ? || ' months')
       AND t.date <= date(?, 'start of month', '+1 month', '-1 day')
-      AND t.is_internal = 0
+      AND t.is_internal = 0 ${exclClause}
     GROUP BY month
     ORDER BY month ASC`,
-    [anchor, months - 1, anchor]
+    [anchor, months - 1, anchor, ...exclParams]
   ) as MonthlyStats[]
 }
 
@@ -807,7 +808,7 @@ export function getDashboardSummary(startDate?: string, endDate?: string, exclud
     totalTransactions: countRow?.n ?? 0,
     topCategories: getCategoryStatsGrouped(effectiveStart, effectiveEnd, excludeCategories),
     topIncomeCategories: getCreditCategoryStatsGrouped(effectiveStart, effectiveEnd, excludeCategories),
-    monthlyTrend: getMonthlyStats(trendMonths, trendAnchor),
+    monthlyTrend: getMonthlyStats(trendMonths, trendAnchor, excludeCategories),
     trendHighlightStart,
     trendHighlightEnd
   }
