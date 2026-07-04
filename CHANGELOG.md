@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.0](https://github.com/jessux/Banquier/compare/v1.22.0...v1.23.0) (2026-07-04)
+
+
+### Nouvelles fonctionnalités
+
+* **category:** add getCategoryMonthlyHistory function and integrate with IPC and UI ([9580590](https://github.com/jessux/Banquier/commit/95805905a9cf6502ca83264d03e8d406c9a5f9c4))
+
 ## [1.22.0](https://github.com/jessux/Banquier/compare/v1.21.0...v1.22.0) (2026-07-04)
 
 
