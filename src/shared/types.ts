@@ -75,6 +75,11 @@ export interface CategoryStatsGrouped {
   subcategories: CategoryStats[]
 }
 
+export interface CategoryMonthlyPoint {
+  month: string
+  total: number
+}
+
 export interface CategoryRule {
   id: number
   pattern: string

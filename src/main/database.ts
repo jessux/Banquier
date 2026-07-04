@@ -729,6 +729,25 @@ export function getCategoryStatsGrouped(startDate?: string, endDate?: string, ex
     .sort((a, b) => b.total - a.total)
 }
 
+export function getCategoryMonthlyHistory(category: string, months = 12): { month: string; total: number }[] {
+  const start = new Date()
+  start.setMonth(start.getMonth() - months)
+  const startStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-01`
+  return db.all(
+    `SELECT strftime('%Y-%m', t.date) AS month,
+      SUM(ABS(t.amount * COALESCE(a.fx_rate, 1.0))) AS total
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
+    WHERE t.amount < 0
+      AND t.is_internal = 0
+      AND (t.category = ? OR t.category LIKE ? || ' > %')
+      AND t.date >= ?
+    GROUP BY month
+    ORDER BY month ASC`,
+    [category, category, startStr]
+  ) as { month: string; total: number }[]
+}
+
 export function getDashboardSummary(startDate?: string, endDate?: string, excludeCategories?: string[]): DashboardSummary {
   const today = new Date()
   const effectiveEnd = endDate ?? today.toISOString().slice(0, 10)

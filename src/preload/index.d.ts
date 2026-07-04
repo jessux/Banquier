@@ -89,6 +89,7 @@ declare global {
       upsertBudget: (category: string, amount: number) => Promise<Budget>
       deleteBudget: (id: number) => Promise<void>
       getCategoryMonthlyAverage: (category: string, months?: number) => Promise<{ average: number; monthsWithData: number }>
+      getCategoryMonthlyHistory: (category: string, months?: number) => Promise<import('../shared/types').CategoryMonthlyPoint[]>
 
       // AI Categorization
       categorizeAi: (onlyUncategorized: boolean, onProgress: (done: number, total: number) => void) => Promise<{ updated: number }>

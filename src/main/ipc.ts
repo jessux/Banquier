@@ -169,6 +169,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('get-dashboard-summary', (_, startDate?: string, endDate?: string, excludeCategories?: string[]) =>
     db.getDashboardSummary(startDate, endDate, excludeCategories)
   )
+  ipcMain.handle('get-category-monthly-history', (_, category: string, months?: number) =>
+    db.getCategoryMonthlyHistory(category, months)
+  )
   ipcMain.handle('get-recurring-expenses', (_, startDate?: string, endDate?: string) =>
     db.getRecurringExpenses(startDate, endDate)
   )

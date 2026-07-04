@@ -169,6 +169,8 @@ const api = {
   deleteBudget: (id: number) => ipcRenderer.invoke('delete-budget', id),
   getCategoryMonthlyAverage: (category: string, months?: number) =>
     ipcRenderer.invoke('get-category-monthly-average', category, months),
+  getCategoryMonthlyHistory: (category: string, months?: number) =>
+    ipcRenderer.invoke('get-category-monthly-history', category, months),
 
   // Profiles
   getProfiles: () => ipcRenderer.invoke('get-profiles') as Promise<ProfilesState>,

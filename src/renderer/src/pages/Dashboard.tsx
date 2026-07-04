@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import {
   AreaChart, Area, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceArea
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceArea,
+  BarChart, Bar
 } from 'recharts'
-import type { DashboardSummary, CategoryStatsGrouped, BudgetWithSpent } from '../../../shared/types'
+import type { DashboardSummary, CategoryStatsGrouped, BudgetWithSpent, CategoryMonthlyPoint } from '../../../shared/types'
 import type { Page } from '../App'
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
@@ -23,6 +24,202 @@ function PieTooltip({ active, payload }: { active?: boolean; payload?: { name: s
           <span>{s.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</span>
         </div>
       ))}
+    </div>
+  )
+}
+
+const MONTH_SHORT_MODAL = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc']
+
+function CategoryModal({
+  category,
+  color,
+  periodTotal,
+  subcategories,
+  onClose,
+  onToggleExclude,
+  isExcluded,
+}: {
+  category: string
+  color: string
+  periodTotal: number
+  subcategories: { category: string; total: number }[]
+  onClose: () => void
+  onToggleExclude: () => void
+  isExcluded: boolean
+}): JSX.Element {
+  const [history, setHistory] = useState<CategoryMonthlyPoint[]>([])
+  const [loadingHistory, setLoadingHistory] = useState(true)
+
+  useEffect(() => {
+    setLoadingHistory(true)
+    window.api.getCategoryMonthlyHistory(category, 12).then((data) => {
+      setHistory(data as CategoryMonthlyPoint[])
+      setLoadingHistory(false)
+    })
+  }, [category])
+
+  const chartData = history.map((p) => {
+    const [y, m] = p.month.split('-')
+    return {
+      month: `${MONTH_SHORT_MODAL[parseInt(m, 10) - 1]}-${y.slice(2)}`,
+      total: Math.round(p.total),
+    }
+  })
+
+  const maxTotal = Math.max(...chartData.map((d) => d.total), 1)
+  const avg = history.length > 0 ? Math.round(history.reduce((s, p) => s + p.total, 0) / history.length) : 0
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 24,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: '#1a1d27', border: '1px solid #2e3147', borderRadius: 12,
+          padding: 24, width: '100%', maxWidth: 560, boxShadow: '0 20px 60px rgba(0,0,0,0.5)',
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+              <span style={{ width: 12, height: 12, borderRadius: '50%', background: color, flexShrink: 0 }} />
+              <span style={{ fontSize: 17, fontWeight: 700, color: '#e2e8f0' }}>{category}</span>
+            </div>
+            <div style={{ fontSize: 22, fontWeight: 700, color, paddingLeft: 22 }}>
+              {periodTotal.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: 28, height: 28, borderRadius: '50%', border: 'none', background: '#2e3147',
+              color: '#94a3b8', cursor: 'pointer', fontSize: 16, display: 'flex',
+              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+            }}
+          >×</button>
+        </div>
+
+        {/* Avg badge */}
+        {!loadingHistory && history.length > 0 && (
+          <div style={{ display: 'flex', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+            <div style={{ background: '#242736', borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
+              <span style={{ color: '#64748b' }}>Moyenne mensuelle </span>
+              <span style={{ color: '#e2e8f0', fontWeight: 600 }}>
+                {avg.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}
+              </span>
+            </div>
+            <div style={{ background: '#242736', borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
+              <span style={{ color: '#64748b' }}>Sur </span>
+              <span style={{ color: '#e2e8f0', fontWeight: 600 }}>{history.length} mois</span>
+            </div>
+            {history.length >= 2 && (() => {
+              const last = history[history.length - 1].total
+              const prev = history[history.length - 2].total
+              const diff = prev > 0 ? ((last - prev) / prev) * 100 : 0
+              const sign = diff >= 0 ? '+' : ''
+              return (
+                <div style={{ background: '#242736', borderRadius: 8, padding: '8px 14px', fontSize: 12 }}>
+                  <span style={{ color: '#64748b' }}>Dernier mois </span>
+                  <span style={{ color: diff > 5 ? '#ef4444' : diff < -5 ? '#22c55e' : '#94a3b8', fontWeight: 600 }}>
+                    {sign}{diff.toFixed(1)}%
+                  </span>
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
+        {/* Bar chart */}
+        <div style={{ marginBottom: subcategories.length > 0 ? 20 : 0 }}>
+          <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Évolution sur 12 mois</div>
+          {loadingHistory ? (
+            <div style={{ height: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div className="spinner" style={{ width: 24, height: 24 }} />
+            </div>
+          ) : chartData.length === 0 ? (
+            <div style={{ height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#475569', fontSize: 13 }}>
+              Aucune donnée sur les 12 derniers mois
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={chartData} margin={{ top: 4, right: 4, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2e3147" vertical={false} />
+                <XAxis dataKey="month" stroke="#64748b" tick={{ fontSize: 10 }} interval={0} />
+                <YAxis stroke="#64748b" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}€`} />
+                <Tooltip
+                  contentStyle={{ background: '#1a1d27', border: '1px solid #2e3147', borderRadius: 6, fontSize: 12 }}
+                  labelStyle={{ color: '#94a3b8' }}
+                  itemStyle={{ color: '#e2e8f0' }}
+                  formatter={(v: number) => [v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }), 'Total']}
+                  cursor={{ fill: '#2e314733' }}
+                />
+                <Bar dataKey="total" radius={[3, 3, 0, 0]}>
+                  {chartData.map((d, i) => (
+                    <Cell
+                      key={i}
+                      fill={d.total === maxTotal ? color : color + '88'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Subcategories */}
+        {subcategories.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Sous-catégories (période)</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {subcategories.sort((a, b) => b.total - a.total).map((s) => {
+                const pctW = Math.round((s.total / periodTotal) * 100)
+                return (
+                  <div key={s.category}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 3 }}>
+                      <span style={{ color: '#94a3b8' }}>{s.category}</span>
+                      <span style={{ color: '#e2e8f0' }}>{s.total.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} <span style={{ color: '#475569' }}>({pctW}%)</span></span>
+                    </div>
+                    <div style={{ background: '#242736', borderRadius: 3, height: 4 }}>
+                      <div style={{ width: `${pctW}%`, height: '100%', background: color + 'aa', borderRadius: 3 }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Footer actions */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, paddingTop: 4 }}>
+          <button
+            onClick={() => { onToggleExclude(); onClose() }}
+            style={{
+              padding: '7px 16px', borderRadius: 8, border: `1px solid ${isExcluded ? '#22c55e44' : '#f59e0b44'}`,
+              background: isExcluded ? '#22c55e18' : '#f59e0b18',
+              color: isExcluded ? '#22c55e' : '#f59e0b',
+              cursor: 'pointer', fontSize: 13, fontWeight: 500,
+            }}
+          >
+            {isExcluded ? 'Réactiver dans les calculs' : 'Exclure des calculs'}
+          </button>
+          <button
+            onClick={onClose}
+            style={{
+              padding: '7px 16px', borderRadius: 8, border: 'none',
+              background: '#2e3147', color: '#94a3b8',
+              cursor: 'pointer', fontSize: 13,
+            }}
+          >Fermer</button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -106,6 +303,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
   const [hoveredCat, setHoveredCat] = useState<string | null>(null)
   const [budgets, setBudgets] = useState<BudgetWithSpent[]>([])
   const [catView, setCatView] = useState<CatView>('depenses')
+  const [selectedCat, setSelectedCat] = useState<{ name: string; color: string; total: number; subcategories: { category: string; total: number }[] } | null>(null)
 
   useEffect(() => {
     if (period === 'custom' && (!customStart || !customEnd)) return
@@ -127,6 +325,15 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
       const next = new Set(prev)
       next.has(cat) ? next.delete(cat) : next.add(cat)
       return next
+    })
+  }
+
+  const handlePieClick = (data: { name: string; value: number; payload: { subcategories: { category: string; total: number }[] } }, index: number) => {
+    setSelectedCat({
+      name: data.name,
+      color: COLORS[index % COLORS.length],
+      total: data.value,
+      subcategories: data.payload.subcategories ?? [],
     })
   }
 
@@ -266,6 +473,17 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
 
   return (
     <div>
+      {selectedCat && (
+        <CategoryModal
+          category={selectedCat.name}
+          color={selectedCat.color}
+          periodTotal={selectedCat.total}
+          subcategories={selectedCat.subcategories}
+          onClose={() => setSelectedCat(null)}
+          onToggleExclude={() => toggleCat(selectedCat.name)}
+          isExcluded={excludedCats.has(selectedCat.name)}
+        />
+      )}
       <div className="page-header">
         <h1 className="page-title">Tableau de bord</h1>
         {periodBar}
@@ -370,7 +588,10 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
         </div>
 
         <div className="card">
-          <div className="card-title" style={{ marginBottom: 16 }}>Répartition par catégorie</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div className="card-title" style={{ marginBottom: 0 }}>Répartition par catégorie</div>
+            <span style={{ fontSize: 11, color: '#475569' }}>Cliquer pour détails</span>
+          </div>
           {pieData.length > 0 ? (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
@@ -378,9 +599,11 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
                   data={pieData} cx="50%" cy="50%" outerRadius={80} dataKey="value"
                   label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                   labelLine={false}
+                  onClick={handlePieClick}
+                  style={{ cursor: 'pointer' }}
                 >
                   {pieData.map((_, index) => (
-                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={index} fill={COLORS[index % COLORS.length]} stroke={COLORS[index % COLORS.length]} strokeWidth={1} />
                   ))}
                 </Pie>
                 <Tooltip content={<PieTooltip />} />
