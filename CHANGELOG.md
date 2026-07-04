@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.2](https://github.com/jessux/Banquier/compare/v1.23.1...v1.23.2) (2026-07-04)
+
+
+### Corrections de bugs
+
+* **dependencies:** update electron version to 31.7.7 ([e7a038b](https://github.com/jessux/Banquier/commit/e7a038b9eed0899abc44d73808e7f8590129f844))
+
 ## [1.23.1](https://github.com/jessux/Banquier/compare/v1.23.0...v1.23.1) (2026-07-04)
 
 
