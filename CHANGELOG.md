@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.23.3](https://github.com/jessux/Banquier/compare/v1.23.2...v1.23.3) (2026-07-05)
+
+
+### Corrections de bugs
+
+* **ci:** remove conflicting standalone vite dep and switch to Node 24 ([fe3b1c5](https://github.com/jessux/Banquier/commit/fe3b1c5ea7fdd03cdfd99dca5d5787de03164a38))
+* **dependencies:** downgrade nat-upnp to 0.2.1 and update electron, electron-builder, and electron-vite versions ([465192e](https://github.com/jessux/Banquier/commit/465192ee7fde78b916f449549bc4bbff7048b97e))
+* **packages:** Implement code changes to enhance functionality and improve performance ([684d722](https://github.com/jessux/Banquier/commit/684d72220376c0d48ba08a2d044ba93005b30bbb))
+
 ## [1.23.2](https://github.com/jessux/Banquier/compare/v1.23.1...v1.23.2) (2026-07-04)
 
 
