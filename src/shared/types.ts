@@ -10,6 +10,8 @@ export interface Account {
   bank: string | null
   currency: string
   fx_rate: number
+  /** Dernier solde connu (récupéré via Powens), null si inconnu (compte manuel). */
+  balance: number | null
 }
 
 export interface Transaction {

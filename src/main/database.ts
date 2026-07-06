@@ -58,6 +58,7 @@ function migrate(): void {
     'ALTER TABLE transactions ADD COLUMN note TEXT',
     'ALTER TABLE transactions ADD COLUMN tags TEXT',
     'ALTER TABLE chat_messages ADD COLUMN reasoning TEXT',
+    'ALTER TABLE accounts ADD COLUMN balance REAL',
   ]
   for (const sql of migrations) {
     try { db.exec(sql) } catch { /* column already exists */ }
@@ -262,6 +263,10 @@ export function updateAccountCurrency(id: number, currency: string): void {
 
 export function updateAccountFxRate(id: number, fxRate: number): void {
   db.run('UPDATE accounts SET fx_rate = ? WHERE id = ?', [fxRate, id])
+}
+
+export function updateAccountBalance(id: number, balance: number): void {
+  db.run('UPDATE accounts SET balance = ? WHERE id = ?', [balance, id])
 }
 
 // --- Transactions ---

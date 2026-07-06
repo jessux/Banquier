@@ -4,7 +4,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceArea,
   BarChart, Bar
 } from 'recharts'
-import type { DashboardSummary, CategoryStatsGrouped, BudgetWithSpent, CategoryMonthlyPoint } from '../../../shared/types'
+import type { DashboardSummary, CategoryStatsGrouped, BudgetWithSpent, CategoryMonthlyPoint, Account } from '../../../shared/types'
 import type { Page } from '../App'
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
@@ -285,6 +285,10 @@ function formatEur(n: number): string {
   return n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
 }
 
+function formatCurrency(n: number, currency: string): string {
+  return n.toLocaleString('fr-FR', { style: 'currency', currency })
+}
+
 function pct(current: number, previous: number): string {
   if (previous === 0) return ''
   const diff = ((current - previous) / previous) * 100
@@ -304,6 +308,11 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
   const [budgets, setBudgets] = useState<BudgetWithSpent[]>([])
   const [catView, setCatView] = useState<CatView>('depenses')
   const [selectedCat, setSelectedCat] = useState<{ name: string; color: string; total: number; subcategories: { category: string; total: number }[] } | null>(null)
+  const [accounts, setAccounts] = useState<Account[]>([])
+
+  useEffect(() => {
+    window.api.getAccounts().then(setAccounts)
+  }, [])
 
   useEffect(() => {
     if (period === 'custom' && (!customStart || !customEnd)) return
@@ -519,6 +528,38 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
           </button>
         </div>
       )}
+
+      {accounts.length > 0 && (() => {
+        const knownAccounts = accounts.filter((a) => a.balance != null)
+        const totalBalance = knownAccounts.reduce((s, a) => s + (a.balance ?? 0) * a.fx_rate, 0)
+        const hasUnknown = knownAccounts.length < accounts.length
+        return (
+          <div className="card" style={{ marginBottom: 24 }}>
+            <div className="card-title">Soldes des comptes</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {accounts.map((a) => (
+                <div key={a.id} className="flex justify-between">
+                  <span style={{ fontSize: 13 }}>{a.name}</span>
+                  {a.balance != null ? (
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{formatCurrency(a.balance, a.currency)}</span>
+                  ) : (
+                    <span style={{ fontSize: 12, color: '#64748b' }}>Solde inconnu</span>
+                  )}
+                </div>
+              ))}
+            </div>
+            {knownAccounts.length > 0 && (
+              <div
+                className="flex justify-between"
+                style={{ borderTop: '1px solid #2e3147', marginTop: 12, paddingTop: 12, fontSize: 14, fontWeight: 700 }}
+              >
+                <span>Total{hasUnknown ? ' (comptes connus)' : ''}</span>
+                <span>{formatEur(totalBalance)}</span>
+              </div>
+            )}
+          </div>
+        )
+      })()}
 
       <div className="grid-3" style={{ marginBottom: 24 }}>
         <div className="card">

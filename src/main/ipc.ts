@@ -633,10 +633,9 @@ async function importPowens(
     if (excludedPowensIds.has(String(acc.id))) continue
     const key = `powens:${acc.id}`
     const found = existing.find((a) => a.bank === key)
-    accountIdByPowens.set(
-      acc.id,
-      found?.id ?? db.createAccount(acc.name || 'Compte', key, acc.currency?.id || 'EUR').id
-    )
+    const accountId = found?.id ?? db.createAccount(acc.name || 'Compte', key, acc.currency?.id || 'EUR').id
+    accountIdByPowens.set(acc.id, accountId)
+    if (acc.balance != null) db.updateAccountBalance(accountId, acc.balance)
   }
 
   const rows = transactions
