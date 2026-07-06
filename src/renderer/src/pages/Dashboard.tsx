@@ -303,6 +303,7 @@ function pct(current: number, previous: number): string {
 export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) => void }): JSX.Element {
   const [summary, setSummary] = useState<DashboardSummary | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [period, setPeriod] = useState<Period>('mois')
   const [monthOffset, setMonthOffset] = useState(0)
   const [customStart, setCustomStart] = useState('')
@@ -330,6 +331,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
   useEffect(() => {
     if (period === 'custom' && (!customStart || !customEnd)) return
     setLoading(true)
+    setError(null)
     const { startDate, endDate } = periodDates(period, customStart, customEnd, monthOffset)
     const excl = excludedCats.size > 0 ? Array.from(excludedCats) : undefined
     Promise.all([
@@ -338,6 +340,10 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
     ]).then(([s, b]) => {
       setSummary(s as DashboardSummary)
       setBudgets(b as BudgetWithSpent[])
+      setLoading(false)
+    }).catch((e) => {
+      console.error('[Dashboard] chargement échoué', e)
+      setError(e instanceof Error ? e.message : String(e))
       setLoading(false)
     })
   }, [period, monthOffset, customStart, customEnd, excludedCats])
@@ -434,6 +440,19 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
       <div>
         <div className="page-header"><h1 className="page-title">Tableau de bord</h1>{periodBar}</div>
         <div className="empty-state"><div className="spinner" style={{ width: 32, height: 32, margin: '0 auto' }} /></div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div>
+        <div className="page-header"><h1 className="page-title">Tableau de bord</h1>{periodBar}</div>
+        <div className="empty-state">
+          <div style={{ fontSize: 48, marginBottom: 16 }}>⚠️</div>
+          <p style={{ fontSize: 16, marginBottom: 8 }}>Impossible de charger le tableau de bord</p>
+          <p className="text-muted" style={{ marginBottom: 8 }}>{error}</p>
+        </div>
       </div>
     )
   }
