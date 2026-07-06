@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.0](https://github.com/jessux/Banquier/compare/v1.24.0...v1.25.0) (2026-07-06)
+
+
+### Nouvelles fonctionnalités
+
+* **dashboard:** implement toggle for account balances visibility and improve sorting of subcategories ([572a2f4](https://github.com/jessux/Banquier/commit/572a2f4525e57bc9526b3514ac788247ffc94ecf))
+
 ## [1.24.0](https://github.com/jessux/Banquier/compare/v1.23.3...v1.24.0) (2026-07-06)
 
 
