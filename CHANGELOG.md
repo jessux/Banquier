@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.24.0](https://github.com/jessux/Banquier/compare/v1.23.3...v1.24.0) (2026-07-06)
+
+
+### Nouvelles fonctionnalités
+
+* **dashboard:** display account balances and total in dashboard ([de61371](https://github.com/jessux/Banquier/commit/de613712b74ad81b214038dfa78beedaaeabf038))
+* **database:** add balance column to accounts and update balance on import ([de61371](https://github.com/jessux/Banquier/commit/de613712b74ad81b214038dfa78beedaaeabf038))
+
 ## [1.23.3](https://github.com/jessux/Banquier/compare/v1.23.2...v1.23.3) (2026-07-05)
 
 
