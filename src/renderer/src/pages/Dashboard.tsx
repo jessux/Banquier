@@ -73,7 +73,7 @@ function CategoryModal({
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
-        background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+        background: 'rgba(0,0,0,0.6)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: 24,
       }}
@@ -179,7 +179,7 @@ function CategoryModal({
           <div style={{ marginBottom: 20 }}>
             <div style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>Sous-catégories (période)</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {subcategories.sort((a, b) => b.total - a.total).map((s) => {
+              {[...subcategories].sort((a, b) => b.total - a.total).map((s) => {
                 const pctW = Math.round((s.total / periodTotal) * 100)
                 return (
                   <div key={s.category}>
@@ -286,7 +286,11 @@ function formatEur(n: number): string {
 }
 
 function formatCurrency(n: number, currency: string): string {
-  return n.toLocaleString('fr-FR', { style: 'currency', currency })
+  try {
+    return n.toLocaleString('fr-FR', { style: 'currency', currency })
+  } catch {
+    return formatEur(n)
+  }
 }
 
 function pct(current: number, previous: number): string {
@@ -309,10 +313,19 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
   const [catView, setCatView] = useState<CatView>('depenses')
   const [selectedCat, setSelectedCat] = useState<{ name: string; color: string; total: number; subcategories: { category: string; total: number }[] } | null>(null)
   const [accounts, setAccounts] = useState<Account[]>([])
+  const [balancesOpen, setBalancesOpen] = useState(() => localStorage.getItem('dashboard.balancesOpen') !== 'false')
 
   useEffect(() => {
     window.api.getAccounts().then(setAccounts)
   }, [])
+
+  const toggleBalancesOpen = (): void => {
+    setBalancesOpen((prev) => {
+      const next = !prev
+      localStorage.setItem('dashboard.balancesOpen', String(next))
+      return next
+    })
+  }
 
   useEffect(() => {
     if (period === 'custom' && (!customStart || !customEnd)) return
@@ -535,27 +548,43 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
         const hasUnknown = knownAccounts.length < accounts.length
         return (
           <div className="card" style={{ marginBottom: 24 }}>
-            <div className="card-title">Soldes des comptes</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {accounts.map((a) => (
-                <div key={a.id} className="flex justify-between">
-                  <span style={{ fontSize: 13 }}>{a.name}</span>
-                  {a.balance != null ? (
-                    <span style={{ fontSize: 13, fontWeight: 600 }}>{formatCurrency(a.balance, a.currency)}</span>
-                  ) : (
-                    <span style={{ fontSize: 12, color: '#64748b' }}>Solde inconnu</span>
-                  )}
-                </div>
-              ))}
-            </div>
-            {knownAccounts.length > 0 && (
-              <div
-                className="flex justify-between"
-                style={{ borderTop: '1px solid #2e3147', marginTop: 12, paddingTop: 12, fontSize: 14, fontWeight: 700 }}
-              >
-                <span>Total{hasUnknown ? ' (comptes connus)' : ''}</span>
-                <span>{formatEur(totalBalance)}</span>
+            <div
+              className="flex justify-between"
+              onClick={toggleBalancesOpen}
+              style={{ cursor: 'pointer', alignItems: 'center' }}
+            >
+              <div className="card-title" style={{ marginBottom: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, color: '#64748b' }}>{balancesOpen ? '▾' : '▸'}</span>
+                Soldes des comptes
               </div>
+              {!balancesOpen && knownAccounts.length > 0 && (
+                <span style={{ fontSize: 13, fontWeight: 700 }}>{formatEur(totalBalance)}</span>
+              )}
+            </div>
+            {balancesOpen && (
+              <>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+                  {accounts.map((a) => (
+                    <div key={a.id} className="flex justify-between">
+                      <span style={{ fontSize: 13 }}>{a.name}</span>
+                      {a.balance != null ? (
+                        <span style={{ fontSize: 13, fontWeight: 600 }}>{formatCurrency(a.balance, a.currency)}</span>
+                      ) : (
+                        <span style={{ fontSize: 12, color: '#64748b' }}>Solde inconnu</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {knownAccounts.length > 0 && (
+                  <div
+                    className="flex justify-between"
+                    style={{ borderTop: '1px solid #2e3147', marginTop: 12, paddingTop: 12, fontSize: 14, fontWeight: 700 }}
+                  >
+                    <span>Total{hasUnknown ? ' (comptes connus)' : ''}</span>
+                    <span>{formatEur(totalBalance)}</span>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )
@@ -783,7 +812,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page) =>
                       </div>
                       {c.subcategories.length > 0 && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 3, paddingLeft: 12, borderLeft: `2px solid ${c.color}33` }}>
-                          {c.subcategories.sort((a, b) => b.total - a.total).map((s) => {
+                          {[...c.subcategories].sort((a, b) => b.total - a.total).map((s) => {
                             const isSubHovered = hoveredCat === `cat/${c.category}/${s.category}`
                             return (
                               <div
