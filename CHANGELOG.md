@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.26.0](https://github.com/jessux/Banquier/compare/v1.25.0...v1.26.0) (2026-07-06)
+
+
+### Nouvelles fonctionnalités
+
+* **Dashboard:** implement error state handling and display error message on load failure ([2801bb8](https://github.com/jessux/Banquier/commit/2801bb89d414782d996f868e82f4c0cbac894110))
+* **ErrorBoundary:** add ErrorBoundary component for error handling in the application ([2801bb8](https://github.com/jessux/Banquier/commit/2801bb89d414782d996f868e82f4c0cbac894110))
+
 ## [1.25.0](https://github.com/jessux/Banquier/compare/v1.24.0...v1.25.0) (2026-07-06)
 
 
