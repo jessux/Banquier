@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.1](https://github.com/jessux/Banquier/compare/v1.26.0...v1.26.1) (2026-07-09)
+
+
+### Corrections de bugs
+
+* **nat-upnp:** patch typo crash on UPnP gateway timeout ([5d3dc10](https://github.com/jessux/Banquier/commit/5d3dc10ba409e12f6128b0186253d5af670947b2))
+
 ## [1.26.0](https://github.com/jessux/Banquier/compare/v1.25.0...v1.26.0) (2026-07-06)
 
 
