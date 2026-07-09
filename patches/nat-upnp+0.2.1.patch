@@ -1,0 +1,13 @@
+diff --git a/node_modules/nat-upnp/lib/nat-upnp/client.js b/node_modules/nat-upnp/lib/nat-upnp/client.js
+index 3fbd3fc..7d9b590 100644
+--- a/node_modules/nat-upnp/lib/nat-upnp/client.js
++++ b/node_modules/nat-upnp/lib/nat-upnp/client.js
+@@ -174,7 +174,7 @@ Client.prototype.findGateway = function findGateway(callback) {
+   timeout = setTimeout(function() {
+     timeouted = true;
+     p.emit('end');
+-    callbacK(new Error('timeout'));
++    callback(new Error('timeout'));
+   }, 5000);
+ 
+   p.on('device', function(info, address) {

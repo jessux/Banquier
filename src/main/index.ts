@@ -30,6 +30,15 @@ if (proxyUrl) {
 // Corporate proxies use self-signed certs — disable verification for internal network
 app.commandLine.appendSwitch('ignore-certificate-errors')
 
+// Safety net for bugs in third-party deps (e.g. nat-upnp's timeout handler)
+// that throw outside any promise chain we can catch — log instead of crashing.
+process.on('uncaughtException', (error) => {
+  console.error('[uncaughtException]', error)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[unhandledRejection]', reason)
+})
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1200,
