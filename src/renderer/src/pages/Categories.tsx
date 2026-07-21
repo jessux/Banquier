@@ -27,7 +27,7 @@ function AddRow({ under, addingUnder, inputRef, newName, setNewName, setError, e
       />
       <button className="btn btn-primary" style={{ padding: '4px 12px' }} onClick={confirmAdd}>Ajouter</button>
       <button className="btn btn-secondary" style={{ padding: '4px 10px' }} onClick={cancelAdd}>✕</button>
-      {error && <span style={{ color: '#ef4444', fontSize: 12 }}>{error}</span>}
+      {error && <span style={{ color: 'var(--red)', fontSize: 12 }}>{error}</span>}
     </div>
   )
 }
@@ -69,7 +69,7 @@ function EditInline({ id, currentName, siblings, onDone }: EditInlineProps) {
       />
       <button className="btn btn-primary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={confirm}>OK</button>
       <button className="btn btn-secondary" style={{ padding: '3px 8px', fontSize: 12 }} onClick={onDone}>✕</button>
-      {error && <span style={{ color: '#ef4444', fontSize: 12 }}>{error}</span>}
+      {error && <span style={{ color: 'var(--red)', fontSize: 12 }}>{error}</span>}
     </div>
   )
 }
@@ -132,7 +132,7 @@ export default function Categories(): JSX.Element {
 
   const editBtn = (id: number) => (
     <button
-      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14, padding: '0 4px', lineHeight: 1 }}
+      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14, padding: '0 4px', lineHeight: 1 }}
       onClick={() => { setAddingUnder(null); setEditingId(id) }}
       title="Renommer"
     >
@@ -170,7 +170,7 @@ export default function Categories(): JSX.Element {
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 padding: '12px 16px',
-                borderBottom: children.length > 0 || addingUnder === cat.id ? '1px solid #2e3147' : 'none'
+                borderBottom: children.length > 0 || addingUnder === cat.id ? '1px solid var(--border)' : 'none'
               }}>
                 {editingId === cat.id ? (
                   <EditInline id={cat.id} currentName={cat.name} siblings={topLevel} onDone={finishEdit} />
@@ -188,7 +188,7 @@ export default function Categories(): JSX.Element {
                     + Sous-catégorie
                   </button>
                   <button
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
                     onClick={() => deleteCategory(cat.id, cat.name, children.length > 0)}
                     title="Supprimer"
                   >
@@ -208,7 +208,7 @@ export default function Categories(): JSX.Element {
                     background: '#171a24'
                   }}
                 >
-                  <span style={{ color: '#64748b', marginRight: 4, fontSize: 12 }}>└─</span>
+                  <span style={{ color: 'var(--text3)', marginRight: 4, fontSize: 12 }}>└─</span>
                   {editingId === sub.id ? (
                     <EditInline id={sub.id} currentName={sub.name} siblings={children} onDone={finishEdit} />
                   ) : (
@@ -217,7 +217,7 @@ export default function Categories(): JSX.Element {
                   {editingId !== sub.id && <>
                     {editBtn(sub.id)}
                     <button
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', fontSize: 14, padding: '0 4px', lineHeight: 1 }}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14, padding: '0 4px', lineHeight: 1 }}
                       onClick={() => deleteCategory(sub.id, sub.name, false)}
                       title="Supprimer"
                     >

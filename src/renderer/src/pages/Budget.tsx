@@ -26,10 +26,10 @@ function fmt(n: number): string {
 function ProgressBar({ pct, over }: { pct: number; over: boolean }) {
   const filled = Math.min(pct, 100)
   return (
-    <div style={{ background: '#242736', borderRadius: 6, height: 8, overflow: 'hidden', flex: 1 }}>
+    <div style={{ background: 'var(--bg3)', borderRadius: 6, height: 8, overflow: 'hidden', flex: 1 }}>
       <div style={{
         width: `${filled}%`, height: '100%', borderRadius: 6,
-        background: over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#22c55e',
+        background: over ? 'var(--red)' : pct > 80 ? 'var(--yellow)' : 'var(--green)',
         transition: 'width 0.4s ease'
       }} />
     </div>
@@ -110,7 +110,7 @@ export default function BudgetPage(): JSX.Element {
       style={{
         width: 28, height: 28, borderRadius: '50%', border: 'none',
         cursor: dir === 1 && monthOffset >= 0 ? 'default' : 'pointer',
-        background: '#242736', color: dir === 1 && monthOffset >= 0 ? '#3e4259' : '#94a3b8',
+        background: 'var(--bg3)', color: dir === 1 && monthOffset >= 0 ? '#3e4259' : 'var(--text2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0
       }}
     >
@@ -146,7 +146,7 @@ export default function BudgetPage(): JSX.Element {
               {fmt(totalBudget - totalSpent)}
             </div>
             {overCount > 0 && (
-              <div style={{ fontSize: 12, color: '#ef4444', marginTop: 6 }}>
+              <div style={{ fontSize: 12, color: 'var(--red)', marginTop: 6 }}>
                 {overCount} catégorie{overCount > 1 ? 's' : ''} dépassée{overCount > 1 ? 's' : ''}
               </div>
             )}
@@ -200,12 +200,12 @@ export default function BudgetPage(): JSX.Element {
                       </div>
                     ) : (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                        <span style={{ fontSize: 13, color: over ? '#ef4444' : '#e2e8f0', fontVariantNumeric: 'tabular-nums', minWidth: 110, textAlign: 'right' }}>
+                        <span style={{ fontSize: 13, color: over ? 'var(--red)' : 'var(--text)', fontVariantNumeric: 'tabular-nums', minWidth: 110, textAlign: 'right' }}>
                           {fmt(b.spent)} / {fmt(b.amount)}
                         </span>
                         <span style={{
                           fontSize: 11, fontWeight: 600, minWidth: 42, textAlign: 'right',
-                          color: over ? '#ef4444' : pct > 80 ? '#f59e0b' : '#22c55e'
+                          color: over ? 'var(--red)' : pct > 80 ? 'var(--yellow)' : 'var(--green)'
                         }}>
                           {pct.toFixed(0)}%
                         </span>
@@ -218,7 +218,7 @@ export default function BudgetPage(): JSX.Element {
                         </button>
                         <button
                           className="btn btn-secondary"
-                          style={{ padding: '3px 8px', fontSize: 12, color: '#ef4444', borderColor: 'rgba(239,68,68,0.3)' }}
+                          style={{ padding: '3px 8px', fontSize: 12, color: 'var(--red)', borderColor: 'rgba(239,68,68,0.3)' }}
                           onClick={() => deleteBudget(b.id)}
                         >
                           ✕
@@ -227,7 +227,7 @@ export default function BudgetPage(): JSX.Element {
                     )}
                   </div>
                   {over && (
-                    <div style={{ fontSize: 11, color: '#ef4444', paddingLeft: 150 }}>
+                    <div style={{ fontSize: 11, color: 'var(--red)', paddingLeft: 150 }}>
                       Dépassement de {fmt(b.spent - b.amount)}
                     </div>
                   )}
@@ -266,7 +266,7 @@ export default function BudgetPage(): JSX.Element {
               <button className="btn btn-secondary" onClick={() => { setAdding(false); setNewCat(''); setNewAmt(''); setSuggestion(null) }}>Annuler</button>
             </div>
             {suggestion && (
-              <div style={{ flexBasis: '100%', fontSize: 12, color: '#818cf8' }}>
+              <div style={{ flexBasis: '100%', fontSize: 12, color: 'var(--accent-light)' }}>
                 💡 Montant pré-rempli d'après votre moyenne : {fmt(suggestion.average)}/mois
                 {' '}sur {suggestion.monthsWithData === 1 ? 'le dernier mois' : `les ${suggestion.monthsWithData} derniers mois`}.
               </div>

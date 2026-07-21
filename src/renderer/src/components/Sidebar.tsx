@@ -13,6 +13,7 @@ const navItems: NavItem[] = [
   { id: 'transactions', label: 'Transactions', icon: '📋' },
   { id: 'recurring', label: 'Récurrences', icon: '🔁' },
   { id: 'budget', label: 'Budgets', icon: '🎯' },
+  { id: 'comparaison', label: 'Comparer', icon: '⚖️' },
   { id: 'patrimoine', label: 'Patrimoine', icon: '💎' },
   { id: 'simulateur', label: 'Simulateur épargne', icon: '🎓' },
   { id: 'categories', label: 'Catégories', icon: '🏷️' },
@@ -159,9 +160,9 @@ export default function Sidebar({ activePage, onNavigate }: Props): JSX.Element 
                   </div>
                 ) : deletingId === p.id ? (
                   <div style={{ padding: '6px 12px', fontSize: 12 }}>
-                    <div style={{ color: '#ef4444', marginBottom: 6 }}>Supprimer <strong>{p.name}</strong> ?</div>
+                    <div style={{ color: 'var(--red)', marginBottom: 6 }}>Supprimer <strong>{p.name}</strong> ?</div>
                     <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11, color: '#ef4444', borderColor: 'rgba(239,68,68,0.4)' }} onClick={() => handleDelete(p.id)}>Oui</button>
+                      <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11, color: 'var(--red)', borderColor: 'rgba(239,68,68,0.4)' }} onClick={() => handleDelete(p.id)}>Oui</button>
                       <button className="btn btn-secondary" style={{ padding: '2px 8px', fontSize: 11 }} onClick={() => setDeletingId(null)}>Non</button>
                     </div>
                   </div>
@@ -187,7 +188,7 @@ export default function Sidebar({ activePage, onNavigate }: Props): JSX.Element 
                       <button
                         title="Supprimer"
                         onClick={() => setDeletingId(p.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 12, padding: '2px 4px', borderRadius: 4, opacity: 0.7 }}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--red)', fontSize: 12, padding: '2px 4px', borderRadius: 4, opacity: 0.7 }}
                       >✕</button>
                     )}
                   </div>

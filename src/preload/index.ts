@@ -61,6 +61,12 @@ const api = {
     ipcRenderer.invoke('get-dashboard-summary', startDate, endDate, excludeCategories),
   getRecurringExpenses: (startDate?: string, endDate?: string) =>
     ipcRenderer.invoke('get-recurring-expenses', startDate, endDate),
+  getTopMerchants: (startDate?: string, endDate?: string, limit?: number) =>
+    ipcRenderer.invoke('get-top-merchants', startDate, endDate, limit),
+  getUncategorized: (startDate?: string, endDate?: string, limit?: number) =>
+    ipcRenderer.invoke('get-uncategorized', startDate, endDate, limit),
+  comparePeriods: (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
+    ipcRenderer.invoke('compare-periods', aStart, aEnd, bStart, bEnd),
 
   // AI Categorization
   categorizeAi: (onlyUncategorized: boolean, onProgress: (done: number, total: number) => void) => {

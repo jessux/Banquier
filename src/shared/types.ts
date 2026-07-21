@@ -110,6 +110,8 @@ export interface Settings {
   onboardingDone?: boolean
   /** Proxy HTTP/HTTPS configuré manuellement (ex: http://proxy.entreprise.com:8080). */
   proxyUrl?: string
+  /** Thème de l'interface. Par défaut : sombre. */
+  theme?: 'dark' | 'light'
 }
 
 /** État de la connexion Powens. */

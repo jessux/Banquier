@@ -252,8 +252,8 @@ export default function Chat(): JSX.Element {
         </div>
 
         {memories.length > 0 && (
-          <div style={{ marginTop: 12, borderTop: '1px solid #2e3147', paddingTop: 10 }}>
-            <p style={{ fontSize: 12, color: '#64748b', margin: '0 4px 6px' }}>
+          <div style={{ marginTop: 12, borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+            <p style={{ fontSize: 12, color: 'var(--text3)', margin: '0 4px 6px' }}>
               🧠 Mémoire IA ({memories.length})
             </p>
             <div style={{ maxHeight: 180, overflowY: 'auto' }}>
@@ -332,10 +332,10 @@ export default function Chat(): JSX.Element {
                         open={loading && i === messages.length - 1 && !msg.content}
                         style={{
                           marginBottom: 10, padding: '6px 10px', borderRadius: 8,
-                          background: '#161927', border: '1px solid #2e3147'
+                          background: '#161927', border: '1px solid var(--border)'
                         }}
                       >
-                        <summary style={{ cursor: 'pointer', fontSize: 12, color: '#64748b', userSelect: 'none' }}>
+                        <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text3)', userSelect: 'none' }}>
                           🧠 Raisonnement du modèle
                         </summary>
                         <div style={{
@@ -352,8 +352,8 @@ export default function Chat(): JSX.Element {
                           <span key={j} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4,
                             padding: '2px 8px', borderRadius: 999,
-                            background: '#1e2130', border: '1px solid #2e3147',
-                            fontSize: 11, color: '#64748b'
+                            background: '#1e2130', border: '1px solid var(--border)',
+                            fontSize: 11, color: 'var(--text3)'
                           }}>
                             {tc}
                           </span>

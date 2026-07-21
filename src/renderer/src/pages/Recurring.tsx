@@ -37,6 +37,28 @@ function formatDate(iso: string): string {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+const DAY_MS = 86400_000
+
+/** Prochaine échéance estimée : dernier paiement + intervalle médian observé entre deux paiements. */
+function nextDueDate(item: RecurringExpense): Date {
+  return new Date(new Date(item.lastDate).getTime() + item.intervalDays * DAY_MS)
+}
+
+function daysUntil(d: Date): number {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(d)
+  target.setHours(0, 0, 0, 0)
+  return Math.round((target.getTime() - today.getTime()) / DAY_MS)
+}
+
+function dueLabel(days: number): string {
+  if (days < 0) return `en retard de ${Math.abs(days)} j`
+  if (days === 0) return "aujourd'hui"
+  if (days === 1) return 'demain'
+  return `dans ${days} j`
+}
+
 export default function Recurring(): JSX.Element {
   const [data, setData] = useState<RecurringSummary | null>(null)
   const [loading, setLoading] = useState(true)
@@ -61,8 +83,8 @@ export default function Recurring(): JSX.Element {
           style={{
             padding: '5px 14px', borderRadius: 20, border: 'none', cursor: 'pointer',
             fontSize: 13, fontWeight: win === w.key ? 600 : 400,
-            background: win === w.key ? '#6366f1' : '#242736',
-            color: win === w.key ? '#fff' : '#94a3b8', transition: 'all 0.15s'
+            background: win === w.key ? 'var(--accent)' : 'var(--bg3)',
+            color: win === w.key ? '#fff' : 'var(--text2)', transition: 'all 0.15s'
           }}
         >
           {w.label}
@@ -97,6 +119,11 @@ export default function Recurring(): JSX.Element {
 
   const visible = data.items.filter((i) => showInactive || i.active)
   const activeCount = data.items.filter((i) => i.active).length
+  const upcoming = data.items
+    .filter((i) => i.active)
+    .map((i) => ({ item: i, next: nextDueDate(i) }))
+    .sort((a, b) => a.next.getTime() - b.next.getTime())
+    .slice(0, 5)
 
   return (
     <div>
@@ -126,14 +153,44 @@ export default function Recurring(): JSX.Element {
         </div>
       </div>
 
+      {upcoming.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div className="card-title">Prochaines échéances estimées</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>
+            {upcoming.map(({ item, next }) => {
+              const days = daysUntil(next)
+              const soon = days <= 3
+              return (
+                <div key={item.merchant} className="flex justify-between" style={{ alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{ fontWeight: 500, fontSize: 13 }}>{item.merchant}</span>
+                    {item.category && <span className="category-badge">{item.category}</span>}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className="amount-negative" style={{ fontSize: 13 }}>{formatEur(item.averageAmount)}</span>
+                    <span style={{
+                      fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 10,
+                      color: soon ? 'var(--yellow)' : 'var(--text2)',
+                      background: soon ? 'rgba(245,158,11,0.12)' : 'var(--bg3)'
+                    }}>
+                      {dueLabel(days)}
+                    </span>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="flex justify-between" style={{ alignItems: 'center', marginBottom: 12 }}>
         <div className="card-title">Détail des récurrences</div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#94a3b8', cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text2)', cursor: 'pointer' }}>
           <input
             type="checkbox"
             checked={showInactive}
             onChange={(e) => setShowInactive(e.target.checked)}
-            style={{ accentColor: '#6366f1' }}
+            style={{ accentColor: 'var(--accent)' }}
           />
           Afficher les inactives
         </label>
@@ -149,6 +206,7 @@ export default function Recurring(): JSX.Element {
               <th style={{ textAlign: 'right' }}>Montant moyen</th>
               <th style={{ textAlign: 'right' }}>Coût mensuel</th>
               <th>Dernier paiement</th>
+              <th>Prochaine échéance</th>
               <th></th>
             </tr>
           </thead>
@@ -182,7 +240,7 @@ function RecurringRow({
       <tr onClick={onToggle} style={{ cursor: 'pointer', opacity: item.active ? 1 : 0.55 }}>
         <td>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 11, color: '#64748b', width: 10 }}>{expanded ? '▾' : '▸'}</span>
+            <span style={{ fontSize: 11, color: 'var(--text3)', width: 10 }}>{expanded ? '▾' : '▸'}</span>
             <span style={{ fontWeight: 600 }}>{item.merchant}</span>
             {!item.active && <span className="badge badge-warning">résilié ?</span>}
           </div>
@@ -199,11 +257,21 @@ function RecurringRow({
         <td style={{ textAlign: 'right' }} className="amount-negative">{formatEur(item.averageAmount)}</td>
         <td style={{ textAlign: 'right' }} className="amount-negative">{formatEur(item.monthlyEstimate)}</td>
         <td>{formatDate(item.lastDate)}</td>
+        <td>
+          {item.active ? (() => {
+            const days = daysUntil(nextDueDate(item))
+            return (
+              <span style={{ fontSize: 12, color: days <= 3 ? 'var(--yellow)' : 'var(--text2)' }}>
+                {dueLabel(days)}
+              </span>
+            )
+          })() : <span className="text-muted text-sm">—</span>}
+        </td>
         <td></td>
       </tr>
       {expanded && (
         <tr>
-          <td colSpan={7} style={{ background: '#15171f', padding: '12px 16px 16px 32px' }}>
+          <td colSpan={8} style={{ background: 'var(--bg)', padding: '12px 16px 16px 32px' }}>
             <div className="text-muted text-sm" style={{ marginBottom: 8 }}>
               Coût annuel estimé : <span className="amount-negative">{formatEur(item.yearlyEstimate)}</span>
               {' · '}depuis le {formatDate(item.firstDate)}
@@ -211,8 +279,8 @@ function RecurringRow({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {item.transactions.map((t) => (
                 <div key={t.id} className="flex justify-between" style={{ fontSize: 13 }}>
-                  <span style={{ color: '#94a3b8' }}>{formatDate(t.date)}</span>
-                  <span style={{ flex: 1, margin: '0 16px', color: '#cbd5e1', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <span style={{ color: 'var(--text2)' }}>{formatDate(t.date)}</span>
+                  <span style={{ flex: 1, margin: '0 16px', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {t.description}
                   </span>
                   <span className="amount-negative">{formatEur(Math.abs(t.amount))}</span>

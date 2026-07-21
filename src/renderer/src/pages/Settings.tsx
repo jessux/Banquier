@@ -282,6 +282,25 @@ export default function SettingsPage(): JSX.Element {
               <option value="en-US">English (US)</option>
             </select>
           </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label>Thème</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['dark', 'light'] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  className={settings.theme === t || (!settings.theme && t === 'dark') ? 'btn btn-primary' : 'btn btn-secondary'}
+                  style={{ flex: 1 }}
+                  onClick={() => {
+                    setSettings((s) => ({ ...s, theme: t }))
+                    document.documentElement.setAttribute('data-theme', t)
+                  }}
+                >
+                  {t === 'dark' ? '🌙 Sombre' : '☀️ Clair'}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -377,10 +396,10 @@ export default function SettingsPage(): JSX.Element {
                   </div>
                 ) : deletingAccountId === a.id ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                    <span style={{ fontSize: 13, color: '#ef4444', flex: 1 }}>
+                    <span style={{ fontSize: 13, color: 'var(--red)', flex: 1 }}>
                       Supprimer <strong>{a.name}</strong> et toutes ses transactions ?
                     </span>
-                    <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12, borderColor: 'rgba(239,68,68,0.5)', color: '#ef4444' }} onClick={() => deleteAccount(a.id)}>Confirmer</button>
+                    <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12, borderColor: 'rgba(239,68,68,0.5)', color: 'var(--red)' }} onClick={() => deleteAccount(a.id)}>Confirmer</button>
                     <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => setDeletingAccountId(null)}>Annuler</button>
                   </div>
                 ) : editingCurrency?.id === a.id ? (
@@ -404,7 +423,7 @@ export default function SettingsPage(): JSX.Element {
                       {a.currency !== settings.currency && (
                         editingFxRate?.id === a.id ? (
                           <>
-                            <span style={{ fontSize: 11, color: '#94a3b8' }}>1 {a.currency} =</span>
+                            <span style={{ fontSize: 11, color: 'var(--text2)' }}>1 {a.currency} =</span>
                             <input
                               autoFocus
                               type="number"
@@ -414,14 +433,14 @@ export default function SettingsPage(): JSX.Element {
                               onKeyDown={(e) => { if (e.key === 'Enter') saveFxRate(); if (e.key === 'Escape') setEditingFxRate(null) }}
                               style={{ width: 72, padding: '3px 6px', fontSize: 12 }}
                             />
-                            <span style={{ fontSize: 11, color: '#94a3b8' }}>{settings.currency}</span>
+                            <span style={{ fontSize: 11, color: 'var(--text2)' }}>{settings.currency}</span>
                             <button className="btn btn-primary" style={{ padding: '3px 8px', fontSize: 12 }} onClick={saveFxRate}>OK</button>
                             <button className="btn btn-secondary" style={{ padding: '3px 6px', fontSize: 12 }} onClick={() => setEditingFxRate(null)}>✕</button>
                           </>
                         ) : (
                           <button
                             className="btn btn-secondary"
-                            style={{ padding: '4px 10px', fontSize: 12, color: '#f59e0b', borderColor: 'rgba(245,158,11,0.4)' }}
+                            style={{ padding: '4px 10px', fontSize: 12, color: 'var(--yellow)', borderColor: 'rgba(245,158,11,0.4)' }}
                             title={`Taux de conversion utilisé dans les statistiques`}
                             onClick={() => setEditingFxRate({ id: a.id, rate: String(a.fx_rate ?? 1) })}
                           >
@@ -430,7 +449,7 @@ export default function SettingsPage(): JSX.Element {
                         )
                       )}
                       <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setEditingAccount({ id: a.id, name: a.name })}>Renommer</button>
-                      <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12, borderColor: 'rgba(239,68,68,0.3)', color: '#ef4444' }} onClick={() => setDeletingAccountId(a.id)}>✕</button>
+                      <button className="btn btn-secondary" style={{ padding: '4px 8px', fontSize: 12, borderColor: 'rgba(239,68,68,0.3)', color: 'var(--red)' }} onClick={() => setDeletingAccountId(a.id)}>✕</button>
                     </div>
                   </>
                 )}
@@ -443,7 +462,7 @@ export default function SettingsPage(): JSX.Element {
         <div style={{ borderTop: accounts.length > 0 ? '1px solid var(--border)' : 'none', paddingTop: accounts.length > 0 ? 16 : 0, marginBottom: 20 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
             <p className="text-sm" style={{ fontWeight: 500 }}>Agrégation Powens</p>
-            {powens.connected && <span style={{ fontSize: 12, color: '#22c55e' }}>✓ Connecté</span>}
+            {powens.connected && <span style={{ fontSize: 12, color: 'var(--green)' }}>✓ Connecté</span>}
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={connectPowens} disabled={powensBusy}>
@@ -458,9 +477,9 @@ export default function SettingsPage(): JSX.Element {
           </div>
           {powensError && (
             <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#ef4444', marginBottom: 4 }}>Erreur de synchronisation</div>
-              <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 10 }}>{powensError}</div>
-              <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 14px', background: 'rgba(239,68,68,0.2)', borderColor: 'rgba(239,68,68,0.5)', color: '#ef4444' }} onClick={connectPowens} disabled={powensBusy}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)', marginBottom: 4 }}>Erreur de synchronisation</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>{powensError}</div>
+              <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 14px', background: 'rgba(239,68,68,0.2)', borderColor: 'rgba(239,68,68,0.5)', color: 'var(--red)' }} onClick={connectPowens} disabled={powensBusy}>
                 Reconnecter ma banque
               </button>
             </div>
@@ -510,17 +529,17 @@ export default function SettingsPage(): JSX.Element {
             <button className="btn btn-secondary" onClick={doRestore}>Restaurer une sauvegarde…</button>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 13, color: '#f59e0b' }}>L'application va recharger. Continuer ?</span>
-              <button className="btn btn-secondary" style={{ fontSize: 12, borderColor: 'rgba(245,158,11,0.5)', color: '#f59e0b' }} onClick={doRestore}>Choisir le fichier</button>
+              <span style={{ fontSize: 13, color: 'var(--yellow)' }}>L'application va recharger. Continuer ?</span>
+              <button className="btn btn-secondary" style={{ fontSize: 12, borderColor: 'rgba(245,158,11,0.5)', color: 'var(--yellow)' }} onClick={doRestore}>Choisir le fichier</button>
               <button className="btn btn-secondary" style={{ fontSize: 12 }} onClick={() => setRestoreStep(0)}>Annuler</button>
             </div>
           )}
         </div>
         {exportStatus === 'ok' && (
-          <p style={{ marginTop: 10, fontSize: 13, color: '#22c55e' }}>Fichier exporté avec succès.</p>
+          <p style={{ marginTop: 10, fontSize: 13, color: 'var(--green)' }}>Fichier exporté avec succès.</p>
         )}
         {restoreStatus === 'err' && (
-          <p style={{ marginTop: 10, fontSize: 13, color: '#ef4444' }}>Erreur lors de la restauration : {restoreError}</p>
+          <p style={{ marginTop: 10, fontSize: 13, color: 'var(--red)' }}>Erreur lors de la restauration : {restoreError}</p>
         )}
       </div>
 
@@ -555,7 +574,7 @@ export default function SettingsPage(): JSX.Element {
           </button>
         </div>
         {updateResult && (
-          <div style={{ marginTop: 12, fontSize: 13, padding: '8px 12px', borderRadius: 6, background: updateResult.status === 'up-to-date' ? 'rgba(34,197,94,0.08)' : updateResult.status === 'error' ? 'rgba(239,68,68,0.08)' : 'rgba(99,102,241,0.08)', color: updateResult.status === 'up-to-date' ? '#22c55e' : updateResult.status === 'error' ? '#ef4444' : '#6366f1' }}>
+          <div style={{ marginTop: 12, fontSize: 13, padding: '8px 12px', borderRadius: 6, background: updateResult.status === 'up-to-date' ? 'rgba(34,197,94,0.08)' : updateResult.status === 'error' ? 'rgba(239,68,68,0.08)' : 'rgba(99,102,241,0.08)', color: updateResult.status === 'up-to-date' ? 'var(--green)' : updateResult.status === 'error' ? 'var(--red)' : 'var(--accent)' }}>
             {updateResult.status === 'up-to-date' && '✓ Application à jour'}
             {updateResult.status === 'available' && `Mise à jour disponible : v${updateResult.version} — téléchargement en cours…`}
             {updateResult.status === 'downloading' && `Téléchargement de la v${updateResult.version} en cours…`}
@@ -566,14 +585,14 @@ export default function SettingsPage(): JSX.Element {
 
       {/* Zone danger */}
       <div className="card" style={{ marginBottom: 20, borderColor: 'rgba(239,68,68,0.3)' }}>
-        <h3 style={{ marginBottom: 8, color: '#ef4444' }}>Zone danger</h3>
+        <h3 style={{ marginBottom: 8, color: 'var(--red)' }}>Zone danger</h3>
         <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
           Ces actions sont irréversibles. Assurez-vous d'avoir exporté vos données avant de continuer.
         </p>
         {clearStep === 0 && (
           <button
             className="btn btn-secondary"
-            style={{ borderColor: 'rgba(239,68,68,0.5)', color: '#ef4444' }}
+            style={{ borderColor: 'rgba(239,68,68,0.5)', color: 'var(--red)' }}
             onClick={clearAllTransactions}
           >
             Vider toutes les transactions
@@ -581,13 +600,13 @@ export default function SettingsPage(): JSX.Element {
         )}
         {clearStep === 1 && (
           <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '12px 16px' }}>
-            <p className="text-sm" style={{ marginBottom: 12, color: '#ef4444', fontWeight: 500 }}>
+            <p className="text-sm" style={{ marginBottom: 12, color: 'var(--red)', fontWeight: 500 }}>
               Toutes les transactions et l'historique d'imports seront supprimés définitivement. Cette action est irréversible.
             </p>
             <div style={{ display: 'flex', gap: 10 }}>
               <button
                 className="btn btn-secondary"
-                style={{ borderColor: 'rgba(239,68,68,0.5)', color: '#ef4444' }}
+                style={{ borderColor: 'rgba(239,68,68,0.5)', color: 'var(--red)' }}
                 onClick={clearAllTransactions}
                 disabled={clearBusy}
               >
@@ -604,10 +623,10 @@ export default function SettingsPage(): JSX.Element {
 
     {showSyncModal && (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-        <div style={{ background: '#1a1d27', border: '1px solid #2e3147', borderRadius: 10, padding: 28, width: 360 }}>
+        <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: 28, width: 360 }}>
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Plage de dates à synchroniser</div>
           {powensFirstDate && (
-            <div style={{ fontSize: 12, color: '#94a3b8', marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 16 }}>
               Données disponibles depuis le {new Date(powensFirstDate + 'T00:00:00').toLocaleDateString('fr-FR')}
             </div>
           )}

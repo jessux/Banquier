@@ -28,7 +28,10 @@ import type {
   PowensSyncResult,
   Budget,
   BudgetWithSpent,
-  ProfilesState
+  ProfilesState,
+  MerchantStats,
+  UncategorizedSummary,
+  PeriodComparison
 } from '../shared/types'
 
 declare global {
@@ -82,6 +85,9 @@ declare global {
       getCategoryStats: (startDate?: string, endDate?: string) => Promise<CategoryStats[]>
       getDashboardSummary: (startDate?: string, endDate?: string, excludeCategories?: string[]) => Promise<DashboardSummary>
       getRecurringExpenses: (startDate?: string, endDate?: string) => Promise<RecurringSummary>
+      getTopMerchants: (startDate?: string, endDate?: string, limit?: number) => Promise<MerchantStats[]>
+      getUncategorized: (startDate?: string, endDate?: string, limit?: number) => Promise<UncategorizedSummary>
+      comparePeriods: (aStart: string, aEnd: string, bStart: string, bEnd: string) => Promise<PeriodComparison>
 
       // Budgets
       getBudgets: () => Promise<Budget[]>

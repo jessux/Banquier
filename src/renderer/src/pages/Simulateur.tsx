@@ -367,7 +367,7 @@ export default function Simulateur(): JSX.Element {
               {mode === 'forward' ? (
                 <>
                   <div className="text-muted text-sm">Versement à effectuer</div>
-                  <div style={{ fontSize: 36, fontWeight: 700, color: '#6366f1', margin: '10px 0 4px' }}>
+                  <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--accent)', margin: '10px 0 4px' }}>
                     {euro(result.pmt)}
                   </div>
                   <div className="text-muted text-sm">
@@ -377,7 +377,7 @@ export default function Simulateur(): JSX.Element {
               ) : (
                 <>
                   <div className="text-muted text-sm">Capital final</div>
-                  <div style={{ fontSize: 36, fontWeight: 700, color: '#6366f1', margin: '10px 0 4px' }}>
+                  <div style={{ fontSize: 36, fontWeight: 700, color: 'var(--accent)', margin: '10px 0 4px' }}>
                     {euro(result.targetCapital)}
                   </div>
                   <div className="text-muted text-sm">
@@ -399,7 +399,7 @@ export default function Simulateur(): JSX.Element {
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="text-muted text-sm">Intérêts générés</span>
-                  <span style={{ fontWeight: 600, color: '#22c55e' }}>+{euro(result.totalInterest)}</span>
+                  <span style={{ fontWeight: 600, color: 'var(--green)' }}>+{euro(result.totalInterest)}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border)', paddingTop: 12 }}>
                   <span className="text-muted text-sm">Capital final</span>
@@ -415,18 +415,18 @@ export default function Simulateur(): JSX.Element {
               <AreaChart data={result.chartData}>
                 <defs>
                   <linearGradient id="simGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                    <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2e3147" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis
                   dataKey="year"
-                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                  tick={{ fontSize: 11, fill: 'var(--text2)' }}
                   tickFormatter={(v) => `An ${v}`}
                 />
                 <YAxis
-                  tick={{ fontSize: 11, fill: '#94a3b8' }}
+                  tick={{ fontSize: 11, fill: 'var(--text2)' }}
                   tickFormatter={(v) => euro(v)}
                   width={95}
                 />
@@ -434,7 +434,7 @@ export default function Simulateur(): JSX.Element {
                   formatter={(v: number) => [euro(v), 'Capital']}
                   labelFormatter={(v) => `Année ${v}`}
                 />
-                <Area type="monotone" dataKey="capital" stroke="#6366f1" fill="url(#simGrad)" strokeWidth={2} />
+                <Area type="monotone" dataKey="capital" stroke="var(--accent)" fill="url(#simGrad)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -450,7 +450,7 @@ export default function Simulateur(): JSX.Element {
             </div>
             <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
               <thead>
-                <tr style={{ textAlign: 'left', color: 'var(--text2, #94a3b8)', borderBottom: '1px solid var(--border)' }}>
+                <tr style={{ textAlign: 'left', color: 'var(--text2, var(--text2))', borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '6px 8px', fontWeight: 500 }}>#</th>
                   <th style={{ padding: '6px 8px', fontWeight: 500 }}>Période</th>
                   <th style={{ padding: '6px 8px', fontWeight: 500 }}>Versement</th>
@@ -463,7 +463,7 @@ export default function Simulateur(): JSX.Element {
                   <Fragment key={row.index}>
                     {tooLong && idx === SCHEDULE_HEAD && (
                       <tr>
-                        <td colSpan={5} style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--text2, #94a3b8)', fontSize: 12 }}>
+                        <td colSpan={5} style={{ padding: '10px 8px', textAlign: 'center', color: 'var(--text2, var(--text2))', fontSize: 12 }}>
                           ··· {hiddenCount} versements ···
                         </td>
                       </tr>
@@ -474,10 +474,10 @@ export default function Simulateur(): JSX.Element {
                         background: row.index === result.nPayments ? 'rgba(99,102,241,0.08)' : undefined
                       }}
                     >
-                      <td style={{ padding: '6px 8px', color: 'var(--text2, #94a3b8)' }}>{row.index}</td>
+                      <td style={{ padding: '6px 8px', color: 'var(--text2, var(--text2))' }}>{row.index}</td>
                       <td style={{ padding: '6px 8px' }}>{row.period}</td>
                       <td style={{ padding: '6px 8px' }}>{euro(row.paid)}</td>
-                      <td style={{ padding: '6px 8px', color: row.interest > 0 ? '#22c55e' : 'var(--text2, #94a3b8)' }}>
+                      <td style={{ padding: '6px 8px', color: row.interest > 0 ? 'var(--green)' : 'var(--text2, var(--text2))' }}>
                         {row.interest > 0 ? `+${euro(row.interest)}` : '—'}
                       </td>
                       <td style={{ padding: '6px 8px', fontWeight: row.index === result.nPayments ? 700 : undefined }}>

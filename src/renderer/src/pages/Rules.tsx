@@ -139,7 +139,7 @@ export default function Rules(): JSX.Element {
       {!loading && rules.length > 0 && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
           <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
-            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontSize: 13, pointerEvents: 'none' }}>🔍</span>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text3)', fontSize: 13, pointerEvents: 'none' }}>🔍</span>
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -151,8 +151,8 @@ export default function Rules(): JSX.Element {
             value={filterCat}
             onChange={(e) => setFilterCat(e.target.value)}
             style={{
-              padding: '8px 12px', borderRadius: 8, border: '1px solid #2e3147',
-              background: '#1a1d27', color: filterCat ? '#e2e8f0' : '#94a3b8', fontSize: 13, cursor: 'pointer'
+              padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border)',
+              background: 'var(--bg2)', color: filterCat ? 'var(--text)' : 'var(--text2)', fontSize: 13, cursor: 'pointer'
             }}
           >
             <option value="">Toutes les catégories</option>
@@ -179,12 +179,12 @@ export default function Rules(): JSX.Element {
 
       {adding && (
         <div style={{
-          background: '#1a1d27', border: '1px solid #6366f1', borderRadius: 10,
+          background: 'var(--bg2)', border: '1px solid var(--accent)', borderRadius: 10,
           padding: '14px 18px', marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap'
         }}>
-          <span style={{ fontSize: 13, color: '#94a3b8', whiteSpace: 'nowrap' }}>Nouvelle règle :</span>
+          <span style={{ fontSize: 13, color: 'var(--text2)', whiteSpace: 'nowrap' }}>Nouvelle règle :</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 260 }}>
-            <span style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap' }}>Regex :</span>
+            <span style={{ fontSize: 12, color: 'var(--text3)', whiteSpace: 'nowrap' }}>Regex :</span>
             <input
               ref={newPatternRef}
               value={newRule.pattern}
@@ -211,7 +211,7 @@ export default function Rules(): JSX.Element {
       {toast && (
         <div style={{
           position: 'fixed', bottom: 24, right: 24, zIndex: 9999,
-          background: '#22c55e', color: '#fff', borderRadius: 8,
+          background: 'var(--green)', color: '#fff', borderRadius: 8,
           padding: '10px 18px', fontSize: 13, fontWeight: 500,
           boxShadow: '0 4px 16px rgba(0,0,0,0.3)'
         }}>
@@ -236,7 +236,7 @@ export default function Rules(): JSX.Element {
           <table>
             <thead>
               <tr>
-                <th style={{ width: 40, textAlign: 'center', color: '#64748b', fontSize: 11 }}>#</th>
+                <th style={{ width: 40, textAlign: 'center', color: 'var(--text3)', fontSize: 11 }}>#</th>
                 <th>Pattern (Regex)</th>
                 <th>Catégorie</th>
                 <th style={{ width: 100 }} />
@@ -245,7 +245,7 @@ export default function Rules(): JSX.Element {
             <tbody>
               {filteredRules.map(({ rule, idx }) => (
                 <tr key={rule.id}>
-                  <td style={{ textAlign: 'center', color: '#64748b', fontSize: 12 }}>{idx + 1}</td>
+                  <td style={{ textAlign: 'center', color: 'var(--text3)', fontSize: 12 }}>{idx + 1}</td>
                   <td>
                     {editing?.id === rule.id ? (
                       <input
@@ -273,7 +273,7 @@ export default function Rules(): JSX.Element {
                     ) : (
                       <span style={{
                         display: 'inline-block', fontSize: 12, fontWeight: 500,
-                        background: 'rgba(99,102,241,0.12)', color: '#818cf8',
+                        background: 'rgba(99,102,241,0.12)', color: 'var(--accent-light)',
                         borderRadius: 4, padding: '2px 8px'
                       }}>
                         {rule.category}
@@ -297,7 +297,7 @@ export default function Rules(): JSX.Element {
                         </button>
                         <button
                           className="btn btn-secondary"
-                          style={{ padding: '4px 8px', fontSize: 12, color: '#ef4444', borderColor: '#ef4444' }}
+                          style={{ padding: '4px 8px', fontSize: 12, color: 'var(--red)', borderColor: 'var(--red)' }}
                           onClick={() => deleteRule(rule.id)}
                         >
                           Supprimer

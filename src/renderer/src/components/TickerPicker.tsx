@@ -112,18 +112,18 @@ export default function TickerPicker({ type, value, onChange, onSelect, placehol
             width: dropPos.width,
             maxHeight: MAX_DROP_HEIGHT,
             overflowY: 'auto',
-            background: '#1a1d27',
-            border: '1px solid #2e3147',
+            background: 'var(--bg2)',
+            border: '1px solid var(--border)',
             borderRadius: 8,
             zIndex: 9999,
             boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
           }}
         >
           {loading && (
-            <div style={{ padding: '8px 12px', fontSize: 12, color: '#94a3b8' }}>Recherche…</div>
+            <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text2)' }}>Recherche…</div>
           )}
           {!loading && results.length === 0 && (
-            <div style={{ padding: '8px 12px', fontSize: 12, color: '#94a3b8' }}>Aucun résultat</div>
+            <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text2)' }}>Aucun résultat</div>
           )}
           {!loading && results.map((s, i) => (
             <div
@@ -138,15 +138,15 @@ export default function TickerPicker({ type, value, onChange, onSelect, placehol
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 gap: 10,
-                background: i === hilite ? '#6366f1' : 'transparent',
-                color: i === hilite ? '#fff' : '#e2e8f0',
+                background: i === hilite ? 'var(--accent)' : 'transparent',
+                color: i === hilite ? '#fff' : 'var(--text)',
                 fontSize: 13
               }}
             >
               <span style={{ fontWeight: 600, flexShrink: 0 }}>{s.symbol}</span>
               <span
                 style={{
-                  color: i === hilite ? 'rgba(255,255,255,0.75)' : '#94a3b8',
+                  color: i === hilite ? 'rgba(255,255,255,0.75)' : 'var(--text2)',
                   fontSize: 12,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
