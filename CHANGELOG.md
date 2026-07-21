@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.0](https://github.com/jessux/Banquier/compare/v1.26.1...v1.27.0) (2026-07-21)
+
+
+### Nouvelles fonctionnalités
+
+* dashboard insights, comparaison de périodes, thème clair ([ecd9fed](https://github.com/jessux/Banquier/commit/ecd9fed82e4cb4de5c81f0daac5720e5cc3a4e04))
+
 ## [1.26.1](https://github.com/jessux/Banquier/compare/v1.26.0...v1.26.1) (2026-07-09)
 
 
