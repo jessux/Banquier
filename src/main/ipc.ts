@@ -175,6 +175,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('get-recurring-expenses', (_, startDate?: string, endDate?: string) =>
     db.getRecurringExpenses(startDate, endDate)
   )
+  ipcMain.handle('get-top-merchants', (_, startDate?: string, endDate?: string, limit?: number) =>
+    db.getTopMerchants(startDate, endDate, limit)
+  )
+  ipcMain.handle('get-uncategorized', (_, startDate?: string, endDate?: string, limit?: number) =>
+    db.getUncategorized(startDate, endDate, limit)
+  )
+  ipcMain.handle('compare-periods', (_, aStart: string, aEnd: string, bStart: string, bEnd: string) =>
+    db.comparePeriods(aStart, aEnd, bStart, bEnd)
+  )
 
   // --- AI Categorization ---
   ipcMain.handle('categorize-ai', async (event, onlyUncategorized: boolean) => {

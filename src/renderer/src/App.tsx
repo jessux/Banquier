@@ -11,10 +11,11 @@ import Recurring from './pages/Recurring'
 import Patrimoine from './pages/Patrimoine'
 import Budget from './pages/Budget'
 import Simulateur from './pages/Simulateur'
+import Comparaison from './pages/Comparaison'
 import OnboardingModal from './components/OnboardingModal'
 import type { Settings as SettingsType } from '../../../shared/types'
 
-export type Page = 'dashboard' | 'transactions' | 'recurring' | 'patrimoine' | 'budget' | 'simulateur' | 'import' | 'chat' | 'categories' | 'rules' | 'settings'
+export type Page = 'dashboard' | 'transactions' | 'recurring' | 'patrimoine' | 'budget' | 'simulateur' | 'comparaison' | 'import' | 'chat' | 'categories' | 'rules' | 'settings'
 
 interface SyncNotif {
   imported: number
@@ -33,11 +34,13 @@ export default function App(): JSX.Element {
   const [budgetAlert, setBudgetAlert] = useState<BudgetAlert | null>(null)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [loadedSettings, setLoadedSettings] = useState<SettingsType | null>(null)
+  const [pendingUncategorizedFilter, setPendingUncategorizedFilter] = useState(false)
 
   useEffect(() => {
     window.api.getSettings().then((s) => {
       setLoadedSettings(s)
       if (!s.onboardingDone) setShowOnboarding(true)
+      document.documentElement.setAttribute('data-theme', s.theme === 'light' ? 'light' : 'dark')
     })
 
     window.api.powensStartupSync().then((result) => {
@@ -65,14 +68,20 @@ export default function App(): JSX.Element {
     }).catch(() => {})
   }, [])
 
+  const navigate = (p: Page, opts?: { uncategorized?: boolean }): void => {
+    setPendingUncategorizedFilter(!!opts?.uncategorized)
+    setPage(p)
+  }
+
   const renderPage = (): JSX.Element => {
     switch (page) {
-      case 'dashboard': return <Dashboard onNavigate={setPage} />
-      case 'transactions': return <Transactions onImport={() => setPage('import')} />
+      case 'dashboard': return <Dashboard onNavigate={navigate} />
+      case 'transactions': return <Transactions onImport={() => navigate('import')} initialUncategorized={pendingUncategorizedFilter} />
       case 'recurring': return <Recurring />
       case 'patrimoine': return <Patrimoine />
       case 'budget': return <Budget />
       case 'simulateur': return <Simulateur />
+      case 'comparaison': return <Comparaison />
       case 'import': return <Import />
       case 'chat': return <Chat />
       case 'categories': return <Categories />
@@ -90,7 +99,7 @@ export default function App(): JSX.Element {
 
   return (
     <div className="layout">
-      <Sidebar activePage={page} onNavigate={setPage} />
+      <Sidebar activePage={page} onNavigate={navigate} />
       <main className="main-content">{renderPage()}</main>
       {showOnboarding && loadedSettings && (
         <OnboardingModal

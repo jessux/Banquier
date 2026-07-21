@@ -27,7 +27,7 @@ const ASSET_TYPES: { type: AssetType; label: string; icon: string }[] = [
 /** Types pour lesquels on suit un prix de revient via des lots d'achat. */
 const MARKET_TYPES: AssetType[] = ['actions', 'etf', 'crypto']
 
-const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#f97316']
+const COLORS = ['var(--accent)', 'var(--green)', 'var(--yellow)', 'var(--red)', '#8b5cf6', '#06b6d4', '#f97316']
 
 const typeMeta = (type: AssetType): { label: string; icon: string } =>
   ASSET_TYPES.find((t) => t.type === type) ?? { label: type, icon: '📦' }
@@ -273,7 +273,7 @@ export default function Patrimoine(): JSX.Element {
   }
 
   const isEmpty = summary.assets.length === 0
-  const gainColor = (g: number): string => (g >= 0 ? '#22c55e' : '#ef4444')
+  const gainColor = (g: number): string => (g >= 0 ? 'var(--green)' : 'var(--red)')
   const gainLabel = (gain: number, basis: number): string => {
     const pct = basis > 0 ? ` (${gain >= 0 ? '+' : ''}${Math.round((gain / basis) * 100)} %)` : ''
     return `${gain >= 0 ? '+' : ''}${euro2(gain)}${pct}`
@@ -291,7 +291,7 @@ export default function Patrimoine(): JSX.Element {
         </div>
       </div>
       {quoteMsg && (
-        <p className="text-sm" style={{ marginBottom: 12, color: quoteMsg.startsWith('Erreur') ? '#ef4444' : 'var(--text-muted)' }}>
+        <p className="text-sm" style={{ marginBottom: 12, color: quoteMsg.startsWith('Erreur') ? 'var(--red)' : 'var(--text-muted)' }}>
           {quoteMsg}
         </p>
       )}
@@ -385,15 +385,15 @@ export default function Patrimoine(): JSX.Element {
                   <AreaChart data={filteredHistory}>
                     <defs>
                       <linearGradient id="nw" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4} />
-                        <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                        <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.4} />
+                        <stop offset="95%" stopColor="var(--accent)" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2e3147" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(d) => d.slice(5)} />
-                    <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickFormatter={(v) => euro(v)} width={70} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text2)' }} tickFormatter={(d) => d.slice(5)} />
+                    <YAxis tick={{ fontSize: 11, fill: 'var(--text2)' }} tickFormatter={(v) => euro(v)} width={70} />
                     <Tooltip formatter={(v: number) => euro(v)} />
-                    <Area type="monotone" dataKey="value" stroke="#6366f1" fill="url(#nw)" />
+                    <Area type="monotone" dataKey="value" stroke="var(--accent)" fill="url(#nw)" />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -595,7 +595,7 @@ export default function Patrimoine(): JSX.Element {
               <div className="card-title" style={{ marginBottom: 8 }}>Lots d'achat (optionnel, pour suivre le prix de revient)</div>
               <table style={{ width: '100%', fontSize: 13 }}>
                 <thead>
-                  <tr style={{ textAlign: 'left', color: 'var(--text2, #94a3b8)' }}>
+                  <tr style={{ textAlign: 'left', color: 'var(--text2, var(--text2))' }}>
                     <th style={{ fontWeight: 500, padding: '4px 6px' }}>Date</th>
                     <th style={{ fontWeight: 500, padding: '4px 6px' }}>Quantité</th>
                     <th style={{ fontWeight: 500, padding: '4px 6px' }}>Prix unitaire</th>

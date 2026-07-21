@@ -147,8 +147,8 @@ export default function CategoryPicker({
             width: dropPos.width,
             maxHeight: MAX_DROP_HEIGHT,
             overflowY: 'auto',
-            background: '#1a1d27',
-            border: '1px solid #2e3147',
+            background: 'var(--bg2)',
+            border: '1px solid var(--border)',
             borderRadius: 8,
             zIndex: 9999,
             boxShadow: '0 8px 24px rgba(0,0,0,0.4)'
@@ -169,15 +169,15 @@ export default function CategoryPicker({
                 display: 'flex',
                 alignItems: 'center',
                 gap: 8,
-                background: i === hilite ? '#6366f1' : 'transparent',
-                color: i === hilite ? '#fff' : '#e2e8f0',
+                background: i === hilite ? 'var(--accent)' : 'transparent',
+                color: i === hilite ? '#fff' : 'var(--text)',
                 fontSize: item.depth === 1 ? 12 : 13,
                 fontWeight: item.depth === 0 && item.isGroup ? 600 : 400,
                 borderTop: item.depth === 0 && i > 0 ? '1px solid rgba(46,49,71,0.4)' : 'none'
               }}
             >
               {item.depth === 1
-                ? <span style={{ color: i === hilite ? 'rgba(255,255,255,0.4)' : '#2e3147', flexShrink: 0 }}>└─</span>
+                ? <span style={{ color: i === hilite ? 'rgba(255,255,255,0.4)' : 'var(--border)', flexShrink: 0 }}>└─</span>
                 : <span style={{ width: 8, height: 8, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />
               }
               {item.label}

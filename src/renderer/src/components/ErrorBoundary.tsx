@@ -28,8 +28,8 @@ export class ErrorBoundary extends Component<Props, State> {
           L'application a rencontré un problème inattendu. Vous pouvez essayer de recharger la page.
         </p>
         <pre style={{
-          background: '#1a1d27', border: '1px solid #2e3147', borderRadius: 6,
-          padding: 12, fontSize: 12, color: '#94a3b8', overflow: 'auto', marginBottom: 16
+          background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6,
+          padding: 12, fontSize: 12, color: 'var(--text2)', overflow: 'auto', marginBottom: 16
         }}>
           {this.state.error.message}
         </pre>
@@ -37,7 +37,7 @@ export class ErrorBoundary extends Component<Props, State> {
           onClick={() => { this.setState({ error: null }); window.location.reload() }}
           style={{
             padding: '8px 16px', borderRadius: 6, border: 'none', cursor: 'pointer',
-            background: '#6366f1', color: '#fff', fontSize: 13, fontWeight: 600
+            background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 600
           }}
         >
           Recharger l'application
