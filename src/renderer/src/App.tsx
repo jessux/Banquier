@@ -49,12 +49,12 @@ export default function App(): JSX.Element {
         setSyncNotif({ imported: -1, categorized: 0, error: result.error })
         return
       }
-      if (result.imported > 0) {
-        setSyncNotif({ imported: result.imported, categorized: result.categorized })
-        const timer = setTimeout(() => setSyncNotif(null), 8000)
-        return () => clearTimeout(timer)
-      }
-    }).catch(() => { /* sync silencieuse */ })
+      setSyncNotif({ imported: result.imported, categorized: result.categorized })
+      const timer = setTimeout(() => setSyncNotif(null), result.imported > 0 ? 8000 : 3000)
+      return () => clearTimeout(timer)
+    }).catch((err) => {
+      console.error('[powens-startup-sync]', err)
+    })
 
     // Alerte budgets dépassés ce mois-ci
     const today = new Date()
@@ -145,13 +145,19 @@ export default function App(): JSX.Element {
           <div className="sync-toast-icon">🏦</div>
           <div className="sync-toast-body">
             <strong>Synchronisation Powens</strong>
-            <span>
-              {syncNotif.imported} nouvelle{syncNotif.imported > 1 ? 's' : ''} transaction{syncNotif.imported > 1 ? 's' : ''}
-            </span>
-            <span>
-              {syncNotif.categorized} catégorisée{syncNotif.categorized !== 1 ? 's' : ''} auto
-              {uncategorized > 0 && <> · <em>{uncategorized} à classer</em></>}
-            </span>
+            {syncNotif.imported > 0 ? (
+              <>
+                <span>
+                  {syncNotif.imported} nouvelle{syncNotif.imported > 1 ? 's' : ''} transaction{syncNotif.imported > 1 ? 's' : ''}
+                </span>
+                <span>
+                  {syncNotif.categorized} catégorisée{syncNotif.categorized !== 1 ? 's' : ''} auto
+                  {uncategorized > 0 && <> · <em>{uncategorized} à classer</em></>}
+                </span>
+              </>
+            ) : (
+              <span>Aucune nouvelle transaction</span>
+            )}
           </div>
           <button className="sync-toast-close" onClick={() => setSyncNotif(null)}>✕</button>
         </div>
