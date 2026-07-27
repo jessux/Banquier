@@ -11,9 +11,16 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "build:win": "set \"ELECTRON_GET_USE_PROXY=true\" && set \"NODE_TLS_REJECT_UNAUTHORIZED=0\" && npm run build && electron-builder --win",
-    "build:win:dir": "set \"ELECTRON_GET_USE_PROXY=true\" && set \"NODE_TLS_REJECT_UNAUTHORIZED=0\" && npm run build && electron-builder --win --dir"
+    "build:win:dir": "set \"ELECTRON_GET_USE_PROXY=true\" && set \"NODE_TLS_REJECT_UNAUTHORIZED=0\" && npm run build && electron-builder --win --dir",
+    "typecheck:mobile": "tsc -p tsconfig.mobile.json",
+    "build:android": "electron-vite build && npx cap sync android"
   },
   "dependencies": {
+    "@capacitor-community/sqlite": "^8.1.0",
+    "@capacitor/core": "^8.4.2",
+    "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/preferences": "^8.0.1",
+    "@capawesome/capacitor-file-picker": "^8.0.3",
     "@langchain/core": "^1.2.1",
     "@langchain/openai": "^1.5.3",
     "electron-store": "^8.2.0",
@@ -33,6 +40,8 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/cli": "^8.4.2",
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",
     "@electron-toolkit/eslint-config-ts": "^3.0.0",
     "@electron-toolkit/preload": "^3.0.1",

@@ -1,0 +1,67 @@
+name: Build Android APK
+
+# Compile un APK debug de Banquier pour Android. Nécessaire car l'environnement
+# de développement habituel n'a pas le SDK Android installé — c'est cette CI qui
+# produit le seul .apk téléchargeable.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'src/mobile/**'
+      - 'src/renderer/**'
+      - 'src/shared/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'src/mobile/**'
+      - 'src/renderer/**'
+      - 'src/shared/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android-build.yml'
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check mobile module
+        run: npm run typecheck:mobile
+
+      - name: Build web assets + sync Capacitor
+        run: npm run build:android
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banquier-android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
