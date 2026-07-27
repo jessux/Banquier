@@ -623,7 +623,7 @@ export default function SettingsPage(): JSX.Element {
 
     {showSyncModal && (
       <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-        <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: 28, width: 360 }}>
+        <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: 28, width: 360, maxWidth: '92vw' }}>
           <div style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Plage de dates à synchroniser</div>
           {powensFirstDate && (
             <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 16 }}>

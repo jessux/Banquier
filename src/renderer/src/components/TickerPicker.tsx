@@ -42,11 +42,12 @@ export default function TickerPicker({ type, value, onChange, onSelect, placehol
     if (!ref.current) return
     const r = ref.current.getBoundingClientRect()
     const spaceBelow = window.innerHeight - r.bottom
-    const width = Math.max(r.width, 280)
+    const width = Math.min(Math.max(r.width, 280), window.innerWidth - 16)
+    const left = Math.min(r.left, window.innerWidth - width - 8)
     if (spaceBelow < MAX_DROP_HEIGHT && r.top > spaceBelow) {
-      setDropPos({ bottom: window.innerHeight - r.top + 2, left: r.left, width })
+      setDropPos({ bottom: window.innerHeight - r.top + 2, left, width })
     } else {
-      setDropPos({ top: r.bottom + 2, left: r.left, width })
+      setDropPos({ top: r.bottom + 2, left, width })
     }
   }
 

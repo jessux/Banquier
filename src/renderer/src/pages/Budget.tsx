@@ -181,7 +181,7 @@ export default function BudgetPage(): JSX.Element {
               const isEditing = editingId === b.id
               return (
                 <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 500, fontSize: 14, minWidth: 140, flex: '0 0 auto' }}>{b.category}</span>
                     <ProgressBar pct={pct} over={over} />
                     {isEditing ? (
