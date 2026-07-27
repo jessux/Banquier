@@ -1,5 +1,16 @@
 import { all, get } from '../db'
-import type { CategoryStats, CategoryStatsGrouped, DashboardSummary, MonthlyStats, MerchantStats, UncategorizedSummary, Transaction } from '../../shared/types'
+import type {
+  CategoryStats,
+  CategoryStatsGrouped,
+  DashboardSummary,
+  MonthlyStats,
+  MerchantStats,
+  UncategorizedSummary,
+  Transaction,
+  PeriodComparison,
+  PeriodComparisonRow,
+  NetBalance
+} from '../../shared/types'
 
 function buildExclClause(excludeCategories?: string[]): { clause: string; params: unknown[] } {
   if (!excludeCategories?.length) return { clause: '', params: [] }
@@ -313,6 +324,104 @@ export async function getTopMerchants(startDate?: string, endDate?: string, limi
     .map(([merchant, v]) => ({ merchant, total: v.total, count: v.count }))
     .sort((a, b) => b.total - a.total)
     .slice(0, Math.min(limit, 50))
+}
+
+export async function getLargestTransactions(
+  startDate?: string,
+  endDate?: string,
+  limit = 10,
+  direction: 'debit' | 'credit' = 'debit'
+): Promise<Transaction[]> {
+  const conditions = ['is_internal = 0', direction === 'credit' ? 'amount > 0' : 'amount < 0']
+  const params: unknown[] = []
+  if (startDate) {
+    conditions.push('date >= ?')
+    params.push(startDate)
+  }
+  if (endDate) {
+    conditions.push('date <= ?')
+    params.push(endDate)
+  }
+
+  return all<Transaction>(
+    `SELECT * FROM transactions WHERE ${conditions.join(' AND ')}
+     ORDER BY ABS(amount) DESC LIMIT ${Math.min(limit, 50)}`,
+    params
+  )
+}
+
+export async function comparePeriods(
+  aStart: string,
+  aEnd: string,
+  bStart: string,
+  bEnd: string
+): Promise<PeriodComparison> {
+  const a = await getCategoryStats(aStart, aEnd)
+  const b = await getCategoryStats(bStart, bEnd)
+  const byCat = new Map<string, { totalA: number; totalB: number }>()
+
+  for (const s of a) {
+    const e = byCat.get(s.category) ?? { totalA: 0, totalB: 0 }
+    e.totalA += s.total
+    byCat.set(s.category, e)
+  }
+  for (const s of b) {
+    const e = byCat.get(s.category) ?? { totalA: 0, totalB: 0 }
+    e.totalB += s.total
+    byCat.set(s.category, e)
+  }
+
+  const categories: PeriodComparisonRow[] = Array.from(byCat.entries())
+    .map(([category, v]) => ({
+      category,
+      totalA: v.totalA,
+      totalB: v.totalB,
+      diff: v.totalB - v.totalA,
+      pct: v.totalA > 0 ? ((v.totalB - v.totalA) / v.totalA) * 100 : null
+    }))
+    .sort((x, y) => Math.abs(y.diff) - Math.abs(x.diff))
+
+  const sum = (rows: CategoryStats[]): number => rows.reduce((acc, r) => acc + r.total, 0)
+
+  return {
+    periodA: { startDate: aStart, endDate: aEnd, totalDebit: sum(a) },
+    periodB: { startDate: bStart, endDate: bEnd, totalDebit: sum(b) },
+    categories
+  }
+}
+
+export async function getNetBalance(startDate?: string, endDate?: string): Promise<NetBalance> {
+  const conditions = ['t.is_internal = 0']
+  const params: unknown[] = []
+  if (startDate) {
+    conditions.push('t.date >= ?')
+    params.push(startDate)
+  }
+  if (endDate) {
+    conditions.push('t.date <= ?')
+    params.push(endDate)
+  }
+
+  const row = await get<{ total_credit: number; total_debit: number }>(
+    `SELECT
+      COALESCE(SUM(CASE WHEN t.amount > 0 THEN t.amount * COALESCE(a.fx_rate, 1.0) ELSE 0 END), 0) AS total_credit,
+      COALESCE(SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount * COALESCE(a.fx_rate, 1.0)) ELSE 0 END), 0) AS total_debit
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
+    WHERE ${conditions.join(' AND ')}`,
+    params
+  )
+
+  const totalCredit = row?.total_credit ?? 0
+  const totalDebit = row?.total_debit ?? 0
+
+  return {
+    startDate: startDate ?? null,
+    endDate: endDate ?? null,
+    totalCredit,
+    totalDebit,
+    net: totalCredit - totalDebit
+  }
 }
 
 export async function getUncategorized(startDate?: string, endDate?: string, limit = 20): Promise<UncategorizedSummary> {

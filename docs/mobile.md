@@ -7,14 +7,17 @@ Banquier existe désormais en app Android native (via [Capacitor](https://capaci
 L'interface (React/Vite) est la même que sur desktop, mais tourne dans une WebView native au lieu d'Electron. Côté données, l'app Android ne parle plus à un process Electron via IPC : elle embarque sa propre base SQLite locale sur le téléphone (`@capacitor-community/sqlite`) et implémente directement en JS/TS ce que le process principal Electron fait pour desktop. Le code correspondant vit dans `src/mobile/` :
 
 - `src/mobile/db.ts` — connexion SQLite + schéma
-- `src/mobile/api/` — port des fonctions de `src/main/database.ts` utiles à la Phase 1
+- `src/mobile/api/` — port des fonctions de `src/main/database.ts` utiles aux Phases 1-2
 - `src/mobile/parsers/csv.ts` — parsing CSV (port de `src/main/parsers/csv.ts`)
+- `src/mobile/llm.ts` — chat financier + catégorisation IA (port de `src/main/llm.ts`, LangChain/OpenRouter)
 - `src/mobile/window-api.ts` — remplace le `window.api` injecté par le preload Electron
 - `src/mobile/entry.ts` — installé automatiquement par `src/renderer/src/main.tsx` quand l'app ne tourne pas sous Electron
 
-Rien dans `src/main/`, `src/preload/` ou les pages de `src/renderer/` n'a été modifié pour ce port (à l'exception d'une ligne d'amorçage conditionnelle dans `main.tsx`) — la build desktop (`npm run dev`, `npm run build:win`) n'est pas affectée.
+Rien dans `src/main/`, `src/preload/` ou les pages de `src/renderer/` n'a été modifié pour ce port (à l'exception d'une ligne d'amorçage conditionnelle dans `main.tsx`) — la build desktop (`npm run dev`, `npm run build:win`) n'est pas affectée. Seule exception délibérée : `src/mobile/llm.ts` réutilise directement `src/main/memory.ts` (recherche BM25 pour le RAG des mémoires IA), un module pur sans dépendance Electron/Node, importé tel quel plutôt que dupliqué.
 
-## Phase 1 (disponible)
+Les appels réseau (OpenRouter) passent par le plugin `CapacitorHttp` (activé dans `capacitor.config.ts`), qui route `fetch()` nativement côté Android plutôt que par la WebView — ça évite les blocages CORS que rencontrerait un appel direct à une API tierce depuis une WebView.
+
+## Phase 1 — cœur hors-ligne (disponible)
 
 Le cœur 100 % hors-ligne de Banquier, sur ta base SQLite locale au téléphone :
 
@@ -25,9 +28,15 @@ Le cœur 100 % hors-ligne de Banquier, sur ta base SQLite locale au téléphone 
 - Tableau de bord (résumé, tendances, top catégories/marchands, non catégorisé)
 - Paramètres de base (devise, langue, thème, onboarding)
 
+## Phase 2 — IA (disponible)
+
+- Catégorisation automatique par IA (par lots, avec les règles utilisateur prioritaires)
+- Chat financier avec les mêmes 9 outils que sur desktop (transactions, stats par catégorie/mois, comptes, top marchands, plus grosses transactions, comparaison de périodes, non catégorisé, solde net, mémorisation)
+- Mémoire IA (RAG BM25) : les informations durables mentionnées en conversation sont retenues et réinjectées dans les échanges suivants
+- Nécessite une clé API OpenRouter, à renseigner dans Paramètres → Clé API (identique au flux desktop)
+
 ## Pas encore disponible sur mobile (roadmap)
 
-- **Phase 2** — Catégorisation IA + chat financier (OpenRouter)
 - **Phase 3** — Synchronisation bancaire Powens (OAuth mobile via Custom Tabs + deep link)
 - **Phase 4** — Patrimoine, actifs, plans DCA, cours (crypto/bourse)
 - **Phase 5** — Import PDF
