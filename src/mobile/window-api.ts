@@ -11,6 +11,9 @@ import * as preferences from './preferences'
 import { openFileDialog as pickFile } from './file-picker'
 import { runFinancialChat, buildFinancialSystemPrompt, buildChatMessages, categorizeBatch, type ToolExecutors } from './llm'
 import { retrieveRelevantMemories } from '../main/memory'
+import { POWENS_CREDS, initAuth, getTempCode } from './powens'
+import { openConnectWebview } from './powens-webview'
+import { importPowens } from './powens-sync'
 import type { TransactionFilters } from '../shared/types'
 import pkg from '../../package.json'
 
@@ -226,12 +229,58 @@ export function createMobileApi(): Window['api'] {
     exportCsv: notImplemented("L'export CSV"),
     restoreDb: notImplemented('La restauration de sauvegarde'),
 
-    // Powens — pas de synchro bancaire automatique sur mobile pour l'instant
-    powensStatus: async () => ({ configured: false, connected: false }),
-    powensConnect: notImplemented('La connexion Powens'),
-    powensSync: notImplemented('La synchronisation Powens'),
-    powensDisconnect: async () => {},
-    powensStartupSync: async () => null,
+    // Powens (agrégation bancaire)
+    powensStatus: async () => {
+      const settings = await preferences.getSettings()
+      return { configured: true, connected: !!settings.powensToken }
+    },
+    powensConnect: async () => {
+      const creds = POWENS_CREDS
+      const settings = await preferences.getSettings()
+
+      // Token permanent d'abord (création de l'utilisateur Powens au besoin).
+      let token = settings.powensToken
+      if (!token) {
+        token = await initAuth(creds)
+        await preferences.saveSettings({ powensToken: token })
+      }
+
+      // Webview rattaché à notre utilisateur via un code temporaire.
+      const tempCode = await getTempCode(creds, token)
+      const result = await openConnectWebview(creds, tempCode)
+      if (result.error) {
+        throw new Error(result.errorDescription || `Connexion refusée (${result.error}).`)
+      }
+
+      const now = new Date()
+      const minDate = `${now.getFullYear() - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+      return importPowens(creds, token, minDate)
+    },
+    powensSync: async (minDate, maxDate) => {
+      const settings = await preferences.getSettings()
+      const token = settings.powensToken
+      if (!token) throw new Error("Aucune connexion Powens. Connectez d'abord une banque.")
+      return importPowens(POWENS_CREDS, token, minDate, maxDate)
+    },
+    powensDisconnect: async () => {
+      await preferences.saveSettings({ powensToken: undefined })
+    },
+    powensStartupSync: async () => {
+      const settings = await preferences.getSettings()
+      const token = settings.powensToken
+      if (!token) return null
+      try {
+        const latest = await transactionsApi.getLatestPowensTransactionDate()
+        const minDate = latest
+          ? new Date(new Date(latest + 'T00:00:00Z').getTime() - 2 * 86400000).toISOString().slice(0, 10)
+          : undefined
+        return await importPowens(POWENS_CREDS, token, minDate)
+      } catch (err) {
+        console.error('[powens-startup-sync]', err)
+        const msg = err instanceof Error ? err.message : String(err)
+        return { imported: 0, duplicates: 0, accounts: 0, categorized: 0, firstDate: null, error: msg }
+      }
+    },
 
     // Patrimoine
     getAssets: notImplemented('Le suivi du patrimoine'),

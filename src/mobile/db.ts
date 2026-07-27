@@ -101,6 +101,11 @@ const SCHEMA_SQL = `
     category TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS excluded_powens_accounts (
+    powens_id  TEXT PRIMARY KEY,
+    deleted_at TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS chat_threads (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     title      TEXT NOT NULL DEFAULT 'Nouvelle conversation',

@@ -214,3 +214,12 @@ export async function getUncategorizedTransactionIds(accountIds: number[]): Prom
   )
   return rows.map((r) => r.id)
 }
+
+export async function getLatestPowensTransactionDate(): Promise<string | null> {
+  const row = await get<{ d: string | null }>(
+    `SELECT MAX(t.date) AS d FROM transactions t
+     JOIN accounts a ON t.account_id = a.id
+     WHERE a.bank LIKE 'powens:%'`
+  )
+  return row?.d ?? null
+}
