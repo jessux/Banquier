@@ -74,6 +74,10 @@ npm run build:win        # installeur .exe (NSIS)
 npm run build:win:dir    # dossier non packagé (test rapide)
 ```
 
+### Android
+
+Banquier est aussi disponible en app Android (Phase 1 : cœur hors-ligne — comptes, transactions, import CSV, catégories, règles, budgets, dashboard). Voir [`docs/mobile.md`](docs/mobile.md) pour le détail et la roadmap.
+
 ---
 
 ## Sauvegarder et restaurer vos données

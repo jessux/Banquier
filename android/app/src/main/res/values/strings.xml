@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Banquier</string>
+    <string name="title_activity_main">Banquier</string>
+    <string name="package_name">com.banquier.app</string>
+    <string name="custom_url_scheme">com.banquier.app</string>
+</resources>
