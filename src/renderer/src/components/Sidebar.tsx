@@ -30,6 +30,7 @@ interface Props {
 export default function Sidebar({ activePage, onNavigate }: Props): JSX.Element {
   const [state, setState] = useState<ProfilesState | null>(null)
   const [showMenu, setShowMenu] = useState(false)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [renamingId, setRenamingId] = useState<string | null>(null)
@@ -98,7 +99,23 @@ export default function Sidebar({ activePage, onNavigate }: Props): JSX.Element 
   }
 
   return (
-    <nav className="sidebar">
+    <>
+      <header className="mobile-topbar">
+        <button
+          className="hamburger-btn"
+          aria-label="Ouvrir le menu"
+          onClick={() => setMobileOpen(true)}
+        >
+          ☰
+        </button>
+        <div className="sidebar-logo" style={{ padding: 0 }}>
+          <span>B</span>anquier
+        </div>
+      </header>
+
+      {mobileOpen && <div className="sidebar-backdrop" onClick={() => setMobileOpen(false)} />}
+
+      <nav className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="sidebar-logo">
         <span>B</span>anquier
       </div>
@@ -107,7 +124,7 @@ export default function Sidebar({ activePage, onNavigate }: Props): JSX.Element 
           <button
             key={item.id}
             className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-            onClick={() => onNavigate(item.id)}
+            onClick={() => { onNavigate(item.id); setMobileOpen(false) }}
           >
             <span className="nav-icon">{item.icon}</span>
             {item.label}
@@ -225,6 +242,7 @@ export default function Sidebar({ activePage, onNavigate }: Props): JSX.Element 
           </div>
         )}
       </div>
-    </nav>
+      </nav>
+    </>
   )
 }
