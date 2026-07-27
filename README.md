@@ -5,9 +5,10 @@
 ### ⬇️ Télécharger Banquier
 
 - **[➡️ Dernière version (installeur Windows)](https://github.com/jessux/Banquier/releases/latest)** — le plus simple, téléchargez le `.exe` et lancez-le
+- **[📱 Android](https://github.com/jessux/Banquier/releases/latest)** — le fichier `.apk` de la même release (voir [`docs/mobile.md`](docs/mobile.md) pour les fonctionnalités déjà portées)
 - **[📜 Toutes les versions / historique des releases](https://github.com/jessux/Banquier/releases)** — versions précédentes et notes de version
 
-> Astuce : dans la page d'une release, le fichier d'installation se trouve dans la section **« Assets »** (cliquez pour la déplier), c'est le fichier qui se termine par `.exe`.
+> Astuce : dans la page d'une release, les fichiers se trouvent dans la section **« Assets »** (cliquez pour la déplier) : `.exe` pour Windows, `.apk` pour Android.
 
 Banquier est une application de bureau qui importe vos relevés (CSV, PDF), les catégorise automatiquement par IA, et vous donne une vision claire de vos finances. Tout tourne sur votre machine. Vos données ne quittent jamais votre disque.
 

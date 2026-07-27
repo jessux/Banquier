@@ -34,11 +34,23 @@ on:
         description: 'Tag de la pre-release à créer (laisser vide pour un nom auto-généré)'
         required: false
         type: string
+      prerelease:
+        description: 'Publier en pre-release (décocher pour attacher à une release existante)'
+        required: false
+        type: boolean
+        default: true
   workflow_call:
     inputs:
       tag:
         required: false
         type: string
+      prerelease:
+        # true  → crée une pre-release dédiée (tags android-preview-*)
+        # false → attache seulement l'APK à la release existante du tag
+        #         (appelé par release-please.yml, comme les installeurs desktop)
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -78,23 +90,32 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
 
+      # `app-debug.apk` ne dit rien à quelqu'un qui télécharge depuis une release
+      # — on le renomme d'après le tag (ou le n° de build) avant publication.
+      - name: Name the APK for distribution
+        id: apk
+        run: |
+          NAME="banquier-${{ inputs.tag || format('preview-{0}', github.run_number) }}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$NAME"
+          echo "path=$NAME" >> "$GITHUB_OUTPUT"
+
       - uses: actions/upload-artifact@v4
         with:
           name: banquier-android-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.apk.outputs.path }}
 
-      # Déclenché manuellement (workflow_dispatch) ou via android-release.yml
-      # (workflow_call, sur un push de tag) : publie l'APK sur une pre-release
-      # GitHub, pour un lien de téléchargement stable et direct (contrairement
-      # à l'artefact CI, qui expire et nécessite d'être connecté).
+      # Cas 1 — pre-release dédiée : déclenché manuellement (workflow_dispatch)
+      # ou par un tag android-preview-* via android-release.yml. Crée la release
+      # de toutes pièces, pour un lien de téléchargement stable et direct
+      # (contrairement à l'artefact CI, qui expire et exige d'être connecté).
       - name: Publish pre-release with APK
-        if: github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call'
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.prerelease
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || format('android-preview-{0}', github.run_number) }}
           name: Banquier Android (pre-release) — build ${{ github.run_number }}
           prerelease: true
-          files: android/app/build/outputs/apk/debug/app-debug.apk
+          files: ${{ steps.apk.outputs.path }}
           body: |
             APK de test (build debug, non signé) — généré automatiquement depuis `${{ github.sha }}`.
 
@@ -106,3 +127,13 @@ jobs:
             l'installation depuis une source inconnue.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Cas 2 — release officielle : appelé par release-please.yml, exactement
+      # comme build-installers.yml pour les binaires desktop. On se contente
+      # d'attacher l'APK à la release déjà créée : `gh release upload` ne touche
+      # ni au titre, ni aux notes de version, ni au flag pre-release.
+      - name: Attach APK to the release
+        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && !inputs.prerelease && inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ inputs.tag }}" "${{ steps.apk.outputs.path }}" --clobber
