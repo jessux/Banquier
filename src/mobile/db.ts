@@ -100,6 +100,36 @@ const SCHEMA_SQL = `
     pattern  TEXT NOT NULL UNIQUE,
     category TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS excluded_powens_accounts (
+    powens_id  TEXT PRIMARY KEY,
+    deleted_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS chat_threads (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    title      TEXT NOT NULL DEFAULT 'Nouvelle conversation',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    thread_id  INTEGER NOT NULL REFERENCES chat_threads(id) ON DELETE CASCADE,
+    role       TEXT NOT NULL,
+    content    TEXT NOT NULL,
+    tool_calls TEXT,
+    reasoning  TEXT,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_chat_messages_thread ON chat_messages(thread_id);
+
+  CREATE TABLE IF NOT EXISTS chat_memories (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    content    TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
 `
 
 const DEFAULT_CATEGORY_TREE: { name: string; children?: string[] }[] = [

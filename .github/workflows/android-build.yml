@@ -9,6 +9,7 @@ on:
     paths:
       - 'android/**'
       - 'src/mobile/**'
+      - 'src/main/memory.ts'
       - 'src/renderer/**'
       - 'src/shared/**'
       - 'capacitor.config.ts'
@@ -20,6 +21,7 @@ on:
     paths:
       - 'android/**'
       - 'src/mobile/**'
+      - 'src/main/memory.ts'
       - 'src/renderer/**'
       - 'src/shared/**'
       - 'capacitor.config.ts'
