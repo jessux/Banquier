@@ -56,7 +56,15 @@ Les fonctionnalités non encore portées affichent un message clair ("n'est pas 
 
 ## Builder l'APK
 
-Le SDK Android n'est pas requis en local pour toucher au code TypeScript (`npm run typecheck:mobile`, `npm run build:android` scaffoldent/synchronisent le projet Capacitor sans compiler la partie native). Compiler un `.apk` réel nécessite un SDK Android complet — c'est ce que fait `.github/workflows/android-build.yml` à chaque push sur `main` touchant `android/`, `src/mobile/`, etc. : il produit un artefact `banquier-android-debug` téléchargeable depuis l'onglet Actions du run correspondant.
+Le SDK Android n'est pas requis en local pour toucher au code TypeScript (`npm run typecheck:mobile`, `npm run build:android` scaffoldent/synchronisent le projet Capacitor sans compiler la partie native). Compiler un `.apk` réel nécessite un SDK Android complet — c'est `.github/workflows/android-build.yml` qui s'en charge, selon trois déclencheurs :
+
+| Quand | Ce que ça produit |
+|---|---|
+| Push/PR sur `main` touchant `android/`, `src/mobile/`, etc. | Un artefact CI `banquier-android-debug` (onglet Actions du run — expire, et exige d'être connecté à GitHub) |
+| Release officielle créée par release-please | L'APK est **attaché à la release**, à côté des installeurs Windows/Mac/Linux (même mécanique que `build-installers.yml`) |
+| Tag `android-preview-*` poussé, ou lancement manuel du workflow | Une **pre-release** dédiée avec l'APK, pour un build de test hors cycle de release |
+
+L'APK est renommé `banquier-<tag>.apk` avant publication.
 
 Pour builder toi-même avec Android Studio :
 
