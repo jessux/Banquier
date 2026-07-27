@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.1](https://github.com/jessux/Banquier/compare/v1.27.0...v1.27.1) (2026-07-27)
+
+
+### Corrections de bugs
+
+* afficher un retour visuel pour la sync Powens automatique au démarrage ([5f3fee7](https://github.com/jessux/Banquier/commit/5f3fee786c013c8e0b0f6c2f9af5f07687750ca3))
+
 ## [1.27.0](https://github.com/jessux/Banquier/compare/v1.26.1...v1.27.0) (2026-07-21)
 
 
