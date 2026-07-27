@@ -1,0 +1,22 @@
+name: Publish Android Pre-release
+
+# Déclenché par un tag `android-preview-*` poussé sur le dépôt (ex: git push
+# origin android-preview-1) — appelle android-build.yml pour compiler l'APK et
+# le publier en pre-release GitHub. Pas de filtre `paths` ici volontairement :
+# un tag est un déclenchement explicite, il doit toujours lancer le build.
+on:
+  push:
+    tags:
+      - 'android-preview-*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build & Publish
+    permissions:
+      contents: write
+    uses: ./.github/workflows/android-build.yml
+    with:
+      tag: ${{ github.ref_name }}
