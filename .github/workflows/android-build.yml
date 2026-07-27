@@ -28,12 +28,22 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/android-build.yml'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag de la pre-release à créer (laisser vide pour un nom auto-généré)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
 
 jobs:
   build:
     name: Build debug APK
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: 1
     steps:
@@ -67,3 +77,26 @@ jobs:
         with:
           name: banquier-android-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      # Déclenché manuellement (workflow_dispatch) : publie l'APK sur une
+      # pre-release GitHub, pour un lien de téléchargement stable et direct
+      # (contrairement à l'artefact CI, qui expire et nécessite d'être connecté).
+      - name: Publish pre-release with APK
+        if: github.event_name == 'workflow_dispatch'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || format('android-preview-{0}', github.run_number) }}
+          name: Banquier Android (pre-release) — build ${{ github.run_number }}
+          prerelease: true
+          files: android/app/build/outputs/apk/debug/app-debug.apk
+          body: |
+            APK de test (build debug, non signé) — généré automatiquement depuis `${{ github.sha }}`.
+
+            Couvre les Phases 1-3 du portage Android : cœur hors-ligne (comptes, transactions,
+            import CSV, catégories, règles, budgets, dashboard), IA (catégorisation + chat),
+            synchronisation bancaire Powens (non testée en conditions réelles — voir docs/mobile.md).
+
+            ⚠️ Build de test, non signé pour la production. Android peut demander d'autoriser
+            l'installation depuis une source inconnue.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
