@@ -11,8 +11,11 @@ interface WebviewResult {
 }
 
 /** Délai laissé au deep link pour arriver après la fermeture du Custom Tab,
- *  avant de considérer que l'utilisateur a vraiment annulé. */
-const DEEPLINK_GRACE_MS = 1500
+ *  avant de considérer que l'utilisateur a vraiment annulé. 1500ms s'est avéré
+ *  trop juste sur device réel (Custom Tab + retour d'authentification forte
+ *  bancaire type App2App), provoquant un faux « Connexion annulée. » alors
+ *  que la connexion avait réussi. */
+const DEEPLINK_GRACE_MS = 4000
 
 /**
  * Équivalent mobile de src/main/powens.ts's openConnectWebview : au lieu d'une
