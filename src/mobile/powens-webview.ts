@@ -10,6 +10,10 @@ interface WebviewResult {
   errorDescription?: string
 }
 
+/** Délai laissé au deep link pour arriver après la fermeture du Custom Tab,
+ *  avant de considérer que l'utilisateur a vraiment annulé. */
+const DEEPLINK_GRACE_MS = 1500
+
 /**
  * Équivalent mobile de src/main/powens.ts's openConnectWebview : au lieu d'une
  * BrowserWindow Electron interceptant la navigation, on ouvre le webview de
@@ -17,12 +21,12 @@ interface WebviewResult {
  * redirection via un deep link (@capacitor/app's appUrlOpen), grâce au schéma
  * custom `banquier://powens-callback` déclaré dans AndroidManifest.xml.
  *
- * Non testé sur un appareil réel — Powens n'exige pas d'enregistrement préalable
- * du redirect_uri pour ce widget (le desktop utilise déjà un `http://localhost`
- * qui n'écoute jamais), donc un schéma custom devrait être accepté de la même
- * façon, mais ça reste à confirmer en conditions réelles.
+ * ⚠️ Ce `redirect_uri` doit être déclaré dans la console d'administration Powens
+ * (liste blanche), sinon le webview répond « invalid 'redirect_uri' ». Le
+ * `http://localhost:8645` du desktop y est déjà, le schéma custom doit être
+ * ajouté à côté.
  */
-export function openConnectWebview(creds: PowensCreds, code: string | null): Promise<WebviewResult> {
+export async function openConnectWebview(creds: PowensCreds, code: string | null): Promise<WebviewResult> {
   const params = new URLSearchParams({
     domain: domainParam(creds.domain),
     client_id: creds.clientId,
@@ -32,52 +36,64 @@ export function openConnectWebview(creds: PowensCreds, code: string | null): Pro
   if (code) params.set('code', code)
   const url = `https://webview.powens.com/connect?${params.toString()}`
 
-  return new Promise((resolve, reject) => {
-    let settled = false
-    let urlListener: PluginListenerHandle | undefined
-    let closeListener: PluginListenerHandle | undefined
+  let urlListener: PluginListenerHandle | undefined
+  let closeListener: PluginListenerHandle | undefined
 
-    const cleanup = (): void => {
-      void urlListener?.remove()
-      void closeListener?.remove()
-    }
+  try {
+    return await new Promise<WebviewResult>((resolve, reject) => {
+      let settled = false
+      let cancelTimer: ReturnType<typeof setTimeout> | undefined
 
-    const finish = (fn: () => void): void => {
-      if (settled) return
-      settled = true
-      fn()
-      cleanup()
-      Browser.close().catch(() => {})
-    }
-
-    const check = (navUrl: string): void => {
-      if (!navUrl.startsWith(creds.redirectUri)) return
-      try {
-        const u = new URL(navUrl)
-        const q = u.searchParams
-        finish(() =>
-          resolve({
-            connectionId: q.get('connection_id') ?? undefined,
-            code: q.get('code') ?? undefined,
-            error: q.get('error') ?? undefined,
-            errorDescription: q.get('error_description') ?? undefined
-          })
-        )
-      } catch {
-        finish(() => resolve({}))
+      const finish = (fn: () => void): void => {
+        if (settled) return
+        settled = true
+        if (cancelTimer) clearTimeout(cancelTimer)
+        fn()
+        Browser.close().catch(() => {})
       }
-    }
 
-    App.addListener('appUrlOpen', (event) => check(event.url)).then((handle) => {
-      urlListener = handle
+      const check = (navUrl: string): void => {
+        if (!navUrl.startsWith(creds.redirectUri)) return
+        try {
+          const u = new URL(navUrl)
+          const q = u.searchParams
+          finish(() =>
+            resolve({
+              connectionId: q.get('connection_id') ?? undefined,
+              code: q.get('code') ?? undefined,
+              error: q.get('error') ?? undefined,
+              errorDescription: q.get('error_description') ?? undefined
+            })
+          )
+        } catch {
+          finish(() => resolve({}))
+        }
+      }
+
+      // Les listeners doivent être posés AVANT d'ouvrir le Custom Tab, sinon un
+      // retour très rapide peut arriver avant qu'ils ne soient attachés.
+      Promise.all([
+        App.addListener('appUrlOpen', (event) => check(event.url)).then((h) => {
+          urlListener = h
+        }),
+        Browser.addListener('browserFinished', () => {
+          if (settled) return
+          // Le deep link ramène l'app au premier plan, ce qui ferme aussi le
+          // Custom Tab : `browserFinished` peut donc précéder `appUrlOpen`. On
+          // laisse un délai de grâce avant de conclure à une vraie annulation,
+          // sinon une connexion réussie serait rejetée.
+          cancelTimer = setTimeout(() => {
+            finish(() => reject(new Error('Connexion annulée.')))
+          }, DEEPLINK_GRACE_MS)
+        }).then((h) => {
+          closeListener = h
+        })
+      ])
+        .then(() => Browser.open({ url }))
+        .catch((e) => finish(() => reject(e instanceof Error ? e : new Error(String(e)))))
     })
-
-    Browser.addListener('browserFinished', () => {
-      finish(() => reject(new Error('Connexion annulée.')))
-    }).then((handle) => {
-      closeListener = handle
-    })
-
-    Browser.open({ url })
-  })
+  } finally {
+    void urlListener?.remove()
+    void closeListener?.remove()
+  }
 }

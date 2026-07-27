@@ -43,7 +43,23 @@ Le cœur 100 % hors-ligne de Banquier, sur ta base SQLite locale au téléphone 
 - Synchronisation initiale et incrémentale, mapping des comptes, dédoublonnage, ré-application des règles — identique au flux desktop
 - Mêmes identifiants Powens sandbox que le desktop (même tenant `banquier-sandbox`)
 
-⚠️ **Non vérifié sur un appareil réel** : cet environnement de développement n'a pas de SDK Android ni d'accès à un vrai flux bancaire Powens pour tester la connexion de bout en bout. Powens n'exige pas d'enregistrement préalable strict du `redirect_uri` pour ce widget (le desktop utilise déjà un `http://localhost` qui n'écoute jamais), donc un schéma custom devrait fonctionner de la même façon — mais ça reste à confirmer sur un téléphone.
+### ⚠️ Prérequis : déclarer le redirect_uri dans la console Powens
+
+Powens valide le `redirect_uri` contre une liste blanche définie dans la **console d'administration**. Sans ça, le webview refuse la connexion avec :
+
+> `invalid 'redirect_uri', the parameter must match the constraints defined in the administration console`
+
+Il faut donc ajouter, à côté du `http://localhost:8645` déjà utilisé par le desktop :
+
+```
+banquier://powens-callback
+```
+
+Cette valeur doit rester synchronisée avec `MOBILE_REDIRECT_URI` (`src/mobile/powens.ts`) et l'`intent-filter` de `android/app/src/main/AndroidManifest.xml`.
+
+### État de la vérification
+
+Le flux n'a pas encore été validé de bout en bout sur un appareil : cet environnement de développement n'a ni SDK Android ni accès à un vrai parcours bancaire. Le code gère explicitement le cas où `browserFinished` (fermeture du Custom Tab) précède `appUrlOpen` (arrivée du deep link) — sans ce délai de grâce, une connexion réussie serait rejetée en « Connexion annulée ».
 
 ## Pas encore disponible sur mobile (roadmap)
 
