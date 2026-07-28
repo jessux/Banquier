@@ -15,7 +15,7 @@ interface WebviewResult {
  *  trop juste sur device réel (Custom Tab + retour d'authentification forte
  *  bancaire type App2App), provoquant un faux « Connexion annulée. » alors
  *  que la connexion avait réussi. */
-const DEEPLINK_GRACE_MS = 4000
+const DEEPLINK_GRACE_MS = 8000
 
 /**
  * Équivalent mobile de src/main/powens.ts's openConnectWebview : au lieu d'une
