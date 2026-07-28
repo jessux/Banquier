@@ -28,8 +28,25 @@ function _r(bytes: number[]): string {
 }
 
 /** Redirection custom-scheme interceptée par l'app via un deep link (voir
- *  src/mobile/powens-webview.ts et l'intent-filter dans AndroidManifest.xml). */
-const MOBILE_REDIRECT_URI = 'banquier://powens-callback'
+ *  src/mobile/powens-webview.ts et l'intent-filter dans AndroidManifest.xml).
+ *
+ *  ⚠️ TEMPORAIRE — DIAGNOSTIC UNIQUEMENT : basculé sur le `redirect_uri` du
+ *  desktop (`http://localhost:8645`), déjà whitelisté côté console Powens,
+ *  pour vérifier si l'échec vient de la whitelist (le custom scheme n'y
+ *  serait pas déclaré) ou d'autre chose. Sur mobile, le Custom Tab ne peut
+ *  pas intercepter une navigation http:// classique (contrairement à la
+ *  BrowserWindow Electron) : la connexion n'ira donc PAS à son terme avec
+ *  cette valeur — elle échouera forcément en fin de parcours avec une page
+ *  "impossible d'accéder à ce site" une fois arrivé sur localhost:8645. Ce
+ *  qui compte pour le diagnostic, c'est ce qui s'affiche AVANT ça :
+ *  - si Powens refuse tout de suite avec "invalid redirect_uri" → le
+ *    problème n'est pas spécifique au custom scheme, la whitelist elle-même
+ *    est mal configurée pour ce client.
+ *  - si le parcours (sélection banque, identifiants) se déroule normalement
+ *    et échoue seulement à la toute fin → confirme que seul le custom
+ *    scheme `banquier://powens-callback` manque à la whitelist.
+ *  À REVERT vers `banquier://powens-callback` une fois le diagnostic fait. */
+const MOBILE_REDIRECT_URI = 'http://localhost:8645'
 
 export const POWENS_CREDS: PowensCreds = {
   domain: 'banquier-sandbox',
