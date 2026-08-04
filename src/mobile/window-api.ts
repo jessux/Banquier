@@ -287,28 +287,28 @@ export function createMobileApi(): Window['api'] {
       }
 
       if (result.dismissed) {
-        // Custom Tab fermé sans redirection : on demande à Powens plutôt que de
-        // conclure à une annulation. Les parcours App2App renvoient souvent
-        // l'utilisateur au navigateur sans déclencher le deep link, et l'ancien
-        // « Connexion annulée. » masquait alors une connexion réussie.
+        // Custom Tab fermé sans redirection : on vérifie auprès de Powens plutôt
+        // que de conclure directement à une annulation. Les parcours App2App
+        // renvoient souvent l'utilisateur au navigateur sans déclencher le deep
+        // link, ET Powens peut mettre nettement plus que quelques secondes à
+        // enregistrer la connexion côté serveur après la fin de l'authentification
+        // bancaire — un délai d'attente limité ici concluait à tort à une
+        // « Connexion annulée » alors que la banque venait tout juste d'être
+        // rattachée. Symptôme observé : le compte n'apparaissait qu'après avoir
+        // quitté et rouvert l'app, ce qui relance powensStartupSync — lequel
+        // fonctionne car il attend, lui, sans jamais transformer l'attente en
+        // erreur (voir waitForConnections dans powens-sync.ts).
         //
-        // Un seul essai immédiatement après la fermeture du Custom Tab ne suffit
-        // pas : Powens met parfois plusieurs secondes à enregistrer la connexion
-        // côté serveur après la fin de l'authentification bancaire. Un essai
-        // unique concluait alors à une fausse « Connexion annulée » — le compte
-        // n'apparaissant qu'à une synchro ultérieure, une fois Powens à jour. On
-        // réessaie donc pendant une fenêtre de temps avant de vraiment abandonner.
+        // On attend donc ici aussi, mais SANS jamais rejeter sur un simple délai
+        // écoulé : que la connexion soit détectée ou pas d'ici là, on laisse
+        // toujours importPowens() trancher — il sait déjà attendre patiemment
+        // (jusqu'à 4 min) et renvoyer un avertissement clair plutôt qu'une
+        // erreur bloquante si vraiment rien n'est arrivé.
         emitProgress('waiting', 'Vérification de la connexion auprès de votre banque…')
-        let added = false
-        for (let i = 0; i < 8 && !added; i++) {
+        for (let i = 0; i < 20; i++) {
           if (i > 0) await new Promise((r) => setTimeout(r, 3000))
           const after = await safeConnectionIds(creds, token)
-          added = [...after].some((id) => !before.has(id))
-        }
-        if (!added) {
-          await preferences.saveSettings({ powensConnectPending: false })
-          emitProgress('idle', '')
-          throw new Error('Connexion annulée.')
+          if ([...after].some((id) => !before.has(id))) break
         }
       }
 
