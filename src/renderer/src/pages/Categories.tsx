@@ -25,8 +25,8 @@ function AddRow({ under, addingUnder, inputRef, newName, setNewName, setError, e
         style={{ width: 220 }}
         onKeyDown={(e) => { if (e.key === 'Enter') confirmAdd(); if (e.key === 'Escape') cancelAdd() }}
       />
-      <button className="btn btn-primary" style={{ padding: '4px 12px' }} onClick={confirmAdd}>Ajouter</button>
-      <button className="btn btn-secondary" style={{ padding: '4px 10px' }} onClick={cancelAdd}>✕</button>
+      <button className="btn btn-primary cat-compact-btn" onClick={confirmAdd}>Ajouter</button>
+      <button className="btn btn-secondary cat-compact-btn" onClick={cancelAdd}>✕</button>
       {error && <span style={{ color: 'var(--red)', fontSize: 12 }}>{error}</span>}
     </div>
   )
@@ -67,8 +67,8 @@ function EditInline({ id, currentName, siblings, onDone }: EditInlineProps) {
         style={{ width: 200 }}
         onKeyDown={(e) => { if (e.key === 'Enter') confirm(); if (e.key === 'Escape') onDone() }}
       />
-      <button className="btn btn-primary" style={{ padding: '3px 10px', fontSize: 12 }} onClick={confirm}>OK</button>
-      <button className="btn btn-secondary" style={{ padding: '3px 8px', fontSize: 12 }} onClick={onDone}>✕</button>
+      <button className="btn btn-primary cat-compact-btn" onClick={confirm}>OK</button>
+      <button className="btn btn-secondary cat-compact-btn" onClick={onDone}>✕</button>
       {error && <span style={{ color: 'var(--red)', fontSize: 12 }}>{error}</span>}
     </div>
   )
@@ -132,7 +132,7 @@ export default function Categories(): JSX.Element {
 
   const editBtn = (id: number) => (
     <button
-      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14, padding: '0 4px', lineHeight: 1 }}
+      className="cat-icon-btn"
       onClick={() => { setAddingUnder(null); setEditingId(id) }}
       title="Renommer"
     >
@@ -180,15 +180,14 @@ export default function Categories(): JSX.Element {
                 {editingId !== cat.id && <>
                   {editBtn(cat.id)}
                   <button
-                    className="btn btn-secondary"
-                    style={{ padding: '3px 10px', fontSize: 12 }}
+                    className="btn btn-secondary cat-compact-btn"
                     onClick={() => startAdd(cat.id)}
                     title="Ajouter une sous-catégorie"
                   >
                     + Sous-catégorie
                   </button>
                   <button
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 16, padding: '0 4px', lineHeight: 1 }}
+                    className="cat-icon-btn"
                     onClick={() => deleteCategory(cat.id, cat.name, children.length > 0)}
                     title="Supprimer"
                   >
@@ -204,8 +203,8 @@ export default function Categories(): JSX.Element {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 10,
                     padding: '9px 16px 9px 32px',
-                    borderBottom: idx < children.length - 1 || addingUnder === cat.id ? '1px solid #1e2130' : 'none',
-                    background: '#171a24'
+                    borderBottom: idx < children.length - 1 || addingUnder === cat.id ? '1px solid var(--border)' : 'none',
+                    background: 'var(--bg)'
                   }}
                 >
                   <span style={{ color: 'var(--text3)', marginRight: 4, fontSize: 12 }}>└─</span>
@@ -217,7 +216,7 @@ export default function Categories(): JSX.Element {
                   {editingId !== sub.id && <>
                     {editBtn(sub.id)}
                     <button
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text3)', fontSize: 14, padding: '0 4px', lineHeight: 1 }}
+                      className="cat-icon-btn"
                       onClick={() => deleteCategory(sub.id, sub.name, false)}
                       title="Supprimer"
                     >
@@ -229,7 +228,7 @@ export default function Categories(): JSX.Element {
 
               {/* Inline add subcategory form */}
               {addingUnder === cat.id && (
-                <div style={{ padding: '10px 16px 10px 32px', background: '#171a24' }}>
+                <div style={{ padding: '10px 16px 10px 32px', background: 'var(--bg)' }}>
                   <AddRow under={cat.id} {...addRowProps} />
                 </div>
               )}

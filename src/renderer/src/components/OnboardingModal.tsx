@@ -286,7 +286,7 @@ function StepAI({
             { n: '3', text: 'Cliquez "Create key" et copiez la clé générée' },
           ].map(({ n, text }) => (
             <div key={n} style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: '#1e2130', border: '1px solid var(--border)', color: 'var(--accent)', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{n}</div>
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--accent)', fontWeight: 700, fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{n}</div>
               <span style={{ fontSize: 13, color: 'var(--text2)' }}>{text}</span>
             </div>
           ))}
@@ -370,7 +370,7 @@ export default function OnboardingModal({ settings, onDone, onNavigate }: Props)
       display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000,
     }}>
       <div style={{
-        background: '#13151f', border: '1px solid var(--border)', borderRadius: 18,
+        background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 18,
         width: 540, maxWidth: '92vw', maxHeight: '90vh', overflowY: 'auto',
         padding: '28px 32px', boxShadow: '0 32px 80px rgba(0,0,0,0.6)',
       }}>
@@ -398,7 +398,7 @@ export default function OnboardingModal({ settings, onDone, onNavigate }: Props)
               key={i}
               style={{
                 flex: 1, height: 4, borderRadius: 3,
-                background: i < step ? '#4f46e5' : i === step ? 'var(--accent-light)' : '#1e2130',
+                background: i < step ? 'var(--accent-hover)' : i === step ? 'var(--accent-light)' : 'var(--bg3)',
                 transition: 'background 0.3s',
               }}
             />
@@ -411,7 +411,7 @@ export default function OnboardingModal({ settings, onDone, onNavigate }: Props)
         </div>
 
         {/* Navigation */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 28, paddingTop: 20, borderTop: '1px solid #1e2130' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 28, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
           <button
             className="btn btn-secondary"
             onClick={() => setStep((s) => s - 1)}

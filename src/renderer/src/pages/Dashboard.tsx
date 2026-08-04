@@ -159,7 +159,7 @@ function CategoryModal({
                   labelStyle={{ color: 'var(--text2)' }}
                   itemStyle={{ color: 'var(--text)' }}
                   formatter={(v: number) => [v.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }), 'Total']}
-                  cursor={{ fill: '#2e314733' }}
+                  cursor={{ fill: 'rgba(148,163,184,0.15)' }}
                 />
                 <Bar dataKey="total" radius={[3, 3, 0, 0]}>
                   {chartData.map((d, i) => (
@@ -377,7 +377,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page, op
       disabled={dir === 1 && monthOffset >= 0}
       style={{
         width: 28, height: 28, borderRadius: '50%', border: 'none', cursor: dir === 1 && monthOffset >= 0 ? 'default' : 'pointer',
-        background: 'var(--bg3)', color: dir === 1 && monthOffset >= 0 ? '#3e4259' : 'var(--text2)',
+        background: 'var(--bg3)', color: dir === 1 && monthOffset >= 0 ? 'var(--text4)' : 'var(--text2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0,
         transition: 'all 0.15s'
       }}
@@ -815,7 +815,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page, op
                             onClick={() => toggleCat(c.category)}
                             onMouseEnter={() => setHoveredCat(`net/${c.category}`)}
                             onMouseLeave={() => setHoveredCat(null)}
-                            style={{ marginBottom: 4, cursor: 'pointer', borderRadius: 4, padding: '2px 4px', marginLeft: -4, background: isHovered ? '#2e314733' : 'transparent', transition: 'background 0.15s' }}
+                            style={{ marginBottom: 4, cursor: 'pointer', borderRadius: 4, padding: '2px 4px', marginLeft: -4, background: isHovered ? 'var(--bg3)' : 'transparent', transition: 'background 0.15s' }}
                             title="Cliquer pour exclure du calcul"
                           >
                             <span style={{ fontSize: 13, fontWeight: 600 }}>{c.category}</span>
@@ -855,7 +855,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page, op
                         onClick={() => toggleCat(c.category)}
                         onMouseEnter={() => setHoveredCat(`cat/${c.category}`)}
                         onMouseLeave={() => setHoveredCat(null)}
-                        style={{ marginBottom: 4, cursor: 'pointer', borderRadius: 4, padding: '2px 4px', marginLeft: -4, background: isHovered ? '#2e314733' : 'transparent', transition: 'background 0.15s' }}
+                        style={{ marginBottom: 4, cursor: 'pointer', borderRadius: 4, padding: '2px 4px', marginLeft: -4, background: isHovered ? 'var(--bg3)' : 'transparent', transition: 'background 0.15s' }}
                         title="Cliquer pour exclure du calcul"
                       >
                         <span style={{ fontSize: 13, fontWeight: 600 }}>{c.category}</span>
@@ -878,7 +878,7 @@ export default function Dashboard({ onNavigate }: { onNavigate?: (page: Page, op
                                 onClick={() => toggleCat(`${c.category} > ${s.category}`)}
                                 onMouseEnter={() => setHoveredCat(`cat/${c.category}/${s.category}`)}
                                 onMouseLeave={() => setHoveredCat(null)}
-                                style={{ fontSize: 12, color: 'var(--text2)', cursor: 'pointer', borderRadius: 3, padding: '1px 4px', marginLeft: -4, background: isSubHovered ? '#2e314744' : 'transparent', transition: 'background 0.15s' }}
+                                style={{ fontSize: 12, color: 'var(--text2)', cursor: 'pointer', borderRadius: 3, padding: '1px 4px', marginLeft: -4, background: isSubHovered ? 'var(--bg3)' : 'transparent', transition: 'background 0.15s' }}
                                 title="Cliquer pour exclure du calcul"
                               >
                                 <span>{s.category}</span>

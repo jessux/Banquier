@@ -133,6 +133,19 @@ Un keystore de debug dédié est maintenant versionné dans le dépôt (`android
 
 `src/mobile/updater.ts` interroge l'API GitHub Releases (`/repos/jessux/Banquier/releases/latest`) et compare au numéro de version embarqué. Contrairement au desktop (`electron-updater`, téléchargement + installation automatique en arrière-plan), il n'y a pas d'installation silencieuse sur Android : ça demanderait la permission `REQUEST_INSTALL_PACKAGES` et un flux de téléchargement/installation natif dédié, jamais implémenté ni testé sur un appareil réel. Le bouton « Vérifier les mises à jour » des Paramètres ouvre donc le lien de téléchargement direct de l'APK dans le navigateur ; l'utilisateur l'installe ensuite manuellement, comme n'importe quelle APK téléchargée.
 
+## Icône de l'app
+
+L'icône Android était encore le placeholder par défaut du template Capacitor (fond gris quadrillé + mascotte Android). Elle a été remplacée par le logo « B » (lettre blanche en gras sur fond indigo `#6366F1`, la couleur `--accent` de l'app), généré par script (`PIL`/Pillow) à toutes les densités mipmap, en respectant la zone de sécurité de l'icône adaptative Android (cercle centré ~55 % du canevas, pour ne rien perdre selon la forme de masque du lanceur). Les vecteurs `drawable/ic_launcher_background.xml` et `drawable-v24/ic_launcher_foreground.xml` du template — orphelins, non référencés par l'icône adaptative (`mipmap-anydpi-v26/ic_launcher.xml` pointe vers `@color/ic_launcher_background` et `@mipmap/ic_launcher_foreground`) — ont été supprimés. Le splash screen (`drawable*/splash.png`) reste le placeholder Capacitor par défaut, non traité dans cette passe.
+
+## Pass mobile UI (thème + adaptation tactile)
+
+Une revue systématique de toutes les pages a corrigé deux catégories de problèmes :
+
+- **Couleurs codées en dur cassant le thème clair.** Plusieurs composants (`Categories.tsx`, `Chat.tsx`, `Rules.tsx`, `OnboardingModal.tsx`, `Dashboard.tsx`, `Budget.tsx`, `Transactions.tsx`) fixaient des teintes calibrées uniquement pour le thème sombre (`#171a24`, `#1e2130`, `#161927`, `#13151f`, `#2a1a1a`, `#3e4259`, `#a78bfa`, `#8b93a7`, `#2e3147xx`…) au lieu des variables CSS (`var(--bg)`, `var(--bg3)`, `var(--border)`, `var(--text3)`, `var(--text4)`, `var(--accent)`…). Le plus visible : le fond de toute la modale d'onboarding restait sombre même en thème clair.
+- **Tableaux non scrollables sur mobile.** `Patrimoine.tsx`, `Simulateur.tsx` et le tableau de correspondance de colonnes d'`Import.tsx` rendaient un `<table>` brut sans le conteneur `.table-wrapper` (`overflow-x: auto`) déjà utilisé par `Transactions.tsx`/`Rules.tsx`/`Recurring.tsx`/`Comparaison.tsx` — sur un écran étroit, ça pouvait casser la mise en page plutôt que défiler horizontalement.
+
+Non traité dans cette passe (limite du temps disponible, à reprendre si besoin) : les actions révélées uniquement au survol (`onMouseEnter`/`onMouseLeave`, ex. le raccourci « exclure × » du Dashboard) restent invisibles au toucher — l'action elle-même fonctionne au tap (le `onClick` du parent), seul l'indice visuel n'apparaît pas sur mobile.
+
 ## Builder l'APK
 
 Le SDK Android n'est pas requis en local pour toucher au code TypeScript (`npm run typecheck:mobile`, `npm run build:android` scaffoldent/synchronisent le projet Capacitor sans compiler la partie native). Compiler un `.apk` réel nécessite un SDK Android complet — c'est `.github/workflows/android-build.yml` qui s'en charge, selon trois déclencheurs :

@@ -346,7 +346,7 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
           <span onClick={() => monthOffset === null ? applyMonth(0) : clearMonth()} style={{ fontSize: 13, color: monthOffset !== null ? 'var(--text)' : 'var(--text3)', minWidth: 110, textAlign: 'center', cursor: 'pointer', fontWeight: monthOffset !== null ? 500 : 400, userSelect: 'none' }}>
             {monthOffset !== null ? monthLabel(monthOffset) : 'Mois…'}
           </span>
-          <button onClick={() => applyMonth((monthOffset ?? 0) + 1)} disabled={monthOffset !== null && monthOffset >= 0} style={{ width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: monthOffset !== null && monthOffset >= 0 ? 'default' : 'pointer', background: 'transparent', color: monthOffset !== null && monthOffset >= 0 ? '#3e4259' : 'var(--text2)', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+          <button onClick={() => applyMonth((monthOffset ?? 0) + 1)} disabled={monthOffset !== null && monthOffset >= 0} style={{ width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: monthOffset !== null && monthOffset >= 0 ? 'default' : 'pointer', background: 'transparent', color: monthOffset !== null && monthOffset >= 0 ? 'var(--text4)' : 'var(--text2)', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
         </div>
         <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setMonthOffset(null) }} style={{ width: 140 }} />
         <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setMonthOffset(null) }} style={{ width: 140 }} />

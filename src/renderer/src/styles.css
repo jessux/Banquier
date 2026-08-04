@@ -350,6 +350,24 @@ body {
   color: white;
 }
 
+/* Page Catégories : boutons inline compacts (éditer une sous-catégorie,
+   ajouter, valider). Densité desktop conservée telle qu'avant ; agrandis sur
+   mobile via le bloc @media plus bas, où ils servent de vraies cibles tactiles. */
+.cat-compact-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.cat-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text3);
+  line-height: 1;
+  padding: 4px;
+  font-size: 15px;
+}
+
 /* Form elements */
 input, select, textarea {
   background: var(--bg3);
@@ -950,6 +968,20 @@ tbody td {
 
   .sync-toast {
     max-width: none;
+  }
+
+  /* Page Catégories : boutons denses pensés pour souris (padding 3-4px,
+     police 12-15px) — trop petits comme cibles tactiles. Zone de frappe visée
+     : ~40px, en jouant sur le padding plutôt que juste la police pour ne pas
+     casser l'alignement des lignes. */
+  .cat-compact-btn {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  .cat-icon-btn {
+    padding: 10px;
+    font-size: 20px;
   }
 }
 
