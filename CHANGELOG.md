@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.28.0](https://github.com/jessux/Banquier/compare/v1.27.5...v1.28.0) (2026-08-04)
+
+
+### Nouvelles fonctionnalités
+
+* **mobile:** liste de transactions façon appli bancaire mobile ([91af3cb](https://github.com/jessux/Banquier/commit/91af3cb0baf2f5af91c4e0c748e8a6cbb3efd76b))
+
+
+### Corrections de bugs
+
+* **mobile:** fausse "Connexion annulée" quand Powens tarde à enregistrer la banque ([d78d000](https://github.com/jessux/Banquier/commit/d78d000e3aef61c49af16b51f298687d2e22457b))
+* **mobile:** fausse Connexion annulée quand Powens tarde à enregistrer la banque ([425fa03](https://github.com/jessux/Banquier/commit/425fa03ed9b0da302e7dd6c77be72d850f03b8e9))
+* **mobile:** ne plus jamais lever "Connexion annulée" depuis powensConnect ([378f441](https://github.com/jessux/Banquier/commit/378f4411ba07300e6e3d2b19ab22c4d0e8dfd940))
+
 ## [1.27.5](https://github.com/jessux/Banquier/compare/v1.27.4...v1.27.5) (2026-08-04)
 
 
