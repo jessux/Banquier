@@ -683,7 +683,10 @@ export default function SettingsPage(): JSX.Element {
               // (ça demanderait la permission REQUEST_INSTALL_PACKAGES, jamais testée
               // sur un appareil réel) : on ouvre le lien de l'APK dans le navigateur,
               // à installer manuellement comme n'importe quelle APK téléchargée.
-              notif
+              // `window.api.notifications` n'existe (de façon synchrone) que sur
+              // Android : contrairement à `notif` (chargé de façon async), il est
+              // fiable dès le premier rendu pour distinguer les deux plateformes.
+              window.api.notifications
                 ? `Mise à jour disponible : v${updateResult.version} — téléchargement de l'APK lancé dans le navigateur.`
                 : `Mise à jour disponible : v${updateResult.version} — téléchargement en cours…`
             )}
