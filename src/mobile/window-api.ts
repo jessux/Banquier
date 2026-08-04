@@ -291,9 +291,20 @@ export function createMobileApi(): Window['api'] {
         // conclure à une annulation. Les parcours App2App renvoient souvent
         // l'utilisateur au navigateur sans déclencher le deep link, et l'ancien
         // « Connexion annulée. » masquait alors une connexion réussie.
+        //
+        // Un seul essai immédiatement après la fermeture du Custom Tab ne suffit
+        // pas : Powens met parfois plusieurs secondes à enregistrer la connexion
+        // côté serveur après la fin de l'authentification bancaire. Un essai
+        // unique concluait alors à une fausse « Connexion annulée » — le compte
+        // n'apparaissant qu'à une synchro ultérieure, une fois Powens à jour. On
+        // réessaie donc pendant une fenêtre de temps avant de vraiment abandonner.
         emitProgress('waiting', 'Vérification de la connexion auprès de votre banque…')
-        const after = await safeConnectionIds(creds, token)
-        const added = [...after].some((id) => !before.has(id))
+        let added = false
+        for (let i = 0; i < 8 && !added; i++) {
+          if (i > 0) await new Promise((r) => setTimeout(r, 3000))
+          const after = await safeConnectionIds(creds, token)
+          added = [...after].some((id) => !before.has(id))
+        }
         if (!added) {
           await preferences.saveSettings({ powensConnectPending: false })
           emitProgress('idle', '')
