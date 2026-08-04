@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.27.4](https://github.com/jessux/Banquier/compare/v1.27.3...v1.27.4) (2026-08-04)
+
+
+### Corrections de bugs
+
+* **mobile:** corriger le crash SQLite, la signature APK et ajouter la vérif de mise à jour ([1963330](https://github.com/jessux/Banquier/commit/19633308382e2000cee5298d4cbb2c437e668cbe))
+* **mobile:** crash SQLite, signature APK, vérif de mise à jour, délai deep link ([91a451f](https://github.com/jessux/Banquier/commit/91a451f4a4cbacedc6b15e079f7e91fc7bc6776d))
+* **mobile:** réduire le délai de grâce du deep link Powens à 2s ([b766033](https://github.com/jessux/Banquier/commit/b766033e353eec72d7c40738b7532204d77c2c28))
+
 ## [1.27.3](https://github.com/jessux/Banquier/compare/v1.27.2...v1.27.3) (2026-08-04)
 
 
