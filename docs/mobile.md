@@ -64,9 +64,11 @@ Le parcours bancaire sort de l'app (Custom Tab, puis souvent l'app de la banque 
 
 | Situation | Traitement |
 |---|---|
-| `browserFinished` (fermeture du Custom Tab) arrive avant `appUrlOpen` (deep link) | Délai de grâce de 8 s avant de conclure quoi que ce soit (`DEEPLINK_GRACE_MS`) |
-| Le deep link n'arrive jamais (retour au navigateur au lieu de l'app) | Le webview renvoie `dismissed` au lieu de lever « Connexion annulée » ; `powensConnect` compare la liste des connexions Powens avant/après et poursuit l'import si une banque a bien été rattachée |
+| `browserFinished` (fermeture du Custom Tab) arrive avant `appUrlOpen` (deep link) | Délai de grâce de 2 s avant de conclure quoi que ce soit (`DEEPLINK_GRACE_MS`) |
+| Le deep link n'arrive jamais (retour au navigateur au lieu de l'app) | Le webview renvoie `dismissed` au lieu de lever « Connexion annulée » ; `powensConnect` attend qu'une nouvelle connexion apparaisse côté Powens (jusqu'à ~1 min), **sans jamais transformer une expiration de cette attente en erreur** — voir ci-dessous |
 | Android détruit l'activité pendant le Custom Tab (mémoire, « Ne pas conserver les activités ») | Le drapeau `powensConnectPending` est posé avant l'ouverture ; au redémarrage, `powensStartupSync` le voit et relance un import large au lieu d'un simple incrément |
+
+**Pourquoi ne plus jamais lever « Connexion annulée » depuis `powensConnect`.** Une première version attendait qu'une nouvelle connexion apparaisse pendant une fenêtre bornée (d'abord un essai unique, puis 8 essais sur ~20 s), et levait une erreur si rien n'apparaissait dans ce délai. En pratique, Powens peut mettre nettement plus longtemps à enregistrer la connexion côté serveur après la fin de l'authentification bancaire (SCA, App2App…) — le symptôme observé était un compte qui n'apparaissait qu'après avoir **quitté et rouvert l'app**, ce qui relance `powensStartupSync`. Ce dernier fonctionnait précisément parce qu'il n'a jamais eu ce genre de délai couperet : il attend (voir `waitForConnections` ci-dessous) et renvoie un avertissement, jamais une erreur bloquante, si rien n'arrive. `powensConnect` reproduit maintenant ce comportement : la vérification post-`dismissed` attend jusqu'à ~1 min qu'une connexion apparaisse, mais **quoi qu'il arrive** laisse ensuite `importPowens()` trancher — lui seul décide, via `waitForConnections`, s'il y a vraiment un souci à signaler.
 
 ### Attente de la banque, et pourquoi elle était trop longue
 
