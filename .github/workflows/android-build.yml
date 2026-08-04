@@ -108,8 +108,13 @@ jobs:
       # ou par un tag android-preview-* via android-release.yml. Crée la release
       # de toutes pièces, pour un lien de téléchargement stable et direct
       # (contrairement à l'artefact CI, qui expire et exige d'être connecté).
+      # ⚠️ Ne pas tester `github.event_name` ici : dans un workflow réutilisable,
+      # il vaut l'événement de l'APPELANT (`push` pour release-please.yml comme
+      # pour android-release.yml), jamais `workflow_call`. La présence de
+      # `inputs` suffit à distinguer les appels dispatch/call des push directs,
+      # où le contexte est vide.
       - name: Publish pre-release with APK
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && inputs.prerelease
+        if: inputs.prerelease
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || format('android-preview-{0}', github.run_number) }}
@@ -133,7 +138,7 @@ jobs:
       # d'attacher l'APK à la release déjà créée : `gh release upload` ne touche
       # ni au titre, ni aux notes de version, ni au flag pre-release.
       - name: Attach APK to the release
-        if: (github.event_name == 'workflow_dispatch' || github.event_name == 'workflow_call') && !inputs.prerelease && inputs.tag != ''
+        if: inputs.tag != '' && !inputs.prerelease
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release upload "${{ inputs.tag }}" "${{ steps.apk.outputs.path }}" --clobber
