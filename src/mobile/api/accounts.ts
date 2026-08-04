@@ -39,6 +39,14 @@ export async function getExcludedPowensAccountIds(): Promise<Set<string>> {
   return new Set(rows.map((r) => r.powens_id))
 }
 
+/** Lève les exclusions posées par deleteAccount(). Réservé au parcours de
+ *  connexion explicite : sans ça, un compte supprimé une fois ne pourrait plus
+ *  jamais être réimporté, même en reconnectant volontairement sa banque. Les
+ *  synchros (auto ou manuelle) continuent de respecter les exclusions. */
+export async function clearExcludedPowensAccounts(): Promise<void> {
+  await run('DELETE FROM excluded_powens_accounts')
+}
+
 export async function updateAccountCurrency(id: number, currency: string): Promise<void> {
   await run('UPDATE accounts SET currency = ? WHERE id = ?', [currency, id])
 }

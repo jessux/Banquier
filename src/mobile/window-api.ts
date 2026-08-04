@@ -252,6 +252,11 @@ export function createMobileApi(): Window['api'] {
         throw new Error(result.errorDescription || `Connexion refusée (${result.error}).`)
       }
 
+      // L'utilisateur vient de rattacher une banque de façon explicite : on lève
+      // les exclusions d'anciens comptes supprimés, sinon reconnecter la même
+      // banque n'y ferait jamais réapparaître ses comptes.
+      await accounts.clearExcludedPowensAccounts()
+
       const now = new Date()
       const minDate = `${now.getFullYear() - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
       return importPowens(creds, token, minDate)
