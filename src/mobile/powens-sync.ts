@@ -11,7 +11,27 @@ import type { PowensSyncResult } from '../shared/types'
 
 /** Port de l'helper importPowens de src/main/ipc.ts : récupère comptes +
  *  transactions Powens et les importe dans la base SQLite locale du téléphone. */
-export async function importPowens(
+let syncInFlight: Promise<PowensSyncResult> | null = null
+
+export function importPowens(
+  creds: PowensCreds,
+  token: string,
+  minDate?: string,
+  maxDate?: string
+): Promise<PowensSyncResult> {
+  // La sync auto au démarrage (App.tsx) peut tourner ~90 s. Si l'utilisateur
+  // déclenche une sync manuelle pendant ce temps, on attend la sync en cours
+  // au lieu de la lancer en parallèle (ça créait des comptes en double et
+  // faisait planter la transaction SQLite partagée avec "beginTransactionAlready").
+  if (syncInFlight) return syncInFlight
+  const run = doImportPowens(creds, token, minDate, maxDate)
+  syncInFlight = run.finally(() => {
+    syncInFlight = null
+  })
+  return syncInFlight
+}
+
+async function doImportPowens(
   creds: PowensCreds,
   token: string,
   minDate?: string,
