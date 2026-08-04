@@ -11,7 +11,7 @@ import type { PowensSyncResult } from '../shared/types'
 
 /** Port de l'helper importPowens de src/main/ipc.ts : récupère comptes +
  *  transactions Powens et les importe dans la base SQLite locale du téléphone. */
-let syncInFlight: Promise<PowensSyncResult> | null = null
+let syncQueue: Promise<unknown> = Promise.resolve()
 
 export function importPowens(
   creds: PowensCreds,
@@ -19,16 +19,20 @@ export function importPowens(
   minDate?: string,
   maxDate?: string
 ): Promise<PowensSyncResult> {
-  // La sync auto au démarrage (App.tsx) peut tourner ~90 s. Si l'utilisateur
-  // déclenche une sync manuelle pendant ce temps, on attend la sync en cours
-  // au lieu de la lancer en parallèle (ça créait des comptes en double et
-  // faisait planter la transaction SQLite partagée avec "beginTransactionAlready").
-  if (syncInFlight) return syncInFlight
-  const run = doImportPowens(creds, token, minDate, maxDate)
-  syncInFlight = run.finally(() => {
-    syncInFlight = null
-  })
-  return syncInFlight
+  // La sync auto au démarrage (App.tsx) peut tourner ~90 s. Deux imports
+  // concurrents créaient des comptes en double (createAccount tourne hors
+  // transaction) — on les met donc à la queue leu leu.
+  //
+  // On sérialise, sans jamais partager le résultat d'un import déjà en cours :
+  // celui-ci a photographié la liste des comptes AVANT que l'utilisateur ne
+  // connecte sa banque, donc le renvoyer à powensConnect ferait disparaître le
+  // compte tout juste ajouté. Chaque appel doit refaire son propre fetch.
+  const result = syncQueue.then(() => doImportPowens(creds, token, minDate, maxDate))
+  syncQueue = result.then(
+    () => undefined,
+    () => undefined
+  )
+  return result
 }
 
 async function doImportPowens(
