@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.27.3](https://github.com/jessux/Banquier/compare/v1.27.2...v1.27.3) (2026-08-04)
+
+
+### Corrections de bugs
+
+* **mobile:** débloquer la connexion Powens et ajouter les notifications système ([fb9f6ba](https://github.com/jessux/Banquier/commit/fb9f6ba1f9ff79949baa98d402da0560c6afb6c1))
+* **mobile:** débloquer la connexion Powens et ajouter les notifications système ([ece8500](https://github.com/jessux/Banquier/commit/ece85002a277e47a9460e36481db6171003930ab))
+
 ## [1.27.2](https://github.com/jessux/Banquier/compare/v1.27.1...v1.27.2) (2026-08-04)
 
 
