@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.27.2](https://github.com/jessux/Banquier/compare/v1.27.1...v1.27.2) (2026-08-04)
+
+
+### Corrections de bugs
+
+* **mobile:** allonger le délai de grâce du deep link Powens ([2d7bb3f](https://github.com/jessux/Banquier/commit/2d7bb3ffcdf97cbdc5b573e9b9e9068dbdadd7b5))
+* **mobile:** allonger le délai de grâce du deep link Powens ([084fbb4](https://github.com/jessux/Banquier/commit/084fbb46929f97d04d11aa00d75b93d707e5ca09))
+* **mobile:** délai de grâce du deep link Powens insuffisant ([f175957](https://github.com/jessux/Banquier/commit/f17595762637c7323a9ac920dcbd5ef5dc38e2f0))
+* **mobile:** remonter le délai de grâce du deep link Powens à 8s ([6348eea](https://github.com/jessux/Banquier/commit/6348eea74835e293bc14aca11b2980310324e283))
+* **mobile:** réparer l'ajout de compte Powens ([ef36e9a](https://github.com/jessux/Banquier/commit/ef36e9aa1648f70b7f176a4b76c93d685024394d))
+* **mobile:** réparer l'ajout de compte Powens ([c361a69](https://github.com/jessux/Banquier/commit/c361a692cd83ad915ca9a177573a173cb5e01699))
+* **mobile:** sérialiser les transactions SQLite pour éviter beginTransactionAlready ([584ebce](https://github.com/jessux/Banquier/commit/584ebce8d3926d2fb0f62bc56fb12ad3a1fe73fe))
+* **mobile:** sérialiser les transactions SQLite pour éviter beginTransactionAlready ([7c969fb](https://github.com/jessux/Banquier/commit/7c969fb7736e99bf10f37bfa7c1f383a580884b8))
+
 ## [1.27.1](https://github.com/jessux/Banquier/compare/v1.27.0...v1.27.1) (2026-07-27)
 
 
