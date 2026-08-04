@@ -1,6 +1,6 @@
 {
   "name": "banquier",
-  "version": "1.27.1",
+  "version": "1.27.2",
   "description": "Application de gestion de relevés bancaires",
   "main": "./out/main/index.js",
   "author": "jessux <jessux@users.noreply.github.com>",
@@ -21,6 +21,7 @@
     "@capacitor/browser": "^8.0.4",
     "@capacitor/core": "^8.4.2",
     "@capacitor/filesystem": "^8.1.2",
+    "@capacitor/local-notifications": "^8.2.1",
     "@capacitor/preferences": "^8.0.1",
     "@capawesome/capacitor-file-picker": "^8.0.3",
     "@langchain/core": "^1.2.1",

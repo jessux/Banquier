@@ -67,10 +67,26 @@ body {
 }
 
 /* Toast synchronisation Powens */
-.sync-toast {
+
+/* Plusieurs toasts peuvent coexister (progression de synchro, résultat, budget
+   dépassé) : la pile les empile au lieu de les superposer au même point fixe. */
+.sync-toast-stack {
   position: fixed;
   bottom: 24px;
   right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.sync-toast-stack > * {
+  pointer-events: auto;
+}
+
+.sync-toast {
   background: var(--bg3);
   border: 1px solid var(--accent);
   border-radius: var(--radius);
@@ -79,7 +95,6 @@ body {
   align-items: flex-start;
   gap: 12px;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-  z-index: 9999;
   max-width: 340px;
   animation: toast-in 0.25s ease;
 }
@@ -903,14 +918,18 @@ tbody td {
     min-height: 52px;
   }
 
-  /* The budget/Powens-sync toast is fixed bottom-right on desktop, which on a
-     phone collides with the chat input area or thumb zone. Pin it as a
+  /* The budget/Powens-sync toasts are fixed bottom-right on desktop, which on a
+     phone collides with the chat input area or thumb zone. Pin the stack as a
      top banner instead. */
-  .sync-toast {
+  .sync-toast-stack {
     left: 16px;
     right: 16px;
     bottom: auto;
     top: calc(52px + env(safe-area-inset-top) + 12px);
+    align-items: stretch;
+  }
+
+  .sync-toast {
     max-width: none;
   }
 }

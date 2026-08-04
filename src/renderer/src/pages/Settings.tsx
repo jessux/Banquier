@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Settings, MobileServerInfo, PowensStatus } from '../../../shared/types'
+import { dismiss as dismissPowensJob, startConnect, startSync, usePowensJob } from '../utils/powensJob'
+import type { Settings, MobileServerInfo, NotificationsStatus, PowensStatus } from '../../../shared/types'
 import type { Account } from '../../../shared/types'
 
 const CURRENCIES = ['EUR', 'USD', 'CHF', 'GBP', 'CAD']
@@ -34,12 +35,17 @@ export default function SettingsPage(): JSX.Element {
   const [urlCopied, setUrlCopied] = useState(false)
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Powens
+  // Powens — l'avancement vient du job partagé, qui survit au changement de page.
+  const powensJob = usePowensJob()
+  const powensBusy =
+    powensJob.phase === 'webview' || powensJob.phase === 'waiting' || powensJob.phase === 'importing'
   const [powens, setPowens] = useState<PowensStatus>({ configured: false, connected: false })
-  const [powensBusy, setPowensBusy] = useState(false)
-  const [powensMsg, setPowensMsg] = useState<string | null>(null)
-  const [powensError, setPowensError] = useState<string | null>(null)
   const [showSyncModal, setShowSyncModal] = useState(false)
+
+  // Notifications système — null tant que non chargé, et sur desktop où
+  // window.api.notifications est absent (la section entière est alors masquée).
+  const [notif, setNotif] = useState<NotificationsStatus | null>(null)
+  const [notifBusy, setNotifBusy] = useState(false)
   const [syncMinDate, setSyncMinDate] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10)
   })
@@ -51,52 +57,54 @@ export default function SettingsPage(): JSX.Element {
     window.api.getAccounts().then(setAccounts)
     window.api.powensStatus().then(setPowens)
     window.api.getAppVersion().then(setAppVersion)
+    window.api.notifications?.status().then(setNotif).catch(() => {})
   }, [])
 
-  const connectPowens = async (): Promise<void> => {
-    setPowensBusy(true)
-    setPowensMsg("Connexion… autorisez l'accès dans la fenêtre de votre banque.")
-    setPowensError(null)
+  const updateNotifications = async (action: () => Promise<NotificationsStatus>): Promise<void> => {
+    setNotifBusy(true)
     try {
-      const res = await window.api.powensConnect()
-      setPowensMsg(
-        `Connecté : ${res.imported} transactions importées, ${res.duplicates} doublons (${res.accounts} compte(s)).`
-      )
-      window.api.powensStatus().then(setPowens)
-      window.api.getAccounts().then(setAccounts)
-    } catch (e) {
-      const msg = String(e instanceof Error ? e.message : e)
-      setPowensError(msg)
-      setPowensMsg(null)
+      setNotif(await action())
+    } catch (err) {
+      console.error('[notifications]', err)
     } finally {
-      setPowensBusy(false)
+      setNotifBusy(false)
     }
   }
 
-  const syncPowens = async (minDate?: string, maxDate?: string): Promise<void> => {
-    setPowensBusy(true)
-    setPowensMsg('Synchronisation…')
-    setPowensError(null)
-    try {
-      const res = await window.api.powensSync(minDate, maxDate)
-      if (res.firstDate) {
-        setPowensFirstDate(res.firstDate)
-        setSyncMinDate(res.firstDate)
-      }
-      setPowensMsg(`Synchronisé : ${res.imported} nouvelles transactions, ${res.duplicates} doublons.`)
-    } catch (e) {
-      const msg = String(e instanceof Error ? e.message : e)
-      setPowensError(msg)
-      setPowensMsg(null)
-    } finally {
-      setPowensBusy(false)
-    }
+  const requestNotifications = (): void => {
+    void updateNotifications(async () => {
+      const next = await window.api.notifications!.request()
+      if (next.granted) await window.api.notifications!.test()
+      return next
+    })
   }
+
+  // Le job Powens n'est plus attendu ici : il tourne en fond et publie son
+  // avancement. La page reste utilisable pendant la synchronisation, qui peut
+  // durer plusieurs minutes le temps que la banque réponde.
+  const connectPowens = (): void => {
+    void startConnect()
+  }
+
+  const syncPowens = (minDate?: string, maxDate?: string): void => {
+    void startSync(minDate, maxDate)
+  }
+
+  // Rafraîchit comptes/état/profondeur d'historique dès qu'une synchro aboutit.
+  useEffect(() => {
+    if (powensJob.phase !== 'done' || !powensJob.result) return
+    window.api.powensStatus().then(setPowens)
+    window.api.getAccounts().then(setAccounts)
+    if (powensJob.result.firstDate) {
+      setPowensFirstDate(powensJob.result.firstDate)
+      setSyncMinDate(powensJob.result.firstDate)
+    }
+  }, [powensJob.phase, powensJob.result])
 
   const disconnectPowens = async (): Promise<void> => {
     await window.api.powensDisconnect()
     window.api.powensStatus().then(setPowens)
-    setPowensMsg('Déconnecté.')
+    dismissPowensJob()
   }
 
   const toggleMobileServer = async (): Promise<void> => {
@@ -308,6 +316,69 @@ export default function SettingsPage(): JSX.Element {
         <button className="btn btn-primary" onClick={save}>{saved ? '✓ Sauvegardé' : 'Sauvegarder'}</button>
       </div>
 
+      {/* Notifications système — Android uniquement */}
+      {notif && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 style={{ marginBottom: 4 }}>Notifications</h3>
+          <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+            Notifications système Android : elles s’affichent dans la barre de statut même
+            lorsque Banquier est fermé.
+          </p>
+
+          {!notif.granted ? (
+            <div style={{ padding: '10px 14px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.35)', borderRadius: 8 }}>
+              <div style={{ fontSize: 13, marginBottom: 10, color: 'var(--text2)' }}>
+                Android n’autorise pas encore Banquier à vous envoyer des notifications.
+              </div>
+              <button className="btn btn-primary" style={{ fontSize: 13 }} disabled={notifBusy} onClick={requestNotifications}>
+                Autoriser les notifications
+              </button>
+            </div>
+          ) : (
+            <>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={notif.enabled}
+                  disabled={notifBusy}
+                  onChange={(e) => updateNotifications(() => window.api.notifications!.setEnabled(e.target.checked))}
+                />
+                <span className="text-sm">
+                  Me prévenir des nouvelles transactions, budgets dépassés et banques à reconnecter
+                </span>
+              </label>
+
+              <div className="form-group" style={{ marginBottom: 14, maxWidth: 320 }}>
+                <label style={{ fontSize: 12 }}>Rappel quotidien de synchronisation</label>
+                <select
+                  value={notif.dailyHour ?? ''}
+                  disabled={notifBusy || !notif.enabled}
+                  onChange={(e) =>
+                    updateNotifications(() =>
+                      window.api.notifications!.setDailyHour(e.target.value === '' ? null : Number(e.target.value))
+                    )
+                  }
+                >
+                  <option value="">Désactivé</option>
+                  {Array.from({ length: 24 }, (_, h) => (
+                    <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 13 }}
+                disabled={notifBusy || !notif.enabled}
+                onClick={() => window.api.notifications?.test()}
+              >
+                Envoyer une notification de test
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       {/* Accès mobile */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -466,7 +537,7 @@ export default function SettingsPage(): JSX.Element {
           </div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={connectPowens} disabled={powensBusy}>
-              {powensBusy ? 'Patientez…' : powens.connected ? '+ Ajouter une banque' : 'Connecter ma banque'}
+              {powens.connected ? '+ Ajouter une banque' : 'Connecter ma banque'}
             </button>
             {powens.connected && (
               <>
@@ -475,18 +546,49 @@ export default function SettingsPage(): JSX.Element {
               </>
             )}
           </div>
-          {powensError && (
+
+          {powensBusy && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.35)', borderRadius: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span className="spinner" />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{powensJob.message || 'Synchronisation…'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text4)', marginTop: 2 }}>
+                    Vous pouvez quitter cet écran, la synchronisation continue en arrière-plan.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {powensJob.phase === 'error' && powensJob.error && (
             <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.35)', borderRadius: 8 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--red)', marginBottom: 4 }}>Erreur de synchronisation</div>
-              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>{powensError}</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>{powensJob.error}</div>
               <button className="btn btn-primary" style={{ fontSize: 12, padding: '4px 14px', background: 'rgba(239,68,68,0.2)', borderColor: 'rgba(239,68,68,0.5)', color: 'var(--red)' }} onClick={connectPowens} disabled={powensBusy}>
                 Reconnecter ma banque
               </button>
             </div>
           )}
-          {powensMsg && !powensError && (
+
+          {powensJob.phase === 'done' && powensJob.result?.warning && (
+            <div style={{ marginTop: 12, padding: '10px 14px', background: 'rgba(234,179,8,0.08)', border: '1px solid rgba(234,179,8,0.35)', borderRadius: 8 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--yellow)', marginBottom: 4 }}>Banque à vérifier</div>
+              <div style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 10 }}>{powensJob.result.warning}</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 14px' }} onClick={() => syncPowens()} disabled={powensBusy}>
+                  Réessayer la récupération
+                </button>
+                <button className="btn btn-secondary" style={{ fontSize: 12, padding: '4px 14px' }} onClick={connectPowens} disabled={powensBusy}>
+                  Reconnecter ma banque
+                </button>
+              </div>
+            </div>
+          )}
+
+          {powensJob.phase === 'done' && powensJob.result && !powensJob.result.warning && (
             <p className="text-sm" style={{ marginTop: 10, color: 'var(--text2)' }}>
-              {powensMsg}
+              {`Synchronisé : ${powensJob.result.imported} nouvelle(s) transaction(s), ${powensJob.result.duplicates} doublon(s), ${powensJob.result.accounts} compte(s).`}
             </p>
           )}
         </div>

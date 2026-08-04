@@ -3,11 +3,16 @@ import { Browser } from '@capacitor/browser'
 import type { PluginListenerHandle } from '@capacitor/core'
 import { domainParam, type PowensCreds } from './powens'
 
-interface WebviewResult {
+export interface WebviewResult {
   connectionId?: string
   code?: string
   error?: string
   errorDescription?: string
+  /** Le Custom Tab s'est fermé sans qu'aucun deep link n'arrive. Ce n'est *pas*
+   *  forcément une annulation : certaines banques (parcours App2App) ramènent
+   *  l'utilisateur au navigateur sans déclencher la redirection. L'appelant doit
+   *  vérifier auprès de Powens si une connexion a malgré tout été créée. */
+  dismissed?: boolean
 }
 
 /** Délai laissé au deep link pour arriver après la fermeture du Custom Tab,
@@ -86,7 +91,9 @@ export async function openConnectWebview(creds: PowensCreds, code: string | null
           // laisse un délai de grâce avant de conclure à une vraie annulation,
           // sinon une connexion réussie serait rejetée.
           cancelTimer = setTimeout(() => {
-            finish(() => reject(new Error('Connexion annulée.')))
+            // On ne rejette plus : `dismissed` laisse l'appelant vérifier auprès
+            // de Powens si la banque a quand même été rattachée (cf. WebviewResult).
+            finish(() => resolve({ dismissed: true }))
           }, DEEPLINK_GRACE_MS)
         }).then((h) => {
           closeListener = h

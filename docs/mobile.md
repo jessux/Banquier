@@ -11,6 +11,7 @@ L'interface (React/Vite) est la même que sur desktop, mais tourne dans une WebV
 - `src/mobile/parsers/csv.ts` — parsing CSV (port de `src/main/parsers/csv.ts`)
 - `src/mobile/llm.ts` — chat financier + catégorisation IA (port de `src/main/llm.ts`, LangChain/OpenRouter)
 - `src/mobile/powens.ts`, `src/mobile/powens-webview.ts`, `src/mobile/powens-sync.ts` — synchronisation bancaire Powens (port de `src/main/powens.ts`)
+- `src/mobile/notifications.ts` — notifications système Android (`@capacitor/local-notifications`)
 - `src/mobile/window-api.ts` — remplace le `window.api` injecté par le preload Electron
 - `src/mobile/entry.ts` — installé automatiquement par `src/renderer/src/main.tsx` quand l'app ne tourne pas sous Electron
 
@@ -57,9 +58,53 @@ banquier://powens-callback
 
 Cette valeur doit rester synchronisée avec `MOBILE_REDIRECT_URI` (`src/mobile/powens.ts`) et l'`intent-filter` de `android/app/src/main/AndroidManifest.xml`.
 
+### Robustesse du parcours de connexion
+
+Le parcours bancaire sort de l'app (Custom Tab, puis souvent l'app de la banque en App2App), ce qui expose trois façons de perdre une connexion pourtant réussie. Chacune est traitée explicitement :
+
+| Situation | Traitement |
+|---|---|
+| `browserFinished` (fermeture du Custom Tab) arrive avant `appUrlOpen` (deep link) | Délai de grâce de 8 s avant de conclure quoi que ce soit (`DEEPLINK_GRACE_MS`) |
+| Le deep link n'arrive jamais (retour au navigateur au lieu de l'app) | Le webview renvoie `dismissed` au lieu de lever « Connexion annulée » ; `powensConnect` compare la liste des connexions Powens avant/après et poursuit l'import si une banque a bien été rattachée |
+| Android détruit l'activité pendant le Custom Tab (mémoire, « Ne pas conserver les activités ») | Le drapeau `powensConnectPending` est posé avant l'ouverture ; au redémarrage, `powensStartupSync` le voit et relance un import large au lieu d'un simple incrément |
+
+### Attente de la banque, et pourquoi elle était trop longue
+
+Powens interroge la banque de façon asynchrone : les transactions n'existent pas côté API tant que la connexion n'a pas de `last_update`. La première version attendait à l'aveugle (10 × 3 s pour les comptes, puis 12 × 5 s pour les transactions), avec deux conséquences : l'utilisateur attendait le délai complet même quand la banque avait déjà répondu, et une connexion en erreur (identifiants refusés, authentification forte à revalider…) renvoyait silencieusement « 0 transaction ».
+
+`powens-sync.ts` lit désormais `/users/me/connections` :
+
+- il repart **dès que** la banque a terminé, au lieu d'attendre un délai fixe ;
+- il traduit les états d'erreur Powens (`wrongpass`, `SCARequired`, `actionNeeded`, `websiteUnavailable`…) en messages actionnables, remontés dans `PowensSyncResult.warning` et affichés dans l'app ;
+- il publie son étape courante, consommée par `window.api.onPowensProgress`.
+
+### Synchronisation en tâche de fond
+
+`src/renderer/src/utils/powensJob.ts` pilote toutes les synchronisations depuis un état unique vivant **hors de React**. L'UI ne fait plus qu'afficher cet état, ce qui règle plusieurs problèmes d'un coup : l'écran reste utilisable pendant la synchro, l'avancement est visible partout (onboarding, paramètres, toast global), une synchro survit au changement de page ou à la fermeture de l'onboarding, et deux synchronisations concurrentes ne peuvent plus démarrer.
+
+Sur desktop, `onPowensProgress` est absent de `window.api` : le job fonctionne à l'identique, avec un simple démarré/terminé.
+
 ### État de la vérification
 
-Le flux n'a pas encore été validé de bout en bout sur un appareil : cet environnement de développement n'a ni SDK Android ni accès à un vrai parcours bancaire. Le code gère explicitement le cas où `browserFinished` (fermeture du Custom Tab) précède `appUrlOpen` (arrivée du deep link) — sans ce délai de grâce, une connexion réussie serait rejetée en « Connexion annulée ».
+Le flux n'a pas encore été validé de bout en bout sur un appareil : cet environnement de développement n'a ni SDK Android ni accès à un vrai parcours bancaire.
+
+## Notifications système
+
+Les alertes de Banquier étaient jusqu'ici de simples toasts HTML : invisibles dès que l'app passe en arrière-plan — c'est-à-dire précisément pendant une synchronisation bancaire, qui peut durer plusieurs minutes.
+
+`src/mobile/notifications.ts` ajoute de vraies notifications Android (barre de statut + bannière) via `@capacitor/local-notifications`, sur deux canaux en importance haute :
+
+| Notification | Déclencheur |
+|---|---|
+| Synchronisation terminée | Fin d'import avec au moins une nouvelle transaction |
+| Banque à reconnecter | Connexion Powens en erreur (`warning` d'un import) |
+| Synchronisation échouée | Exception pendant une synchro |
+| Budget dépassé | Au démarrage, au plus une fois par jour |
+| Rappel quotidien | Heure choisie dans Paramètres → Notifications ; programmé côté OS, se déclenche app fermée |
+
+La permission `POST_NOTIFICATIONS` (obligatoire depuis Android 13) est demandée à l'étape « Notifications » de l'onboarding, et réactivable dans Paramètres → Notifications. L'icône de la barre de statut est un drawable monochrome dédié (`res/drawable/ic_stat_banquier.xml`) : Android n'affiche que la silhouette du small icon, réutiliser `ic_launcher` produirait un carré blanc.
+
+**Pourquoi des notifications locales et pas du push FCM.** Le push FCM suppose un serveur qui pousse les messages. Banquier n'en a pas — toutes les données vivent dans le SQLite du téléphone, et chacun des événements ci-dessus est produit par l'app elle-même. Les notifications locales couvrent donc l'intégralité des cas, avec le même rendu système qu'un push (bannière, son, barre de statut, persistance app fermée pour le rappel programmé). Un vrai push FCM ne deviendra pertinent que le jour où un backend Banquier recevra les webhooks Powens.
 
 ## Pas encore disponible sur mobile (roadmap)
 
