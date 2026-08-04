@@ -678,7 +678,15 @@ export default function SettingsPage(): JSX.Element {
         {updateResult && (
           <div style={{ marginTop: 12, fontSize: 13, padding: '8px 12px', borderRadius: 6, background: updateResult.status === 'up-to-date' ? 'rgba(34,197,94,0.08)' : updateResult.status === 'error' ? 'rgba(239,68,68,0.08)' : 'rgba(99,102,241,0.08)', color: updateResult.status === 'up-to-date' ? 'var(--green)' : updateResult.status === 'error' ? 'var(--red)' : 'var(--accent)' }}>
             {updateResult.status === 'up-to-date' && '✓ Application à jour'}
-            {updateResult.status === 'available' && `Mise à jour disponible : v${updateResult.version} — téléchargement en cours…`}
+            {updateResult.status === 'available' && (
+              // Sur Android il n'y a pas de téléchargement/installation automatique
+              // (ça demanderait la permission REQUEST_INSTALL_PACKAGES, jamais testée
+              // sur un appareil réel) : on ouvre le lien de l'APK dans le navigateur,
+              // à installer manuellement comme n'importe quelle APK téléchargée.
+              notif
+                ? `Mise à jour disponible : v${updateResult.version} — téléchargement de l'APK lancé dans le navigateur.`
+                : `Mise à jour disponible : v${updateResult.version} — téléchargement en cours…`
+            )}
             {updateResult.status === 'downloading' && `Téléchargement de la v${updateResult.version} en cours…`}
             {updateResult.status === 'error' && `Erreur : ${updateResult.message}`}
           </div>

@@ -111,9 +111,27 @@ La permission `POST_NOTIFICATIONS` (obligatoire depuis Android 13) est demandée
 - **Phase 4** — Patrimoine, actifs, plans DCA, cours (crypto/bourse)
 - **Phase 5** — Import PDF
 - **Phase 6** — Pages Récurrences, Comparaison, Simulateur
-- **Phase 7** — Pipeline de release signée (keystore, publication Play Store)
+- **Phase 7** — Publication sur le Play Store (le debug est désormais signé de façon stable, cf. « Signature de l'APK » ci-dessous — reste la signature de *release*, le compte développeur et la fiche store)
 
 Les fonctionnalités non encore portées affichent un message clair ("n'est pas encore disponible") plutôt que de planter silencieusement.
+
+## Fiabilité SQLite : le vrai fix de « beginTransactionAlready »
+
+Un premier correctif (sérialiser les appels à `transaction()` via une file `txChain` dans `db.ts`) empêchait deux synchronisations concurrentes de s'entrechoquer, mais laissait un bug plus profond : `@capacitor-community/sqlite` encapsule **chaque** `run()` dans sa propre transaction implicite par défaut (3ᵉ paramètre `transaction`, `true` par défaut côté plugin). Concrètement, dès qu'un `run()` s'exécutait *à l'intérieur* d'un `transaction()` déjà ouvert (import Powens/CSV, catégorisation par lots…), le plugin tentait de rouvrir une transaction sur une connexion qui en avait déjà une active — d'où le crash, de façon déterministe et pas seulement en cas de concurrence. `db.ts`'s `run()` passe désormais explicitement `transaction: false` : une instruction seule reste atomique de toute façon, et à l'intérieur d'un `transaction()` explicite, elle rejoint la transaction déjà ouverte au lieu d'en ouvrir une autre.
+
+## Signature de l'APK et mises à jour en place
+
+Sans configuration explicite, l'Android Gradle Plugin signe les builds *debug* avec `~/.android/debug.keystore`, régénéré aléatoirement sur chaque machine — donc à chaque run CI, puisque `.github/workflows/android-build.yml` tourne sur un runner GitHub Actions éphémère qui en démarre un neuf à chaque fois. Chaque APK publié se retrouvait signé par une clé différente, et Android refuse catégoriquement d'installer une mise à jour signée par une autre clé que celle de la version déjà installée (« App not installed as package conflicts with an existing package ») — d'où l'obligation de désinstaller avant de réinstaller à chaque nouvelle version.
+
+Un keystore de debug dédié est maintenant versionné dans le dépôt (`android/keystore/banquier-debug.keystore`, référencé depuis `android/app/build.gradle`) : ce n'est pas un secret — c'est la pratique standard pour ce cas de figure — et toutes les releases sont désormais signées à l'identique, donc s'installent en mise à jour normale les unes sur les autres.
+
+⚠️ Cette transition elle-même demande encore une désinstallation manuelle (changement de clé de signature, inévitable). Toutes les versions **suivantes** s'installeront en mise à jour normale.
+
+`versionCode`/`versionName` sont aussi devenus dynamiques (dérivés de `package.json`, au lieu d'être figés à `1`/`"1.0"` pour toutes les releases) : certains outils d'installation refusent une mise à jour dont le `versionCode` n'augmente pas.
+
+## Vérification de mise à jour
+
+`src/mobile/updater.ts` interroge l'API GitHub Releases (`/repos/jessux/Banquier/releases/latest`) et compare au numéro de version embarqué. Contrairement au desktop (`electron-updater`, téléchargement + installation automatique en arrière-plan), il n'y a pas d'installation silencieuse sur Android : ça demanderait la permission `REQUEST_INSTALL_PACKAGES` et un flux de téléchargement/installation natif dédié, jamais implémenté ni testé sur un appareil réel. Le bouton « Vérifier les mises à jour » des Paramètres ouvre donc le lien de téléchargement direct de l'APK dans le navigateur ; l'utilisateur l'installe ensuite manuellement, comme n'importe quelle APK téléchargée.
 
 ## Builder l'APK
 

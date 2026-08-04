@@ -12,6 +12,7 @@ import { openFileDialog as pickFile } from './file-picker'
 import { runFinancialChat, buildFinancialSystemPrompt, buildChatMessages, categorizeBatch, type ToolExecutors } from './llm'
 import { retrieveRelevantMemories } from '../main/memory'
 import * as notifications from './notifications'
+import { checkForUpdates } from './updater'
 import { POWENS_CREDS, initAuth, getTempCode, getConnections, type PowensCreds } from './powens'
 import { openConnectWebview } from './powens-webview'
 import { importPowens, onProgress as onPowensProgress, emitProgress } from './powens-sync'
@@ -399,6 +400,6 @@ export function createMobileApi(): Window['api'] {
 
     // App info & updates
     getAppVersion: async () => pkg.version,
-    checkForUpdates: async () => ({ status: 'up-to-date' as const })
+    checkForUpdates
   }
 }
