@@ -26,7 +26,18 @@ export async function run(
   sql: string,
   params: unknown[] = []
 ): Promise<{ lastInsertRowid: number; changes: number }> {
-  const res = await getDb().run(sql, params as unknown[])
+  // Le plugin encapsule par défaut CHAQUE run() dans sa propre transaction
+  // implicite (3ᵉ paramètre `transaction`, true par défaut). À l'intérieur d'un
+  // transaction() explicite ci-dessous, ce comportement tente de rouvrir une
+  // transaction sur une connexion qui en a déjà une active — c'est la cause
+  // réelle du crash "beginTransactionAlready" lors des imports (Powens, CSV,
+  // catégorisation par lots) : la sérialisation ajoutée précédemment empêche
+  // deux transaction() de se chevaucher, mais ne changeait rien à ce conflit
+  // interne à un seul transaction(). On désactive donc systématiquement ce
+  // comportement : une instruction seule reste atomique de toute façon, et à
+  // l'intérieur d'un transaction() explicite, elle doit rejoindre la
+  // transaction déjà ouverte plutôt que d'en ouvrir une autre.
+  const res = await getDb().run(sql, params as unknown[], false)
   return { lastInsertRowid: res.changes?.lastId ?? 0, changes: res.changes?.changes ?? 0 }
 }
 

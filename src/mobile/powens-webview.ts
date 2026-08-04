@@ -15,12 +15,15 @@ export interface WebviewResult {
   dismissed?: boolean
 }
 
-/** Délai laissé au deep link pour arriver après la fermeture du Custom Tab,
- *  avant de considérer que l'utilisateur a vraiment annulé. 1500ms s'est avéré
- *  trop juste sur device réel (Custom Tab + retour d'authentification forte
- *  bancaire type App2App), provoquant un faux « Connexion annulée. » alors
- *  que la connexion avait réussi. */
-const DEEPLINK_GRACE_MS = 8000
+/** Délai laissé au deep link pour arriver après la fermeture du Custom Tab, avant
+ *  de considérer que la redirection ne viendra pas et de vérifier directement
+ *  auprès de Powens (voir `dismissed` dans WebviewResult). Initialement remonté
+ *  à 8s car un timer trop court provoquait un faux « Connexion annulée. » sur
+ *  device réel (App2App bancaire) — mais depuis que ce timer ne fait plus que
+ *  déclencher une vérification (au lieu de rejeter directement), un délai court
+ *  ne coûte plus qu'un aller-retour réseau superflu si le deep link était sur le
+ *  point d'arriver, au lieu d'un vrai risque de faux négatif. */
+const DEEPLINK_GRACE_MS = 2000
 
 /**
  * Équivalent mobile de src/main/powens.ts's openConnectWebview : au lieu d'une

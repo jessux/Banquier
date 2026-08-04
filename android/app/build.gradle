@@ -1,5 +1,18 @@
 apply plugin: 'com.android.application'
 
+// La version affichée/comparée par l'app (Paramètres, vérification de mise à
+// jour) doit suivre celle de package.json — source de vérité unique gérée par
+// release-please — plutôt qu'un numéro figé indépendant du reste du projet.
+def packageJson = new groovy.json.JsonSlurper().parseText(file('../../package.json').text)
+def appVersionName = packageJson.version
+// versionCode Android : entier strictement croissant à chaque release, dérivé
+// du semver (major*1_000_000 + minor*1_000 + patch). Il ne sert pas à grand-
+// chose en distribution hors Play Store, mais certains outils d'installation
+// refusent une mise à jour dont le versionCode n'augmente pas — le laisser
+// figé à 1 (comme avant) y contribuait.
+def versionParts = appVersionName.tokenize('.').collect { it.toInteger() }
+def appVersionCode = versionParts[0] * 1000000 + versionParts[1] * 1000 + versionParts[2]
+
 android {
     namespace = "com.banquier.app"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +20,8 @@ android {
         applicationId "com.banquier.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,7 +29,30 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        // Sans configuration explicite, l'Android Gradle Plugin signe les builds
+        // debug avec ~/.android/debug.keystore, régénéré aléatoirement à chaque
+        // machine — donc à chaque run CI sur un runner GitHub Actions éphémère,
+        // qui en démarre un neuf. Chaque APK publié se retrouvait signé par une
+        // clé différente, et Android refuse catégoriquement de mettre à jour une
+        // app installée par une APK signée par une AUTRE clé (erreur "App not
+        // installed as package conflicts with an existing package" / installation
+        // bloquée), obligeant à désinstaller avant de réinstaller à chaque version.
+        // On fixe donc un keystore de debug dédié et versionné dans le dépôt (une
+        // clé de debug n'est pas un secret — c'est la pratique standard pour ce
+        // cas de figure) afin que toutes les releases soient signées à l'identique
+        // et s'installent en mise à jour normale les unes sur les autres.
+        debug {
+            storeFile file('../keystore/banquier-debug.keystore')
+            storePassword 'banquier-debug'
+            keyAlias 'banquier-debug'
+            keyPassword 'banquier-debug'
+        }
+    }
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
