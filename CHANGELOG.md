@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.27.5](https://github.com/jessux/Banquier/compare/v1.27.4...v1.27.5) (2026-08-04)
+
+
+### Corrections de bugs
+
+* **mobile:** délai deep link, toast fermable, topbar plus grande ([068039e](https://github.com/jessux/Banquier/commit/068039e35ee90f1fe66b9912cef979258b3afa04))
+* **mobile:** délai deep link, toast fermable, topbar plus grande, icône B, thème clair, tableaux ([ce92088](https://github.com/jessux/Banquier/commit/ce92088b5297fb80ffbc549bb9085dc420097aa8))
+* **mobile:** icône B, thème clair cassé sur plusieurs pages, tableaux non scrollables ([99c4a57](https://github.com/jessux/Banquier/commit/99c4a57cb0fdc0232d62af007d76ee4f7ab6cded))
+
 ## [1.27.4](https://github.com/jessux/Banquier/compare/v1.27.3...v1.27.4) (2026-08-04)
 
 
