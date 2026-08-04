@@ -34,17 +34,29 @@ export async function exec(sql: string): Promise<void> {
   await getDb().execute(sql)
 }
 
-export async function transaction<T>(fn: () => Promise<T>): Promise<T> {
-  const conn = getDb()
-  await conn.beginTransaction()
-  try {
-    const result = await fn()
-    await conn.commitTransaction()
-    return result
-  } catch (e) {
-    await conn.rollbackTransaction()
-    throw e
-  }
+// La connexion SQLite native est unique et partagée : deux beginTransaction()
+// concurrents (ex. sync Powens auto au démarrage + sync manuelle) plantent
+// avec "beginTransactionAlready". On sérialise donc tous les appels ici.
+let txChain: Promise<unknown> = Promise.resolve()
+
+export function transaction<T>(fn: () => Promise<T>): Promise<T> {
+  const result = txChain.then(async () => {
+    const conn = getDb()
+    await conn.beginTransaction()
+    try {
+      const value = await fn()
+      await conn.commitTransaction()
+      return value
+    } catch (e) {
+      await conn.rollbackTransaction()
+      throw e
+    }
+  })
+  txChain = result.then(
+    () => undefined,
+    () => undefined
+  )
+  return result
 }
 
 const SCHEMA_SQL = `
