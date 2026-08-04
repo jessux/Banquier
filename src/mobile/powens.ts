@@ -87,6 +87,61 @@ export async function getTempCode(creds: PowensCreds, token: string): Promise<st
   return json.code
 }
 
+/** Une banque rattachée par l'utilisateur. `state` vaut null quand tout va bien ;
+ *  `last_update` est renseigné dès que Powens a fini de rapatrier les données. */
+export interface PowensConnection {
+  id: number
+  id_connector?: number
+  state?: string | null
+  error?: string | null
+  error_message?: string | null
+  last_update?: string | null
+  active?: boolean
+  connector?: { name?: string }
+}
+
+/** Traduction des états d'erreur Powens en messages actionnables. Ces états
+ *  bloquent la récupération des transactions : sans les remonter, l'app afficherait
+ *  « 0 transaction » sans que l'utilisateur puisse comprendre pourquoi. */
+const CONNECTION_STATE_LABELS: Record<string, string> = {
+  wrongpass: 'identifiants refusés par la banque — reconnectez-la',
+  additionalInformationNeeded: 'la banque demande une information supplémentaire',
+  actionNeeded: 'une action est requise sur le site de votre banque',
+  SCARequired: 'authentification forte à revalider',
+  webauthRequired: 'reconnexion à la banque nécessaire',
+  decoupled: "validation en attente dans l'application de votre banque",
+  passwordExpired: 'mot de passe bancaire expiré',
+  websiteUnavailable: 'site de la banque temporairement indisponible',
+  rateLimiting: 'trop de tentatives, réessayez dans quelques minutes',
+  bug: 'erreur technique côté Powens'
+}
+
+/** `validating` signifie que Powens est encore en train de synchroniser : ce n'est
+ *  pas une erreur, juste une attente. */
+export type ConnectionStatus = 'ok' | 'syncing' | 'error'
+
+export function classifyConnection(c: PowensConnection): ConnectionStatus {
+  if (c.state === 'validating') return 'syncing'
+  if (c.state) return 'error'
+  return c.last_update ? 'ok' : 'syncing'
+}
+
+/** Message lisible pour une connexion en erreur, préfixé du nom de la banque. */
+export function connectionErrorLabel(c: PowensConnection): string {
+  const bank = c.connector?.name ? `${c.connector.name} : ` : ''
+  const label = (c.state && CONNECTION_STATE_LABELS[c.state]) || c.error_message || c.state || 'erreur inconnue'
+  return `${bank}${label}`
+}
+
+export async function getConnections(creds: PowensCreds, token: string): Promise<PowensConnection[]> {
+  const json = await api<{ connections: PowensConnection[] }>(
+    creds.domain,
+    '/users/me/connections?expand=connector',
+    { token }
+  )
+  return json.connections ?? []
+}
+
 export interface PowensAccount {
   id: number
   name: string

@@ -11,9 +11,10 @@ import * as preferences from './preferences'
 import { openFileDialog as pickFile } from './file-picker'
 import { runFinancialChat, buildFinancialSystemPrompt, buildChatMessages, categorizeBatch, type ToolExecutors } from './llm'
 import { retrieveRelevantMemories } from '../main/memory'
-import { POWENS_CREDS, initAuth, getTempCode } from './powens'
+import * as notifications from './notifications'
+import { POWENS_CREDS, initAuth, getTempCode, getConnections, type PowensCreds } from './powens'
 import { openConnectWebview } from './powens-webview'
-import { importPowens } from './powens-sync'
+import { importPowens, onProgress as onPowensProgress, emitProgress } from './powens-sync'
 import type { TransactionFilters } from '../shared/types'
 import pkg from '../../package.json'
 
@@ -21,6 +22,23 @@ const NOT_YET = ' n’est pas encore disponible dans Banquier Android (arrive da
 
 function notImplemented(feature: string): () => Promise<never> {
   return () => Promise.reject(new Error(feature + NOT_YET))
+}
+
+/** Profondeur d'historique demandée lors d'un rattachement de banque : un an. */
+function defaultConnectMinDate(): string {
+  const now = new Date()
+  return `${now.getFullYear() - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+}
+
+/** IDs des connexions bancaires actuelles, ou un ensemble vide si l'appel échoue :
+ *  sert uniquement à comparer un avant/après, jamais à bloquer le parcours. */
+async function safeConnectionIds(creds: PowensCreds, token: string): Promise<Set<number>> {
+  try {
+    return new Set((await getConnections(creds, token)).map((c) => c.id))
+  } catch (err) {
+    console.warn('[powens] lecture des connexions impossible', err)
+    return new Set()
+  }
 }
 
 /** Native-Android implementation of the same window.api surface the Electron preload
@@ -238,6 +256,8 @@ export function createMobileApi(): Window['api'] {
       const creds = POWENS_CREDS
       const settings = await preferences.getSettings()
 
+      emitProgress('webview', 'Ouverture de la connexion bancaire…')
+
       // Token permanent d'abord (création de l'utilisateur Powens au besoin).
       let token = settings.powensToken
       if (!token) {
@@ -245,11 +265,39 @@ export function createMobileApi(): Window['api'] {
         await preferences.saveSettings({ powensToken: token })
       }
 
+      // Le parcours bancaire se déroule dans un Custom Tab, donc app en arrière-plan :
+      // Android peut détruire l'activité entre-temps (mémoire, « Ne pas conserver les
+      // activités »). On note l'intention pour que powensStartupSync reprenne l'import
+      // au prochain démarrage au lieu de perdre la banque tout juste rattachée.
+      await preferences.saveSettings({ powensConnectPending: true })
+
+      // Photo des connexions avant ouverture : permet de détecter un rattachement
+      // réussi même si le deep link de redirection n'arrive jamais.
+      const before = await safeConnectionIds(creds, token)
+
       // Webview rattaché à notre utilisateur via un code temporaire.
       const tempCode = await getTempCode(creds, token)
       const result = await openConnectWebview(creds, tempCode)
+
       if (result.error) {
+        await preferences.saveSettings({ powensConnectPending: false })
+        emitProgress('idle', '')
         throw new Error(result.errorDescription || `Connexion refusée (${result.error}).`)
+      }
+
+      if (result.dismissed) {
+        // Custom Tab fermé sans redirection : on demande à Powens plutôt que de
+        // conclure à une annulation. Les parcours App2App renvoient souvent
+        // l'utilisateur au navigateur sans déclencher le deep link, et l'ancien
+        // « Connexion annulée. » masquait alors une connexion réussie.
+        emitProgress('waiting', 'Vérification de la connexion auprès de votre banque…')
+        const after = await safeConnectionIds(creds, token)
+        const added = [...after].some((id) => !before.has(id))
+        if (!added) {
+          await preferences.saveSettings({ powensConnectPending: false })
+          emitProgress('idle', '')
+          throw new Error('Connexion annulée.')
+        }
       }
 
       // L'utilisateur vient de rattacher une banque de façon explicite : on lève
@@ -257,34 +305,72 @@ export function createMobileApi(): Window['api'] {
       // banque n'y ferait jamais réapparaître ses comptes.
       await accounts.clearExcludedPowensAccounts()
 
-      const now = new Date()
-      const minDate = `${now.getFullYear() - 1}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
-      return importPowens(creds, token, minDate)
+      try {
+        return await importPowens(creds, token, defaultConnectMinDate())
+      } finally {
+        await preferences.saveSettings({ powensConnectPending: false })
+      }
     },
     powensSync: async (minDate, maxDate) => {
       const settings = await preferences.getSettings()
       const token = settings.powensToken
       if (!token) throw new Error("Aucune connexion Powens. Connectez d'abord une banque.")
-      return importPowens(POWENS_CREDS, token, minDate, maxDate)
+      try {
+        return await importPowens(POWENS_CREDS, token, minDate, maxDate)
+      } catch (err) {
+        emitProgress('error', err instanceof Error ? err.message : String(err))
+        void notifications.syncFailed(err instanceof Error ? err.message : String(err))
+        throw err
+      }
     },
     powensDisconnect: async () => {
-      await preferences.saveSettings({ powensToken: undefined })
+      await preferences.saveSettings({ powensToken: undefined, powensConnectPending: false })
     },
     powensStartupSync: async () => {
       const settings = await preferences.getSettings()
       const token = settings.powensToken
       if (!token) return null
+
+      // Un parcours de connexion interrompu (activité détruite pendant le Custom
+      // Tab) laisse ce drapeau : la banque est rattachée côté Powens mais rien n'a
+      // encore été importé. On refait donc un import large plutôt qu'un incrément,
+      // qui ne remonterait que les tout derniers jours.
+      const pending = settings.powensConnectPending === true
+
       try {
-        const latest = await transactionsApi.getLatestPowensTransactionDate()
-        const minDate = latest
-          ? new Date(new Date(latest + 'T00:00:00Z').getTime() - 2 * 86400000).toISOString().slice(0, 10)
-          : undefined
-        return await importPowens(POWENS_CREDS, token, minDate)
+        if (pending) {
+          emitProgress('waiting', 'Reprise de la connexion bancaire…')
+          await accounts.clearExcludedPowensAccounts()
+        }
+
+        const latest = pending ? null : await transactionsApi.getLatestPowensTransactionDate()
+        const minDate = pending
+          ? defaultConnectMinDate()
+          : latest
+            ? new Date(new Date(latest + 'T00:00:00Z').getTime() - 2 * 86400000).toISOString().slice(0, 10)
+            : undefined
+
+        const res = await importPowens(POWENS_CREDS, token, minDate)
+        if (pending) await preferences.saveSettings({ powensConnectPending: false })
+        return res
       } catch (err) {
         console.error('[powens-startup-sync]', err)
         const msg = err instanceof Error ? err.message : String(err)
+        emitProgress('error', msg)
+        void notifications.syncFailed(msg)
         return { imported: 0, duplicates: 0, accounts: 0, categorized: 0, firstDate: null, error: msg }
       }
+    },
+    onPowensProgress: (cb) => onPowensProgress(cb),
+
+    // Notifications système (barre de statut Android)
+    notifications: {
+      status: notifications.status,
+      request: notifications.request,
+      setEnabled: notifications.setEnabled,
+      setDailyHour: notifications.setDailyHour,
+      budgetAlert: notifications.budgetAlert,
+      test: notifications.test
     },
 
     // Patrimoine

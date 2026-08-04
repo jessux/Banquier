@@ -46,4 +46,12 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Notifications système (fin de synchro, budget dépassé, banque à reconnecter).
+         Obligatoire et demandée à l'exécution depuis Android 13 (API 33). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Reprogramme le rappel quotidien après un redémarrage du téléphone. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Permet au rappel quotidien de se déclencher à l'heure voulue malgré le Doze. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 </manifest>
