@@ -87,14 +87,19 @@ body {
 }
 
 .sync-toast {
+  /* Fond entièrement opaque et distinct de l'arrière-plan (sidebar/contenu
+     assourdis derrière) : --bg3 seul, sans halo, pouvait donner une impression
+     de transparence une fois superposé à un panneau ouvert (ex. le menu mobile). */
   background: var(--bg3);
+  opacity: 1;
+  isolation: isolate;
   border: 1px solid var(--accent);
   border-radius: var(--radius);
   padding: 14px 16px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.35);
   max-width: 340px;
   animation: toast-in 0.25s ease;
 }
@@ -218,11 +223,14 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  height: 52px;
+  /* 10px de marge sous l'encoche/status bar (avant : collée dessus, d'où
+     l'impression de logo/burger « trop haut ») + 44px de zone de contenu,
+     assez haute pour des icônes/texte plus gros sans être rognés. */
+  height: calc(env(safe-area-inset-top) + 54px);
   align-items: center;
-  gap: 8px;
-  padding: 0 8px;
-  padding-top: env(safe-area-inset-top);
+  gap: 10px;
+  padding: 0 10px;
+  padding-top: calc(env(safe-area-inset-top) + 10px);
   background: var(--bg2);
   border-bottom: 1px solid var(--border);
   z-index: 300;
@@ -232,10 +240,21 @@ body {
   background: none;
   border: none;
   color: var(--text);
-  font-size: 22px;
+  font-size: 28px;
   line-height: 1;
-  padding: 10px;
+  padding: 10px 12px;
   cursor: pointer;
+}
+
+.mobile-topbar-logo {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+
+.mobile-topbar-logo span {
+  color: var(--accent);
 }
 
 .sidebar-backdrop {
@@ -798,7 +817,7 @@ tbody td {
   }
 
   .layout {
-    padding-top: calc(52px + env(safe-area-inset-top));
+    padding-top: calc(env(safe-area-inset-top) + 54px);
   }
 
   .sidebar {
@@ -880,7 +899,7 @@ tbody td {
      conversation instead of a fixed 240px side column. */
   .chat-layout {
     flex-direction: column;
-    height: calc(100vh - 52px - env(safe-area-inset-top) - 32px);
+    height: calc(100vh - 54px - env(safe-area-inset-top) - 32px);
   }
 
   .thread-sidebar {
@@ -925,7 +944,7 @@ tbody td {
     left: 16px;
     right: 16px;
     bottom: auto;
-    top: calc(52px + env(safe-area-inset-top) + 12px);
+    top: calc(env(safe-area-inset-top) + 54px + 12px);
     align-items: stretch;
   }
 
