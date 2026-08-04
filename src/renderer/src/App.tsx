@@ -34,6 +34,12 @@ export default function App(): JSX.Element {
   // continue quand on change de page ou qu'on ferme l'onboarding, et son avancement
   // reste affichable partout.
   const job = usePowensJob()
+  // Fermer le bandeau de progression ne doit pas interrompre la synchro en cours
+  // (dismissPowensJob() refuse d'ailleurs tout reset tant qu'un job tourne) : on
+  // masque donc juste son affichage, dans un état séparé qui se réarme dès qu'une
+  // NOUVELLE synchro démarre — sinon elle resterait masquée pour toujours après
+  // la première fermeture.
+  const [hideProgressToast, setHideProgressToast] = useState(false)
 
   useEffect(() => {
     window.api.getSettings().then((s) => {
@@ -97,6 +103,10 @@ export default function App(): JSX.Element {
   const syncRunning = job.phase === 'webview' || job.phase === 'waiting' || job.phase === 'importing'
   const uncategorized = syncResult ? syncResult.imported - syncResult.categorized : 0
 
+  useEffect(() => {
+    if (syncRunning) setHideProgressToast(false)
+  }, [syncRunning])
+
   const handleOnboardingDone = async (saved: Partial<SettingsType>): Promise<void> => {
     await window.api.saveSettings(saved)
     setShowOnboarding(false)
@@ -130,7 +140,7 @@ export default function App(): JSX.Element {
           <button className="sync-toast-close" onClick={() => setBudgetAlert(null)}>✕</button>
         </div>
       )}
-      {syncRunning && job.message && (
+      {syncRunning && job.message && !hideProgressToast && (
         <div className="sync-toast">
           <div className="sync-toast-icon"><span className="spinner" /></div>
           <div className="sync-toast-body">
@@ -140,6 +150,7 @@ export default function App(): JSX.Element {
               Vous pouvez continuer à utiliser l’application.
             </span>
           </div>
+          <button className="sync-toast-close" onClick={() => setHideProgressToast(true)}>✕</button>
         </div>
       )}
       {syncError && (

@@ -448,7 +448,8 @@ export default function Simulateur(): JSX.Element {
                 </span>
               )}
             </div>
-            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+            <div className="table-wrapper" style={{ border: 'none' }}>
+            <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse', minWidth: 520 }}>
               <thead>
                 <tr style={{ textAlign: 'left', color: 'var(--text2, var(--text2))', borderBottom: '1px solid var(--border)' }}>
                   <th style={{ padding: '6px 8px', fontWeight: 500 }}>#</th>
@@ -488,6 +489,7 @@ export default function Simulateur(): JSX.Element {
                 ))}
               </tbody>
             </table>
+            </div>
           </div>
         </>
       )}

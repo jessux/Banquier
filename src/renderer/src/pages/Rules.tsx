@@ -256,7 +256,7 @@ export default function Rules(): JSX.Element {
                         onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditing(null) }}
                       />
                     ) : (
-                      <code style={{ fontFamily: 'monospace', fontSize: 12, color: '#a78bfa' }}>{rule.pattern}</code>
+                      <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--accent)' }}>{rule.pattern}</code>
                     )}
                   </td>
                   <td>

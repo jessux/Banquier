@@ -110,7 +110,7 @@ export default function BudgetPage(): JSX.Element {
       style={{
         width: 28, height: 28, borderRadius: '50%', border: 'none',
         cursor: dir === 1 && monthOffset >= 0 ? 'default' : 'pointer',
-        background: 'var(--bg3)', color: dir === 1 && monthOffset >= 0 ? '#3e4259' : 'var(--text2)',
+        background: 'var(--bg3)', color: dir === 1 && monthOffset >= 0 ? 'var(--text4)' : 'var(--text2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0
       }}
     >

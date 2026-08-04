@@ -108,7 +108,7 @@ export default function Sidebar({ activePage, onNavigate }: Props): JSX.Element 
         >
           ☰
         </button>
-        <div className="sidebar-logo" style={{ padding: 0 }}>
+        <div className="mobile-topbar-logo">
           <span>B</span>anquier
         </div>
       </header>

@@ -593,7 +593,8 @@ export default function Patrimoine(): JSX.Element {
           {isMarket && !useDca && (
             <div style={{ marginTop: 8 }}>
               <div className="card-title" style={{ marginBottom: 8 }}>Lots d'achat (optionnel, pour suivre le prix de revient)</div>
-              <table style={{ width: '100%', fontSize: 13 }}>
+              <div className="table-wrapper" style={{ border: 'none' }}>
+              <table style={{ width: '100%', fontSize: 13, minWidth: 480 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', color: 'var(--text2, var(--text2))' }}>
                     <th style={{ fontWeight: 500, padding: '4px 6px' }}>Date</th>
@@ -625,6 +626,7 @@ export default function Patrimoine(): JSX.Element {
                   ))}
                 </tbody>
               </table>
+              </div>
               <button className="btn btn-secondary" style={{ fontSize: 12, marginTop: 8 }} onClick={() => setLots([...lots, emptyLot()])}>
                 + Ajouter un lot
               </button>

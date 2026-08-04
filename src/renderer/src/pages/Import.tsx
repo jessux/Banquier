@@ -224,7 +224,8 @@ export default function Import(): JSX.Element {
 
               <div className="card" style={{ marginBottom: 20 }}>
                 <div className="card-title" style={{ marginBottom: 12 }}>Correspondance des colonnes</div>
-                <table className="mapping-table">
+                <div className="table-wrapper" style={{ border: 'none' }}>
+                <table className="mapping-table" style={{ minWidth: 420 }}>
                   <thead>
                     <tr>
                       <th style={{ background: 'none', padding: '8px 12px', fontSize: 12, color: 'var(--text2)' }}>Colonne CSV</th>
@@ -252,6 +253,7 @@ export default function Import(): JSX.Element {
                     ))}
                   </tbody>
                 </table>
+                </div>
               </div>
             </>
           )}
