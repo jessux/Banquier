@@ -445,6 +445,79 @@ tbody td {
 .amount-negative { color: var(--red); font-weight: 500; }
 .amount-positive { color: var(--green); font-weight: 500; }
 
+/* Liste de transactions "mobile" (masquée par défaut, activée en @media ci-dessous) */
+.tx-mobile-list {
+  display: none;
+}
+
+.tx-date-sep {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 16px 2px 8px;
+}
+
+.tx-date-sep:first-child {
+  padding-top: 2px;
+}
+
+.tx-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.tx-row:last-child {
+  border-bottom: none;
+}
+
+.tx-icon-circle {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #fff;
+}
+
+.tx-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.tx-row-title {
+  font-size: 15px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tx-row-sub {
+  font-size: 12.5px;
+  color: var(--accent-light);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.tx-row-amount {
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* Category badge */
 .category-badge {
   display: inline-block;
@@ -982,6 +1055,16 @@ tbody td {
   .cat-icon-btn {
     padding: 10px;
     font-size: 20px;
+  }
+
+  /* Page Transactions : le tableau desktop laisse place à une liste style appli
+     bancaire mobile (pastille de catégorie + séparateurs de date). */
+  .table-wrapper {
+    display: none;
+  }
+
+  .tx-mobile-list {
+    display: block;
   }
 }
 
