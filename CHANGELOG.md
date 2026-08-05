@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.29.0](https://github.com/jessux/Banquier/compare/v1.28.0...v1.29.0) (2026-08-05)
+
+
+### Nouvelles fonctionnalités
+
+* **mobile:** publie le build simulateur iOS sur les releases ([1c56982](https://github.com/jessux/Banquier/commit/1c5698252db8286e3675dce7e8be473046164094))
+* **mobile:** publie le build simulateur iOS sur les releases ([5abcd47](https://github.com/jessux/Banquier/commit/5abcd47bd52bf36951667732d48b0fd5b8a7ef39))
+
 ## [1.28.0](https://github.com/jessux/Banquier/compare/v1.27.5...v1.28.0) (2026-08-04)
 
 
