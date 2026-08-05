@@ -1,4 +1,3 @@
-import { Browser } from '@capacitor/browser'
 import pkg from '../../package.json'
 
 /**
@@ -13,6 +12,14 @@ import pkg from '../../package.json'
  * déjà `android-build.yml` pour publier les APK) et à ouvrir le lien de
  * téléchargement direct de l'APK dans le navigateur — l'utilisateur l'installe
  * ensuite comme n'importe quelle APK téléchargée.
+ *
+ * Volontairement pas `@capacitor/browser` (`Browser.open`) : ce plugin ouvre
+ * une Chrome Custom Tab, dont le téléchargement reste bloqué à 100 % sans
+ * jamais se finaliser sur certains appareils/connexions (observé en 4G avec
+ * signal faible) — le même lien copié dans Chrome directement se télécharge
+ * sans problème. `window.open(url, '_blank')` laisse le WebViewClient par
+ * défaut de Capacitor déléguer l'URL au navigateur système via une intent
+ * `ACTION_VIEW` classique, exactement comme un lien tapé manuellement.
  */
 
 const REPO = 'jessux/Banquier'
@@ -59,7 +66,7 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
     // Priorité au lien direct de l'APK ; à défaut, la page de la release (l'APK
     // peut manquer si le build Android a échoué pour cette version précise).
     const apkAsset = release.assets.find((a) => a.name.endsWith('.apk'))
-    await Browser.open({ url: apkAsset?.browser_download_url ?? release.html_url })
+    window.open(apkAsset?.browser_download_url ?? release.html_url, '_blank')
 
     return { status: 'available', version: release.tag_name.replace(/^v/, '') }
   } catch (err) {
