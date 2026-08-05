@@ -4,7 +4,9 @@ name: Build iOS app
 # développement habituel n'a pas macOS/Xcode. Contrairement à l'APK Android,
 # ce build n'est pas signé et ne peut donc pas s'installer sur un iPhone
 # physique (Apple exige une signature même en debug) — voir docs/mobile.md
-# pour ce qu'il reste à faire (compte développeur Apple, TestFlight).
+# pour ce qu'il reste à faire (compte développeur Apple, TestFlight). L'archive
+# attachée aux releases ne s'ouvre donc que dans le simulateur iOS (Xcode, sur
+# un Mac), pas sur un iPhone.
 on:
   push:
     branches: [main]
@@ -31,6 +33,28 @@ on:
       - 'package-lock.json'
       - '.github/workflows/ios-build.yml'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag de la pre-release à créer (laisser vide pour un nom auto-généré)'
+        required: false
+        type: string
+      prerelease:
+        description: 'Publier en pre-release (décocher pour attacher à une release existante)'
+        required: false
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      tag:
+        required: false
+        type: string
+      prerelease:
+        # true  → crée une pre-release dédiée (tags ios-preview-*)
+        # false → attache seulement le zip à la release existante du tag
+        #         (appelé par release-please.yml, comme l'APK Android)
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -39,6 +63,8 @@ jobs:
   build:
     name: Build for iOS Simulator (non signé)
     runs-on: macos-15
+    permissions:
+      contents: write
     env:
       ELECTRON_SKIP_BINARY_DOWNLOAD: 1
     steps:
@@ -74,7 +100,55 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
+      # GitHub Releases n'accepte pas un bundle .app (dossier) tel quel — on
+      # le zippe avec `ditto`, l'outil natif macOS qui préserve la structure
+      # du bundle (contrairement à `zip` qui peut abîmer les ressources).
+      - name: Name and zip the build for distribution
+        id: app
+        run: |
+          NAME="banquier-ios-simulator-${{ inputs.tag || format('preview-{0}', github.run_number) }}.zip"
+          ditto -c -k --sequesterRsrc --keepParent \
+            ios/App/build/Build/Products/Debug-iphonesimulator/App.app \
+            "$NAME"
+          echo "path=$NAME" >> "$GITHUB_OUTPUT"
+
       - uses: actions/upload-artifact@v4
         with:
           name: banquier-ios-simulator-debug
-          path: ios/App/build/Build/Products/Debug-iphonesimulator/App.app
+          path: ${{ steps.app.outputs.path }}
+
+      # Cas 1 — pre-release dédiée : déclenché manuellement (workflow_dispatch)
+      # ou lancement direct du workflow. Crée la release de toutes pièces,
+      # pour un lien de téléchargement stable et direct (contrairement à
+      # l'artefact CI, qui expire et exige d'être connecté).
+      # ⚠️ Ne pas tester `github.event_name` ici : dans un workflow réutilisable,
+      # il vaut l'événement de l'APPELANT (`push` pour release-please.yml),
+      # jamais `workflow_call`. La présence de `inputs` suffit à distinguer les
+      # appels dispatch/call des push directs, où le contexte est vide.
+      - name: Publish pre-release with the simulator build
+        if: inputs.prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || format('ios-preview-{0}', github.run_number) }}
+          name: Banquier iOS (pre-release, simulateur) — build ${{ github.run_number }}
+          prerelease: true
+          files: ${{ steps.app.outputs.path }}
+          body: |
+            Build de test iOS (Debug, non signé) — généré automatiquement depuis `${{ github.sha }}`.
+
+            ⚠️ Ce zip contient un `App.app` qui ne s'ouvre que dans le **simulateur iOS d'Xcode**
+            (macOS uniquement) — il ne peut pas s'installer sur un iPhone physique. Apple exige une
+            signature (compte développeur payant) pour ça, ce qui n'est pas encore en place ici —
+            voir `docs/mobile.md#ios`.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Cas 2 — release officielle : appelé par release-please.yml, exactement
+      # comme android-build.yml pour l'APK. On se contente d'attacher le zip à
+      # la release déjà créée : `gh release upload` ne touche ni au titre, ni
+      # aux notes de version, ni au flag pre-release.
+      - name: Attach the build to the release
+        if: inputs.tag != '' && !inputs.prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ inputs.tag }}" "${{ steps.app.outputs.path }}" --clobber

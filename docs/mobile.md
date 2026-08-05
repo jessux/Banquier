@@ -179,6 +179,12 @@ Ce qui a été ajouté :
 - Un schéma Xcode partagé (`App.xcscheme`) commité, pour que `xcodebuild` puisse builder en CI sans jamais ouvrir le projet dans l'IDE
 - `npm run build:ios` (équivalent de `build:android`) et `.github/workflows/ios-build.yml`
 
+### Attaché aux releases, comme l'APK — avec une grosse différence
+
+`.github/workflows/ios-build.yml` est appelé depuis `release-please.yml` exactement comme `android-build.yml` : chaque release officielle se voit attacher un zip `banquier-ios-simulator-<tag>.zip`, en plus des installeurs desktop et de l'APK. Mêmes déclencheurs qu'Android (push/PR sur `main`, tag `ios-preview-*`, lancement manuel).
+
+⚠️ **Ce zip n'est pas l'équivalent de l'APK.** Il contient un `App.app` buildé pour le **simulateur iOS** (`CODE_SIGNING_ALLOWED=NO`, voir plus bas) : il ne s'ouvre que dans Xcode → simulateur, sur un Mac. Contrairement à l'APK, **impossible de l'installer sur un iPhone physique** — Apple l'interdit sans signature. Il est attaché aux releases parce que c'est un artefact de build reproductible (utile pour vérifier que le projet compile, ou tester en simulateur), pas parce que c'est une distribution utilisateur final comme l'APK.
+
 ### Pas encore fait
 
 - **Aucune signature.** Contrairement à l'APK Android (signé avec un keystore de debug versionné, installable directement), Apple exige une signature pour installer quoi que ce soit sur un iPhone — même en debug. Sans compte développeur Apple (99$/an), impossible de produire un build installable sur un device réel. `.github/workflows/ios-build.yml` build donc uniquement pour le **simulateur iOS** (`CODE_SIGNING_ALLOWED=NO`), ce qui vérifie que le projet compile mais ne produit rien d'installable sur un vrai iPhone. Pour aller plus loin (TestFlight, App Store) il faudra : un compte développeur Apple, un certificat de distribution + provisioning profile, et probablement `fastlane match` ou l'équivalent pour gérer ça en CI.
