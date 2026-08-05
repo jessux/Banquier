@@ -9,7 +9,10 @@ import type {
   Transaction,
   PeriodComparison,
   PeriodComparisonRow,
-  NetBalance
+  NetBalance,
+  RecurringFrequency,
+  RecurringExpense,
+  RecurringSummary
 } from '../../shared/types'
 
 function buildExclClause(excludeCategories?: string[]): { clause: string; params: unknown[] } {
@@ -448,4 +451,140 @@ export async function getUncategorized(startDate?: string, endDate?: string, lim
   )
 
   return { count: agg?.count ?? 0, total: agg?.total ?? 0, sample }
+}
+
+// --- Dépenses récurrentes (abonnements, prélèvements réguliers) ---
+
+const RECURRING_FREQUENCIES: { freq: RecurringFrequency; days: number; perMonth: number }[] = [
+  { freq: 'hebdomadaire', days: 7, perMonth: 52 / 12 },
+  { freq: 'mensuel', days: 30, perMonth: 1 },
+  { freq: 'bimestriel', days: 60, perMonth: 1 / 2 },
+  { freq: 'trimestriel', days: 91, perMonth: 1 / 3 },
+  { freq: 'semestriel', days: 182, perMonth: 1 / 6 },
+  { freq: 'annuel', days: 365, perMonth: 1 / 12 }
+]
+
+/** Associe un intervalle médian (en jours) à la fréquence la plus proche, ou null si trop éloigné. */
+function classifyFrequency(medianDays: number): { freq: RecurringFrequency; perMonth: number } | null {
+  let best: { freq: RecurringFrequency; perMonth: number } | null = null
+  let bestErr = Infinity
+  for (const f of RECURRING_FREQUENCIES) {
+    const err = Math.abs(medianDays - f.days) / f.days
+    // tolérance de 25 % autour de la fréquence théorique
+    if (err <= 0.25 && err < bestErr) {
+      bestErr = err
+      best = { freq: f.freq, perMonth: f.perMonth }
+    }
+  }
+  return best
+}
+
+function mostCommonCategory(txs: Transaction[]): string | null {
+  const counts = new Map<string, number>()
+  for (const t of txs) {
+    if (!t.category) continue
+    counts.set(t.category, (counts.get(t.category) ?? 0) + 1)
+  }
+  let best: string | null = null
+  let bestN = 0
+  for (const [cat, n] of counts) {
+    if (n > bestN) {
+      best = cat
+      bestN = n
+    }
+  }
+  return best
+}
+
+function median(values: number[]): number {
+  if (values.length === 0) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid]
+}
+
+export async function getRecurringExpenses(startDate?: string, endDate?: string): Promise<RecurringSummary> {
+  const conditions = ['amount < 0', 'is_internal = 0']
+  const params: unknown[] = []
+  if (startDate) {
+    conditions.push('date >= ?')
+    params.push(startDate)
+  }
+  if (endDate) {
+    conditions.push('date <= ?')
+    params.push(endDate)
+  }
+
+  const rows = await all<Transaction>(
+    `SELECT * FROM transactions WHERE ${conditions.join(' AND ')} ORDER BY date ASC`,
+    params
+  )
+
+  // Regroupe par marchand normalisé.
+  const groups = new Map<string, Transaction[]>()
+  for (const r of rows) {
+    const key = normalizeMerchant(r.description)
+    if (!key) continue
+    const arr = groups.get(key)
+    if (arr) arr.push(r)
+    else groups.set(key, [r])
+  }
+
+  const items: RecurringExpense[] = []
+  const now = Date.now()
+
+  for (const [merchant, txs] of groups) {
+    // Au moins 3 occurrences pour confirmer une régularité.
+    if (txs.length < 3) continue
+
+    const times = txs.map((t) => new Date(t.date).getTime())
+    const intervals: number[] = []
+    for (let i = 1; i < times.length; i++) {
+      intervals.push((times[i] - times[i - 1]) / 86_400_000)
+    }
+    const med = median(intervals)
+    if (med <= 0) continue
+
+    const classified = classifyFrequency(med)
+    if (!classified) continue
+
+    // Vérifie la régularité : coefficient de variation des intervalles.
+    const mean = intervals.reduce((a, b) => a + b, 0) / intervals.length
+    const variance = intervals.reduce((a, b) => a + (b - mean) ** 2, 0) / intervals.length
+    const cv = mean > 0 ? Math.sqrt(variance) / mean : 1
+    if (cv > 0.5) continue // intervalles trop irréguliers : ce n'est pas un abonnement
+
+    const amounts = txs.map((t) => Math.abs(t.amount))
+    const averageAmount = amounts.reduce((a, b) => a + b, 0) / amounts.length
+    const last = txs[txs.length - 1]
+    const daysSinceLast = (now - new Date(last.date).getTime()) / 86_400_000
+    const active = daysSinceLast <= med * 2 // actif si dernière occurrence < 2 intervalles attendus
+
+    const monthlyEstimate = averageAmount * classified.perMonth
+
+    items.push({
+      merchant,
+      category: mostCommonCategory(txs),
+      frequency: classified.freq,
+      occurrences: txs.length,
+      averageAmount,
+      lastAmount: Math.abs(last.amount),
+      firstDate: txs[0].date,
+      lastDate: last.date,
+      intervalDays: Math.round(med),
+      monthlyEstimate,
+      yearlyEstimate: monthlyEstimate * 12,
+      active,
+      transactions: [...txs].reverse()
+    })
+  }
+
+  items.sort((a, b) => b.monthlyEstimate - a.monthlyEstimate)
+
+  const activeItems = items.filter((i) => i.active)
+  return {
+    items,
+    totalMonthlyActive: activeItems.reduce((acc, i) => acc + i.monthlyEstimate, 0),
+    totalYearlyActive: activeItems.reduce((acc, i) => acc + i.yearlyEstimate, 0)
+  }
 }

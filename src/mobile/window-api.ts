@@ -110,10 +110,10 @@ export function createMobileApi(): Window['api'] {
     getMonthlyStats: dashboardApi.getMonthlyStats,
     getCategoryStats: dashboardApi.getCategoryStats,
     getDashboardSummary: dashboardApi.getDashboardSummary,
-    getRecurringExpenses: notImplemented('La détection des dépenses récurrentes'),
+    getRecurringExpenses: dashboardApi.getRecurringExpenses,
     getTopMerchants: dashboardApi.getTopMerchants,
     getUncategorized: dashboardApi.getUncategorized,
-    comparePeriods: notImplemented('La comparaison de périodes'),
+    comparePeriods: dashboardApi.comparePeriods,
 
     // Budgets
     getBudgets: budgetsApi.getBudgets,
