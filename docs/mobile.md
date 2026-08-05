@@ -7,7 +7,8 @@ Banquier existe désormais en app mobile native (via [Capacitor](https://capacit
 L'interface (React/Vite) est la même que sur desktop, mais tourne dans une WebView native au lieu d'Electron. Côté données, l'app Android ne parle plus à un process Electron via IPC : elle embarque sa propre base SQLite locale sur le téléphone (`@capacitor-community/sqlite`) et implémente directement en JS/TS ce que le process principal Electron fait pour desktop. Le code correspondant vit dans `src/mobile/` :
 
 - `src/mobile/db.ts` — connexion SQLite + schéma
-- `src/mobile/api/` — port des fonctions de `src/main/database.ts` utiles aux Phases 1-3
+- `src/mobile/api/` — port des fonctions de `src/main/database.ts` utiles aux Phases 1-4
+- `src/mobile/quotes.ts` — cotations crypto/bourse (port de `src/main/quotes.ts`)
 - `src/mobile/parsers/csv.ts` — parsing CSV (port de `src/main/parsers/csv.ts`)
 - `src/mobile/parsers/pdf.ts` — extraction de texte PDF (`pdfjs-dist`, côté client) + prompt/parsing LLM (port de `src/main/parsers/pdf.ts`, voir Phase 5)
 - `src/mobile/llm.ts` — chat financier + catégorisation IA (port de `src/main/llm.ts`, LangChain/OpenRouter)
@@ -91,6 +92,16 @@ Sur desktop, `onPowensProgress` est absent de `window.api` : le job fonctionne �
 
 Le flux n'a pas encore été validé de bout en bout sur un appareil : cet environnement de développement n'a ni SDK Android ni accès à un vrai parcours bancaire.
 
+## Phase 4 — Patrimoine (disponible, non testée en conditions réelles)
+
+- Actifs (immobilier, actions, ETF, crypto, liquidités, assurance-vie, autre), lots d'achat et plans d'investissement programmé (DCA) vivent désormais dans les mêmes tables que sur desktop (`assets`, `asset_lots`, `dca_plans`, `networth_snapshots`), ajoutées au schéma SQLite embarqué du téléphone (`src/mobile/db.ts`). Comme pour toutes les autres tables mobiles, elles sont créées via `CREATE TABLE IF NOT EXISTS` au démarrage de l'app (`initDatabase()`) — pas de mécanisme de migration séparé à gérer.
+- `src/mobile/api/patrimoine.ts` porte l'intégralité de la logique Patrimoine de `src/main/database.ts` (CRUD des actifs et de leurs lots, plus/moins-value latente, instantané quotidien de valeur nette) vers le style async des autres modules `src/mobile/api/*.ts`, plus les helpers de planification DCA (`scheduledDates`, `applyDca`…) que desktop garde en ligne dans `src/main/ipc.ts` — regroupés ici puisque `applyDca` a de toute façon besoin à la fois de la DB et des cours.
+- `src/mobile/quotes.ts` porte `src/main/quotes.ts` (cotations CoinGecko pour la crypto, Yahoo Finance pour actions/ETF, conversion en euros). La seule vraie différence avec desktop : desktop tourne dans le process principal Electron et doit donc passer par `node-fetch` + `https-proxy-agent` pour honorer un éventuel proxy d'entreprise (`setConfiguredProxy`) ; sur mobile, `capacitor.config.ts` active `CapacitorHttp`, qui route le `fetch()` natif de la WebView côté Android — exactement le mécanisme déjà utilisé par `src/mobile/llm.ts` pour OpenRouter (voir plus haut). Ça élimine `node-fetch`/`https-proxy-agent` sans rien perdre : mobile n'a de toute façon pas d'équivalent au réglage de proxy desktop à honorer.
+
+⚠️ **Cours = un troisième appel externe, même sans Powens/IA configurés.** Le README présente Powens et l'IA (OpenRouter) comme les deux seules choses qui font sortir des données de la machine, une fois configurées. Le rafraîchissement des cours du Patrimoine en ajoute une troisième : dès qu'un actif de type marché (actions/ETF/crypto) est créé avec un symbole et que l'utilisateur déclenche « Rafraîchir les cours » (ou saisit un ticker, ou lance une recherche de symbole), l'app appelle CoinGecko et/ou Yahoo Finance directement depuis le téléphone — sans clé API à renseigner, donc sans geste de configuration explicite comme pour Powens/OpenRouter. Ça ne se déclenche que si l'utilisateur ajoute effectivement ce type d'actif et utilise ces fonctionnalités ; le reste de l'app (comptes, transactions, budgets…) reste 100 % hors-ligne comme avant.
+
+Comme pour la Phase 3, rien de tout ça n'a été validé de bout en bout sur un appareil réel — cet environnement de développement n'a ni SDK Android ni device physique pour vérifier concrètement les réponses CoinGecko/Yahoo depuis une WebView Android, ni le comportement de `CapacitorHttp` face à leurs formats de réponse réels.
+
 ## Phase 5 — Import PDF (disponible, non testée en conditions réelles)
 
 Comme sur desktop, l'import PDF n'est pas un parseur de tableau déterministe (contrairement au CSV) : c'est un unique appel LLM. Le flux desktop (`src/main/parsers/pdf.ts` + le handler `import-pdf` d'`src/main/ipc.ts`) est : extraire le texte brut du PDF, construire un prompt demandant `{date, description, amount}[]` en JSON, l'envoyer en un seul appel OpenRouter (sans historique ni outils), parser la réponse JSON, puis insérer les transactions avec la même logique de dédoublonnage et de règles de catégorisation que le CSV. Le portage mobile (`src/mobile/parsers/pdf.ts`, branché dans `importPdf` d'`src/mobile/window-api.ts`) reproduit exactement ce flux, avec deux différences :
@@ -107,6 +118,14 @@ PDF.js s'exécute normalement dans un Web Worker dédié (`GlobalWorkerOptions.w
 Le choix fait ici : **ne pas configurer `GlobalWorkerOptions.workerSrc` du tout**, ce qui déclenche le mécanisme de repli natif de pdf.js — le "fake worker", qui exécute le parsing directement sur le thread principal (avec un simple `console.warn("Setting up fake worker.")`, sans lever d'erreur ; comportement vérifié dans le code source de `pdfjs-dist@4.10.38`, `PDFWorker._initialize`/`_setupFakeWorker`). C'est un compromis assumé plutôt qu'un oubli : ça bloque brièvement l'UI pendant l'extraction (un import PDF reste une action ponctuelle, pas un flux continu), mais ça évite toute une catégorie de pannes de chargement de Worker qu'on ne peut pas tester ici — pas de fichier worker séparé à bundler/servir correctement, pas de `blob:`/CSP à déboguer à l'aveugle. Le build Vite (`npm run build:android`) confirme au moins que rien ne référence ni ne tente de charger `pdf.worker.mjs` comme asset séparé.
 
 **Non vérifié.** Comme le reste des flux mobiles marqués « non testée en conditions réelles », l'ensemble (sélection du PDF, extraction de texte par pdf.js en thread principal, appel OpenRouter, insertion) n'a été validé que par `npm run typecheck:mobile` et `npm run build:android` (bundling Vite réussi) — jamais dans une vraie WebView Android. Le point le plus susceptible de mal se comporter sur un appareil réel reste ce comportement de repli de pdf.js en l'absence de Worker.
+
+## Phase 6 — Récurrences, Comparaison, Simulateur (disponible, non testée en conditions réelles)
+
+- **Récurrences** (`Recurring.tsx`) — détection des abonnements/prélèvements réguliers, portée depuis `src/main/database.ts` (`getRecurringExpenses` et ses fonctions pures `classifyFrequency`/`mostCommonCategory`/`median`) vers `src/mobile/api/dashboard.ts`, à l'identique de la logique desktop : regroupement par marchand normalisé (réutilise le `normalizeMerchant` déjà porté pour `getTopMerchants`), classification de fréquence par intervalle médian, filtrage par coefficient de variation pour écarter les paiements trop irréguliers.
+- **Comparaison de périodes** (`Comparaison.tsx`) — `comparePeriods` était déjà entièrement porté et utilisé par les 9 outils du chat financier (Phase 2) ; il ne manquait que le branchement au niveau du `window.api` exposé aux pages, maintenant fait.
+- **Simulateur d'épargne** (`Simulateur.tsx`) — n'a nécessité aucun portage : c'est un calcul d'intérêts composés/objectif d'épargne entièrement côté client, sans le moindre appel à `window.api`. La page, partagée entre desktop et mobile, fonctionnait donc déjà telle quelle.
+
+Comme pour la Phase 3, ce portage n'a pas été validé de bout en bout sur un appareil ou un émulateur réel — cet environnement de développement n'a ni SDK Android ni device.
 
 ## Notifications système
 
@@ -128,8 +147,6 @@ La permission `POST_NOTIFICATIONS` (obligatoire depuis Android 13) est demandée
 
 ## Pas encore disponible sur mobile (roadmap)
 
-- **Phase 4** — Patrimoine, actifs, plans DCA, cours (crypto/bourse)
-- **Phase 6** — Pages Récurrences, Comparaison, Simulateur
 - **Phase 7** — Publication sur le Play Store (le debug est désormais signé de façon stable, cf. « Signature de l'APK » ci-dessous — reste la signature de *release*, le compte développeur et la fiche store)
 
 Les fonctionnalités non encore portées affichent un message clair ("n'est pas encore disponible") plutôt que de planter silencieusement.
