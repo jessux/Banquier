@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.29.1](https://github.com/jessux/Banquier/compare/v1.29.0...v1.29.1) (2026-08-05)
+
+
+### Corrections de bugs
+
+* **icons:** aligne le fond de l'icône desktop/iOS sur l'indigo --accent de l'app ([cbabb50](https://github.com/jessux/Banquier/commit/cbabb50c6ee399c7c90b7270ddcbeaa2407b54cf))
+* **icons:** recentre le glyphe B sur toutes les icônes ([afbad56](https://github.com/jessux/Banquier/commit/afbad56277941fd733361a2d9097f6d5988e1393))
+* **mobile:** ouvre le lien de mise à jour APK hors Custom Tab ([6adafb9](https://github.com/jessux/Banquier/commit/6adafb9babdd85084c368ab64e39f4a087713f58))
+
 ## [1.29.0](https://github.com/jessux/Banquier/compare/v1.28.0...v1.29.0) (2026-08-05)
 
 
