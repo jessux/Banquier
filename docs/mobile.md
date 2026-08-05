@@ -90,6 +90,14 @@ Sur desktop, `onPowensProgress` est absent de `window.api` : le job fonctionne �
 
 Le flux n'a pas encore été validé de bout en bout sur un appareil : cet environnement de développement n'a ni SDK Android ni accès à un vrai parcours bancaire.
 
+## Phase 6 — Récurrences, Comparaison, Simulateur (disponible, non testée en conditions réelles)
+
+- **Récurrences** (`Recurring.tsx`) — détection des abonnements/prélèvements réguliers, portée depuis `src/main/database.ts` (`getRecurringExpenses` et ses fonctions pures `classifyFrequency`/`mostCommonCategory`/`median`) vers `src/mobile/api/dashboard.ts`, à l'identique de la logique desktop : regroupement par marchand normalisé (réutilise le `normalizeMerchant` déjà porté pour `getTopMerchants`), classification de fréquence par intervalle médian, filtrage par coefficient de variation pour écarter les paiements trop irréguliers.
+- **Comparaison de périodes** (`Comparaison.tsx`) — `comparePeriods` était déjà entièrement porté et utilisé par les 9 outils du chat financier (Phase 2) ; il ne manquait que le branchement au niveau du `window.api` exposé aux pages, maintenant fait.
+- **Simulateur d'épargne** (`Simulateur.tsx`) — n'a nécessité aucun portage : c'est un calcul d'intérêts composés/objectif d'épargne entièrement côté client, sans le moindre appel à `window.api`. La page, partagée entre desktop et mobile, fonctionnait donc déjà telle quelle.
+
+Comme pour la Phase 3, ce portage n'a pas été validé de bout en bout sur un appareil ou un émulateur réel — cet environnement de développement n'a ni SDK Android ni device.
+
 ## Notifications système
 
 Les alertes de Banquier étaient jusqu'ici de simples toasts HTML : invisibles dès que l'app passe en arrière-plan — c'est-à-dire précisément pendant une synchronisation bancaire, qui peut durer plusieurs minutes.
@@ -112,7 +120,6 @@ La permission `POST_NOTIFICATIONS` (obligatoire depuis Android 13) est demandée
 
 - **Phase 4** — Patrimoine, actifs, plans DCA, cours (crypto/bourse)
 - **Phase 5** — Import PDF
-- **Phase 6** — Pages Récurrences, Comparaison, Simulateur
 - **Phase 7** — Publication sur le Play Store (le debug est désormais signé de façon stable, cf. « Signature de l'APK » ci-dessous — reste la signature de *release*, le compte développeur et la fiche store)
 
 Les fonctionnalités non encore portées affichent un message clair ("n'est pas encore disponible") plutôt que de planter silencieusement.
