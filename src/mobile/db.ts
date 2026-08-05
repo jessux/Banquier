@@ -153,6 +153,47 @@ const SCHEMA_SQL = `
     content    TEXT NOT NULL,
     created_at TEXT NOT NULL
   );
+
+  CREATE TABLE IF NOT EXISTS assets (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    type       TEXT NOT NULL,
+    label      TEXT NOT NULL,
+    quantity   REAL,
+    value      REAL NOT NULL,
+    currency   TEXT NOT NULL DEFAULT 'EUR',
+    symbol     TEXT,
+    notes      TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS networth_snapshots (
+    date  TEXT PRIMARY KEY,
+    value REAL NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS asset_lots (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id   INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    date       TEXT,
+    quantity   REAL NOT NULL,
+    unit_price REAL NOT NULL,
+    fees       REAL NOT NULL DEFAULT 0,
+    plan_id    INTEGER
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_asset_lots_asset ON asset_lots(asset_id);
+
+  CREATE TABLE IF NOT EXISTS dca_plans (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    asset_id   INTEGER NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    amount     REAL NOT NULL,
+    frequency  TEXT NOT NULL,
+    day_ref    INTEGER NOT NULL DEFAULT 1,
+    start_date TEXT NOT NULL,
+    fees       REAL NOT NULL DEFAULT 0,
+    active     INTEGER NOT NULL DEFAULT 1
+  );
 `
 
 const DEFAULT_CATEGORY_TREE: { name: string; children?: string[] }[] = [

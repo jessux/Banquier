@@ -7,7 +7,8 @@ Banquier existe désormais en app mobile native (via [Capacitor](https://capacit
 L'interface (React/Vite) est la même que sur desktop, mais tourne dans une WebView native au lieu d'Electron. Côté données, l'app Android ne parle plus à un process Electron via IPC : elle embarque sa propre base SQLite locale sur le téléphone (`@capacitor-community/sqlite`) et implémente directement en JS/TS ce que le process principal Electron fait pour desktop. Le code correspondant vit dans `src/mobile/` :
 
 - `src/mobile/db.ts` — connexion SQLite + schéma
-- `src/mobile/api/` — port des fonctions de `src/main/database.ts` utiles aux Phases 1-3
+- `src/mobile/api/` — port des fonctions de `src/main/database.ts` utiles aux Phases 1-4
+- `src/mobile/quotes.ts` — cotations crypto/bourse (port de `src/main/quotes.ts`)
 - `src/mobile/parsers/csv.ts` — parsing CSV (port de `src/main/parsers/csv.ts`)
 - `src/mobile/llm.ts` — chat financier + catégorisation IA (port de `src/main/llm.ts`, LangChain/OpenRouter)
 - `src/mobile/powens.ts`, `src/mobile/powens-webview.ts`, `src/mobile/powens-sync.ts` — synchronisation bancaire Powens (port de `src/main/powens.ts`)
@@ -90,6 +91,16 @@ Sur desktop, `onPowensProgress` est absent de `window.api` : le job fonctionne �
 
 Le flux n'a pas encore été validé de bout en bout sur un appareil : cet environnement de développement n'a ni SDK Android ni accès à un vrai parcours bancaire.
 
+## Phase 4 — Patrimoine (disponible, non testée en conditions réelles)
+
+- Actifs (immobilier, actions, ETF, crypto, liquidités, assurance-vie, autre), lots d'achat et plans d'investissement programmé (DCA) vivent désormais dans les mêmes tables que sur desktop (`assets`, `asset_lots`, `dca_plans`, `networth_snapshots`), ajoutées au schéma SQLite embarqué du téléphone (`src/mobile/db.ts`). Comme pour toutes les autres tables mobiles, elles sont créées via `CREATE TABLE IF NOT EXISTS` au démarrage de l'app (`initDatabase()`) — pas de mécanisme de migration séparé à gérer.
+- `src/mobile/api/patrimoine.ts` porte l'intégralité de la logique Patrimoine de `src/main/database.ts` (CRUD des actifs et de leurs lots, plus/moins-value latente, instantané quotidien de valeur nette) vers le style async des autres modules `src/mobile/api/*.ts`, plus les helpers de planification DCA (`scheduledDates`, `applyDca`…) que desktop garde en ligne dans `src/main/ipc.ts` — regroupés ici puisque `applyDca` a de toute façon besoin à la fois de la DB et des cours.
+- `src/mobile/quotes.ts` porte `src/main/quotes.ts` (cotations CoinGecko pour la crypto, Yahoo Finance pour actions/ETF, conversion en euros). La seule vraie différence avec desktop : desktop tourne dans le process principal Electron et doit donc passer par `node-fetch` + `https-proxy-agent` pour honorer un éventuel proxy d'entreprise (`setConfiguredProxy`) ; sur mobile, `capacitor.config.ts` active `CapacitorHttp`, qui route le `fetch()` natif de la WebView côté Android — exactement le mécanisme déjà utilisé par `src/mobile/llm.ts` pour OpenRouter (voir plus haut). Ça élimine `node-fetch`/`https-proxy-agent` sans rien perdre : mobile n'a de toute façon pas d'équivalent au réglage de proxy desktop à honorer.
+
+⚠️ **Cours = un troisième appel externe, même sans Powens/IA configurés.** Le README présente Powens et l'IA (OpenRouter) comme les deux seules choses qui font sortir des données de la machine, une fois configurées. Le rafraîchissement des cours du Patrimoine en ajoute une troisième : dès qu'un actif de type marché (actions/ETF/crypto) est créé avec un symbole et que l'utilisateur déclenche « Rafraîchir les cours » (ou saisit un ticker, ou lance une recherche de symbole), l'app appelle CoinGecko et/ou Yahoo Finance directement depuis le téléphone — sans clé API à renseigner, donc sans geste de configuration explicite comme pour Powens/OpenRouter. Ça ne se déclenche que si l'utilisateur ajoute effectivement ce type d'actif et utilise ces fonctionnalités ; le reste de l'app (comptes, transactions, budgets…) reste 100 % hors-ligne comme avant.
+
+Comme pour la Phase 3, rien de tout ça n'a été validé de bout en bout sur un appareil réel — cet environnement de développement n'a ni SDK Android ni device physique pour vérifier concrètement les réponses CoinGecko/Yahoo depuis une WebView Android, ni le comportement de `CapacitorHttp` face à leurs formats de réponse réels.
+
 ## Notifications système
 
 Les alertes de Banquier étaient jusqu'ici de simples toasts HTML : invisibles dès que l'app passe en arrière-plan — c'est-à-dire précisément pendant une synchronisation bancaire, qui peut durer plusieurs minutes.
@@ -110,7 +121,6 @@ La permission `POST_NOTIFICATIONS` (obligatoire depuis Android 13) est demandée
 
 ## Pas encore disponible sur mobile (roadmap)
 
-- **Phase 4** — Patrimoine, actifs, plans DCA, cours (crypto/bourse)
 - **Phase 5** — Import PDF
 - **Phase 6** — Pages Récurrences, Comparaison, Simulateur
 - **Phase 7** — Publication sur le Play Store (le debug est désormais signé de façon stable, cf. « Signature de l'APK » ci-dessous — reste la signature de *release*, le compte développeur et la fiche store)
