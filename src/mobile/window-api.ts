@@ -6,6 +6,7 @@ import * as budgetsApi from './api/budgets'
 import * as importsApi from './api/imports'
 import * as dashboardApi from './api/dashboard'
 import * as chatApi from './api/chat'
+import * as patrimoineApi from './api/patrimoine'
 import * as csv from './parsers/csv'
 import * as preferences from './preferences'
 import { openFileDialog as pickFile } from './file-picker'
@@ -16,7 +17,8 @@ import { checkForUpdates } from './updater'
 import { POWENS_CREDS, initAuth, getTempCode, getConnections, type PowensCreds } from './powens'
 import { openConnectWebview } from './powens-webview'
 import { importPowens, onProgress as onPowensProgress, emitProgress } from './powens-sync'
-import type { TransactionFilters } from '../shared/types'
+import { getCurrentPriceEur, isMarketType, searchSymbols } from './quotes'
+import type { Asset, AssetInput, AssetType, QuoteRefreshResult, TransactionFilters } from '../shared/types'
 import pkg from '../../package.json'
 
 const NOT_YET = ' n’est pas encore disponible dans Banquier Android (arrive dans une prochaine mise à jour).'
@@ -386,16 +388,91 @@ export function createMobileApi(): Window['api'] {
     },
 
     // Patrimoine
-    getAssets: notImplemented('Le suivi du patrimoine'),
-    getPatrimoineSummary: notImplemented('Le suivi du patrimoine'),
-    getAssetLots: notImplemented('Le suivi du patrimoine'),
-    getDcaPlan: notImplemented('Le suivi du patrimoine'),
-    createAsset: notImplemented('Le suivi du patrimoine'),
-    updateAsset: notImplemented('Le suivi du patrimoine'),
-    deleteAsset: notImplemented('Le suivi du patrimoine'),
-    searchSymbol: notImplemented('La recherche de cours'),
-    previewSymbol: notImplemented('La recherche de cours'),
-    refreshQuotes: notImplemented('La mise à jour des cours'),
+    getAssets: patrimoineApi.getAssets,
+    getPatrimoineSummary: patrimoineApi.getPatrimoineSummary,
+    getAssetLots: patrimoineApi.getAssetLots,
+    getDcaPlan: async (assetId: number) => (await patrimoineApi.getDcaPlanByAsset(assetId)) ?? null,
+    deleteAsset: patrimoineApi.deleteAsset,
+
+    createAsset: async (input: AssetInput): Promise<Asset> => {
+      const asset = await patrimoineApi.createAsset(input)
+      if (input.dca && isMarketType(input.type) && input.symbol) {
+        const planId = await patrimoineApi.createDcaPlan(asset.id, input.dca)
+        await patrimoineApi.applyDca(asset.id, input.type, input.symbol, {
+          ...input.dca,
+          id: planId,
+          asset_id: asset.id,
+          active: 1
+        })
+      }
+      const assets = await patrimoineApi.getAssets()
+      return assets.find((a) => a.id === asset.id) as Asset
+    },
+
+    updateAsset: async (id: number, input: AssetInput) => {
+      await patrimoineApi.updateAsset(id, input)
+      await patrimoineApi.deleteDcaPlansByAsset(id)
+      if (input.dca && isMarketType(input.type) && input.symbol) {
+        const planId = await patrimoineApi.createDcaPlan(id, input.dca)
+        await patrimoineApi.applyDca(id, input.type, input.symbol, {
+          ...input.dca,
+          id: planId,
+          asset_id: id,
+          active: 1
+        })
+      }
+    },
+
+    // Suggestions de tickers pour la liste déroulante de recherche du formulaire.
+    searchSymbol: async (type: string, query: string) => {
+      try {
+        return await searchSymbols(type as AssetType, query)
+      } catch {
+        return []
+      }
+    },
+
+    // Aperçu d'un cours pour valider un ticker dans le formulaire.
+    previewSymbol: async (type: string, symbol: string) => {
+      try {
+        return { price: await getCurrentPriceEur(type as AssetType, symbol) }
+      } catch (e) {
+        return { price: null, error: String(e instanceof Error ? e.message : e) }
+      }
+    },
+
+    // Met à jour les cours (et régénère les lots DCA jusqu'à aujourd'hui).
+    refreshQuotes: async (): Promise<QuoteRefreshResult> => {
+      const assets = (await patrimoineApi.getAssets()).filter((a) => a.symbol && isMarketType(a.type))
+      const updated: QuoteRefreshResult['updated'] = []
+      const failed: QuoteRefreshResult['failed'] = []
+      for (const a of assets) {
+        try {
+          const plan = await patrimoineApi.getDcaPlanByAsset(a.id)
+          if (plan) {
+            const value = await patrimoineApi.applyDca(a.id, a.type, a.symbol as string, plan)
+            updated.push({ id: a.id, label: a.label, value })
+            continue
+          }
+          const qty = a.lot_quantity > 0 ? a.lot_quantity : a.quantity ?? 0
+          if (qty <= 0) {
+            failed.push({ label: a.label, reason: 'quantité inconnue' })
+            continue
+          }
+          const price = await getCurrentPriceEur(a.type, a.symbol as string)
+          if (price == null) {
+            failed.push({ label: a.label, reason: 'cours introuvable' })
+            continue
+          }
+          const value = qty * price
+          await patrimoineApi.setAssetValue(a.id, value)
+          updated.push({ id: a.id, label: a.label, value })
+        } catch (e) {
+          failed.push({ label: a.label, reason: String(e instanceof Error ? e.message : e) })
+        }
+      }
+      return { updated, failed }
+    },
 
     // Profiles — un seul profil sur mobile pour l'instant
     getProfiles: async () => ({ active: 'default', profiles: [{ id: 'default', name: 'Mon compte' }] }),
