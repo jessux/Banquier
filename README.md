@@ -81,7 +81,7 @@ Banquier est aussi disponible en app Android (Phase 1 : cœur hors-ligne — com
 
 ### iOS
 
-Le portage iOS est en chantier (scaffolding du projet Xcode fait, pas encore signé ni distribuable — voir [`docs/mobile.md#ios`](docs/mobile.md#ios)). Pas encore de build installable sur iPhone.
+Le portage iOS est en chantier (scaffolding du projet Xcode fait, pas encore signé ni distribuable — voir [`docs/mobile.md#ios`](docs/mobile.md#ios)). Chaque release publie un build simulateur (`banquier-ios-simulator-*.zip`, à ouvrir dans Xcode sur un Mac) dans l'onglet [Releases](https://github.com/jessux/Banquier/releases) — pas encore de build installable sur iPhone.
 
 ---
 
