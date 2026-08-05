@@ -43,3 +43,15 @@ jobs:
       tag: ${{ needs.release-please.outputs.tag_name }}
       # Attache l'APK à la release existante sans la repasser en pre-release.
       prerelease: false
+
+  build-ios:
+    name: Build iOS (simulateur)
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/ios-build.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      # Attache le zip à la release existante sans la repasser en pre-release.
+      prerelease: false

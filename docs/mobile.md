@@ -1,6 +1,6 @@
-# Banquier sur Android
+# Banquier sur mobile (Android / iOS)
 
-Banquier existe désormais en app Android native (via [Capacitor](https://capacitorjs.com)), en plus de la version desktop Electron. C'est un chantier en plusieurs phases — voici où ça en est.
+Banquier existe désormais en app mobile native (via [Capacitor](https://capacitorjs.com)), en plus de la version desktop Electron. C'est un chantier en plusieurs phases — voici où ça en est. Le portage Android est le plus avancé (Phases 1-3 disponibles, voir plus bas) ; le portage iOS est pour l'instant au stade du scaffolding — voir [iOS](#ios) en fin de document.
 
 ## Comment ça marche
 
@@ -165,4 +165,38 @@ Pour builder toi-même avec Android Studio :
 ```bash
 npm run build:android
 npx cap open android   # ouvre le projet dans Android Studio
+```
+
+## iOS
+
+Tout le code de `src/mobile/` (SQLite, parsing CSV, IA/chat, sync Powens, notifications…) est déjà multiplateforme puisqu'il passe exclusivement par les plugins Capacitor — c'est le même code qui tourne sur Android et iOS, sans branche `if (platform === 'android')`. Ce qui manquait, c'était le projet natif iOS lui-même.
+
+Ce qui a été ajouté :
+
+- `ios/` — projet Xcode généré par `npx cap add ios` (dépendance `@capacitor/ios`, gestion des plugins natifs via Swift Package Manager, pas de CocoaPods)
+- Le schéma d'URL `banquier://` déclaré dans `Info.plist` (`CFBundleURLTypes`), équivalent iOS de l'intent-filter Android pour la redirection Powens (`banquier://powens-callback`, voir `src/mobile/powens-webview.ts`) — `AppDelegate.swift` relaie déjà l'ouverture d'URL au plugin `@capacitor/app` sans modification nécessaire
+- Icône de l'app (même logo « B » que Android/desktop, aplati sur fond indigo plein `#6366F1` — un icône iOS ne peut pas avoir de canal alpha)
+- Un schéma Xcode partagé (`App.xcscheme`) commité, pour que `xcodebuild` puisse builder en CI sans jamais ouvrir le projet dans l'IDE
+- `npm run build:ios` (équivalent de `build:android`) et `.github/workflows/ios-build.yml`
+
+### Attaché aux releases, comme l'APK — avec une grosse différence
+
+`.github/workflows/ios-build.yml` est appelé depuis `release-please.yml` exactement comme `android-build.yml` : chaque release officielle se voit attacher un zip `banquier-ios-simulator-<tag>.zip`, en plus des installeurs desktop et de l'APK. Mêmes déclencheurs qu'Android (push/PR sur `main`, tag `ios-preview-*`, lancement manuel).
+
+⚠️ **Ce zip n'est pas l'équivalent de l'APK.** Il contient un `App.app` buildé pour le **simulateur iOS** (`CODE_SIGNING_ALLOWED=NO`, voir plus bas) : il ne s'ouvre que dans Xcode → simulateur, sur un Mac. Contrairement à l'APK, **impossible de l'installer sur un iPhone physique** — Apple l'interdit sans signature. Il est attaché aux releases parce que c'est un artefact de build reproductible (utile pour vérifier que le projet compile, ou tester en simulateur), pas parce que c'est une distribution utilisateur final comme l'APK.
+
+### Pas encore fait
+
+- **Aucune signature.** Contrairement à l'APK Android (signé avec un keystore de debug versionné, installable directement), Apple exige une signature pour installer quoi que ce soit sur un iPhone — même en debug. Sans compte développeur Apple (99$/an), impossible de produire un build installable sur un device réel. `.github/workflows/ios-build.yml` build donc uniquement pour le **simulateur iOS** (`CODE_SIGNING_ALLOWED=NO`), ce qui vérifie que le projet compile mais ne produit rien d'installable sur un vrai iPhone. Pour aller plus loin (TestFlight, App Store) il faudra : un compte développeur Apple, un certificat de distribution + provisioning profile, et probablement `fastlane match` ou l'équivalent pour gérer ça en CI.
+- **Jamais testé**, ni sur simulateur ni sur device réel — cet environnement de développement n'a ni macOS ni Xcode.
+- **Splash screen** : placeholder Capacitor par défaut, comme sur Android (non traité).
+- **Universal Links** non configurés — on réutilise le même schéma d'URL personnalisé `banquier://` que sur Android plutôt qu'un vrai universal link (`https://…`), plus simple (pas besoin d'héberger un fichier `apple-app-site-association`) mais Safari affiche une confirmation avant de basculer vers l'app.
+- **Versionning statique** : `CURRENT_PROJECT_VERSION`/`MARKETING_VERSION` restent figés (`1`/`1.0`) — contrairement à Android où `versionCode`/`versionName` sont dérivés dynamiquement de `package.json`. Pas critique tant qu'il n'y a pas de vraie distribution à versionner (TestFlight/App Store).
+- **Roadmap Phases 4-7** (patrimoine, import PDF, récurrences/comparaison/simulateur, publication store) — identique à Android, pas commencée côté iOS non plus, en plus du chantier signature/distribution qui lui est propre.
+
+Pour builder toi-même avec Xcode (sur un Mac) :
+
+```bash
+npm run build:ios
+npx cap open ios   # ouvre le projet dans Xcode
 ```
