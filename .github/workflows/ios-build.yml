@@ -1,0 +1,80 @@
+name: Build iOS app
+
+# Compile Banquier pour iOS (simulateur). Nécessaire car l'environnement de
+# développement habituel n'a pas macOS/Xcode. Contrairement à l'APK Android,
+# ce build n'est pas signé et ne peut donc pas s'installer sur un iPhone
+# physique (Apple exige une signature même en debug) — voir docs/mobile.md
+# pour ce qu'il reste à faire (compte développeur Apple, TestFlight).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'src/mobile/**'
+      - 'src/main/memory.ts'
+      - 'src/renderer/**'
+      - 'src/shared/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ios-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'ios/**'
+      - 'src/mobile/**'
+      - 'src/main/memory.ts'
+      - 'src/renderer/**'
+      - 'src/shared/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ios-build.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build for iOS Simulator (non signé)
+    runs-on: macos-15
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check mobile module
+        run: npm run typecheck:mobile
+
+      - name: Build web assets + sync Capacitor
+        run: npm run build:ios
+
+      # Pas de compte développeur Apple ni de certificat de signature ici : on
+      # build pour le simulateur (CODE_SIGNING_ALLOWED=NO), ce qui suffit à
+      # vérifier que le projet Xcode/Swift compile. Un build installable sur
+      # un vrai iPhone demande une signature (voir docs/mobile.md).
+      - name: Build App.app (iOS Simulator, non signé)
+        working-directory: ios/App
+        run: |
+          xcodebuild \
+            -project App.xcodeproj \
+            -scheme App \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banquier-ios-simulator-debug
+          path: ios/App/build/Build/Products/Debug-iphonesimulator/App.app

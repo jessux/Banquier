@@ -79,6 +79,10 @@ npm run build:win:dir    # dossier non packagé (test rapide)
 
 Banquier est aussi disponible en app Android (Phase 1 : cœur hors-ligne — comptes, transactions, import CSV, catégories, règles, budgets, dashboard). Voir [`docs/mobile.md`](docs/mobile.md) pour le détail et la roadmap.
 
+### iOS
+
+Le portage iOS est en chantier (scaffolding du projet Xcode fait, pas encore signé ni distribuable — voir [`docs/mobile.md#ios`](docs/mobile.md#ios)). Pas encore de build installable sur iPhone.
+
 ---
 
 ## Sauvegarder et restaurer vos données
