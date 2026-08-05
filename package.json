@@ -1,6 +1,6 @@
 {
   "name": "banquier",
-  "version": "1.29.1",
+  "version": "1.30.0",
   "description": "Application de gestion de relevés bancaires",
   "main": "./out/main/index.js",
   "author": "jessux <jessux@users.noreply.github.com>",

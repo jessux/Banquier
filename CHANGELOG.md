@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.30.0](https://github.com/jessux/Banquier/compare/v1.29.1...v1.30.0) (2026-08-05)
+
+
+### Nouvelles fonctionnalités
+
+* **mobile:** porte l'import PDF (Phase 5) ([1cf1005](https://github.com/jessux/Banquier/commit/1cf10053ec1de06ccd16929055a3886e57d5d737))
+* **mobile:** porte l'import PDF (Phase 5) ([f2bc9f5](https://github.com/jessux/Banquier/commit/f2bc9f5fba445ae867bd45c58028c82514b315aa))
+* **mobile:** porte l'import PDF (Phase 5) ([#81](https://github.com/jessux/Banquier/issues/81)) ([1cf1005](https://github.com/jessux/Banquier/commit/1cf10053ec1de06ccd16929055a3886e57d5d737))
+* **mobile:** porte le suivi du Patrimoine (Phase 4) ([92a1142](https://github.com/jessux/Banquier/commit/92a1142cbbd60409a76dc19564d9d6ff0a969340))
+* **mobile:** porte le suivi du Patrimoine (Phase 4) ([f9af988](https://github.com/jessux/Banquier/commit/f9af988295b6fc28fcaec14c22b5de643c9aeffe))
+* **mobile:** porte le suivi du Patrimoine (Phase 4) ([#80](https://github.com/jessux/Banquier/issues/80)) ([92a1142](https://github.com/jessux/Banquier/commit/92a1142cbbd60409a76dc19564d9d6ff0a969340))
+* **mobile:** porte Récurrences, Comparaison et Simulateur (Phase 6) ([7ae1509](https://github.com/jessux/Banquier/commit/7ae15092b853cd14f2b687fb6cdb98004540de6e))
+* **mobile:** porte Récurrences, Comparaison et Simulateur (Phase 6) ([cce6335](https://github.com/jessux/Banquier/commit/cce633560c1acd7019c7a804935e3c75927075e8))
+* **mobile:** porte Récurrences, Comparaison et Simulateur (Phase 6) ([#79](https://github.com/jessux/Banquier/issues/79)) ([7ae1509](https://github.com/jessux/Banquier/commit/7ae15092b853cd14f2b687fb6cdb98004540de6e))
+
 ## [1.29.1](https://github.com/jessux/Banquier/compare/v1.29.0...v1.29.1) (2026-08-05)
 
 
