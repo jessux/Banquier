@@ -7,9 +7,10 @@ import * as importsApi from './api/imports'
 import * as dashboardApi from './api/dashboard'
 import * as chatApi from './api/chat'
 import * as csv from './parsers/csv'
+import * as pdf from './parsers/pdf'
 import * as preferences from './preferences'
 import { openFileDialog as pickFile } from './file-picker'
-import { runFinancialChat, buildFinancialSystemPrompt, buildChatMessages, categorizeBatch, type ToolExecutors } from './llm'
+import { runFinancialChat, buildFinancialSystemPrompt, buildChatMessages, categorizeBatch, callOpenRouterOnce, type ToolExecutors } from './llm'
 import { retrieveRelevantMemories } from '../main/memory'
 import * as notifications from './notifications'
 import { checkForUpdates } from './updater'
@@ -101,7 +102,31 @@ export function createMobileApi(): Window['api'] {
       if (insertedIds.length > 0) await rulesApi.applyRulesToTransactions(insertedIds)
       return { imported, duplicates, errors: 0, importId: importRecord.id }
     },
-    importPdf: notImplemented("L'import PDF"),
+    importPdf: async (handle, accountId) => {
+      const text = await pdf.extractPdfText(handle)
+      const prompt = pdf.buildPdfParsePrompt(text)
+      const settings = await preferences.getSettings()
+
+      const response = await callOpenRouterOnce([{ role: 'user', content: prompt }], settings)
+
+      const transactions = pdf.parseLlmJsonResponse(response)
+      if (transactions.length === 0) {
+        return { imported: 0, duplicates: 0, errors: 1, importId: -1 }
+      }
+
+      const txWithAccount = transactions.map((t) => ({ ...t, account_id: accountId }))
+      const importRecord = await importsApi.createImport(
+        handle.replace(/^mobile-file-\d+-/, ''),
+        txWithAccount.length
+      )
+      const txWithImport = txWithAccount.map((t) => ({ ...t, import_id: importRecord.id }))
+      const { imported, duplicates, insertedIds } = await transactionsApi.insertTransactions(
+        txWithImport,
+        importRecord.id
+      )
+      if (insertedIds.length > 0) await rulesApi.applyRulesToTransactions(insertedIds)
+      return { imported, duplicates, errors: 0, importId: importRecord.id }
+    },
     getImports: importsApi.getImports,
 
     // Stats

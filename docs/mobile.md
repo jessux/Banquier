@@ -9,6 +9,7 @@ L'interface (React/Vite) est la même que sur desktop, mais tourne dans une WebV
 - `src/mobile/db.ts` — connexion SQLite + schéma
 - `src/mobile/api/` — port des fonctions de `src/main/database.ts` utiles aux Phases 1-3
 - `src/mobile/parsers/csv.ts` — parsing CSV (port de `src/main/parsers/csv.ts`)
+- `src/mobile/parsers/pdf.ts` — extraction de texte PDF (`pdfjs-dist`, côté client) + prompt/parsing LLM (port de `src/main/parsers/pdf.ts`, voir Phase 5)
 - `src/mobile/llm.ts` — chat financier + catégorisation IA (port de `src/main/llm.ts`, LangChain/OpenRouter)
 - `src/mobile/powens.ts`, `src/mobile/powens-webview.ts`, `src/mobile/powens-sync.ts` — synchronisation bancaire Powens (port de `src/main/powens.ts`)
 - `src/mobile/notifications.ts` — notifications système Android (`@capacitor/local-notifications`)
@@ -90,6 +91,23 @@ Sur desktop, `onPowensProgress` est absent de `window.api` : le job fonctionne �
 
 Le flux n'a pas encore été validé de bout en bout sur un appareil : cet environnement de développement n'a ni SDK Android ni accès à un vrai parcours bancaire.
 
+## Phase 5 — Import PDF (disponible, non testée en conditions réelles)
+
+Comme sur desktop, l'import PDF n'est pas un parseur de tableau déterministe (contrairement au CSV) : c'est un unique appel LLM. Le flux desktop (`src/main/parsers/pdf.ts` + le handler `import-pdf` d'`src/main/ipc.ts`) est : extraire le texte brut du PDF, construire un prompt demandant `{date, description, amount}[]` en JSON, l'envoyer en un seul appel OpenRouter (sans historique ni outils), parser la réponse JSON, puis insérer les transactions avec la même logique de dédoublonnage et de règles de catégorisation que le CSV. Le portage mobile (`src/mobile/parsers/pdf.ts`, branché dans `importPdf` d'`src/mobile/window-api.ts`) reproduit exactement ce flux, avec deux différences :
+
+- **Extraction de texte côté client.** Desktop utilise `pdf-parse`, un module Node-only (`fs.readFileSync` + parsing natif), indisponible dans le bundle renderer mobile (build navigateur classique, cf. `electron.vite.config.ts`). Le portage utilise [`pdfjs-dist`](https://github.com/mozilla/pdf.js) (le moteur PDF.js de Mozilla, pur JS/WASM) à la place : le PDF est lu depuis le cache du sélecteur de fichier (`file-picker.ts`, même mécanisme que l'import CSV — `openFileDialog()` retourne un handle opaque, `getCachedFile(handle).base64` donne le contenu), décodé en `Uint8Array` (`atob` + boucle, comme le `decodeBase64ToText` du CSV), puis passé à `pdfjsLib.getDocument({ data })`. Le texte de chaque page est extrait via `getTextContent()` et concaténé — le format exact diffère un peu de `pdf-parse` (pagination, espacement), mais ça n'a pas besoin d'être identique puisque ce texte ne sert qu'à nourrir le prompt LLM, pas à un parsing structurel.
+- **`buildPdfParsePrompt` et `parseLlmJsonResponse` sont dupliquées, pas importées.** Ce sont des fonctions pures (aucune I/O), mais elles vivent dans `src/main/parsers/pdf.ts`, qui commence par `import fs from 'fs'` et `require('pdf-parse')` — importer ce fichier depuis le mobile embarquerait ces dépendances Node-only dans le bundle renderer. Contrairement à `src/main/memory.ts` (réutilisé tel quel par `src/mobile/llm.ts`, seule exception documentée plus haut, précisément parce qu'il est 100 % pur), `pdf.ts` n'a pas cette propriété au niveau du fichier entier. Les deux fonctions sont donc recopiées verbatim dans `src/mobile/parsers/pdf.ts` (avec un commentaire pointant vers l'original) — toute évolution de leur logique côté desktop doit être reportée manuellement ici.
+
+L'extraction des transactions passe ensuite par le même unique appel LLM que sur desktop, via `callOpenRouterOnce` (`src/mobile/llm.ts`, déjà utilisé pour la catégorisation IA) : ça suppose donc une clé API OpenRouter configurée dans Paramètres, exactement comme la catégorisation IA ou le chat. Sans clé, `callOpenRouterOnce` lève déjà une erreur claire — aucune validation redondante ajoutée ici.
+
+### Web Worker de pdf.js : thread principal, volontairement
+
+PDF.js s'exécute normalement dans un Web Worker dédié (`GlobalWorkerOptions.workerSrc`), pour ne pas bloquer le thread principal pendant le parsing. C'est le point le plus incertain de ce portage : le chargement d'un Worker (module ES, souvent via une URL `blob:`) dans une WebView Android pilotée par Capacitor est un terrain connu pour être fragile — origine du contenu servi (`https://localhost` sur Android, potentiellement pas la même politique que dans un vrai navigateur), CSP, support de `new Worker(url, { type: "module" })` selon la version du WebView système. Rien de tout ça n'est vérifiable dans cet environnement de développement (pas de SDK/émulateur Android).
+
+Le choix fait ici : **ne pas configurer `GlobalWorkerOptions.workerSrc` du tout**, ce qui déclenche le mécanisme de repli natif de pdf.js — le "fake worker", qui exécute le parsing directement sur le thread principal (avec un simple `console.warn("Setting up fake worker.")`, sans lever d'erreur ; comportement vérifié dans le code source de `pdfjs-dist@4.10.38`, `PDFWorker._initialize`/`_setupFakeWorker`). C'est un compromis assumé plutôt qu'un oubli : ça bloque brièvement l'UI pendant l'extraction (un import PDF reste une action ponctuelle, pas un flux continu), mais ça évite toute une catégorie de pannes de chargement de Worker qu'on ne peut pas tester ici — pas de fichier worker séparé à bundler/servir correctement, pas de `blob:`/CSP à déboguer à l'aveugle. Le build Vite (`npm run build:android`) confirme au moins que rien ne référence ni ne tente de charger `pdf.worker.mjs` comme asset séparé.
+
+**Non vérifié.** Comme le reste des flux mobiles marqués « non testée en conditions réelles », l'ensemble (sélection du PDF, extraction de texte par pdf.js en thread principal, appel OpenRouter, insertion) n'a été validé que par `npm run typecheck:mobile` et `npm run build:android` (bundling Vite réussi) — jamais dans une vraie WebView Android. Le point le plus susceptible de mal se comporter sur un appareil réel reste ce comportement de repli de pdf.js en l'absence de Worker.
+
 ## Notifications système
 
 Les alertes de Banquier étaient jusqu'ici de simples toasts HTML : invisibles dès que l'app passe en arrière-plan — c'est-à-dire précisément pendant une synchronisation bancaire, qui peut durer plusieurs minutes.
@@ -111,7 +129,6 @@ La permission `POST_NOTIFICATIONS` (obligatoire depuis Android 13) est demandée
 ## Pas encore disponible sur mobile (roadmap)
 
 - **Phase 4** — Patrimoine, actifs, plans DCA, cours (crypto/bourse)
-- **Phase 5** — Import PDF
 - **Phase 6** — Pages Récurrences, Comparaison, Simulateur
 - **Phase 7** — Publication sur le Play Store (le debug est désormais signé de façon stable, cf. « Signature de l'APK » ci-dessous — reste la signature de *release*, le compte développeur et la fiche store)
 
