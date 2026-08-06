@@ -3,6 +3,13 @@ name: Release Please
 on:
   push:
     branches: [main]
+  # Filet de secours : les push/merges effectués par l'app GitHub de Claude
+  # Code ne déclenchent pas l'événement `push` (protection anti-boucle
+  # standard de GitHub pour les tokens d'app), donc un fix mergé par Claude
+  # ne fait pas avancer Release Please tout seul. Un humain peut lancer ce
+  # workflow manuellement depuis l'onglet Actions pour rattraper les commits
+  # déjà sur main.
+  workflow_dispatch: {}
 
 permissions:
   contents: write
