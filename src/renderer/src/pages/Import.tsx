@@ -260,8 +260,8 @@ export default function Import(): JSX.Element {
 
           {fileType === 'pdf' && (
             <div className="card" style={{ marginBottom: 20 }}>
-              <p style={{ marginBottom: 8 }}>Le PDF sera analysé automatiquement par le LLM pour extraire les transactions.</p>
-              <p className="text-muted text-sm">Assurez-vous que votre clé API OpenRouter est configurée dans les Paramètres.</p>
+              <p style={{ marginBottom: 8 }}>Le PDF sera analysé localement pour extraire les transactions — aucune donnée n'est envoyée en ligne.</p>
+              <p className="text-muted text-sm">Fonctionne avec les relevés au format Date / Nature / Valeur / Débit / Crédit (BNP Paribas et la plupart des banques françaises).</p>
             </div>
           )}
 

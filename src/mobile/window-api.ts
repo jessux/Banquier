@@ -11,7 +11,7 @@ import * as csv from './parsers/csv'
 import * as pdf from './parsers/pdf'
 import * as preferences from './preferences'
 import { openFileDialog as pickFile } from './file-picker'
-import { runFinancialChat, buildFinancialSystemPrompt, buildChatMessages, categorizeBatch, callOpenRouterOnce, type ToolExecutors } from './llm'
+import { runFinancialChat, buildFinancialSystemPrompt, buildChatMessages, categorizeBatch, type ToolExecutors } from './llm'
 import { retrieveRelevantMemories } from '../main/memory'
 import * as notifications from './notifications'
 import { checkForUpdates } from './updater'
@@ -105,13 +105,7 @@ export function createMobileApi(): Window['api'] {
       return { imported, duplicates, errors: 0, importId: importRecord.id }
     },
     importPdf: async (handle, accountId) => {
-      const text = await pdf.extractPdfText(handle)
-      const prompt = pdf.buildPdfParsePrompt(text)
-      const settings = await preferences.getSettings()
-
-      const response = await callOpenRouterOnce([{ role: 'user', content: prompt }], settings)
-
-      const transactions = pdf.parseLlmJsonResponse(response)
+      const transactions = await pdf.extractPdfTransactions(handle)
       if (transactions.length === 0) {
         return { imported: 0, duplicates: 0, errors: 1, importId: -1 }
       }
