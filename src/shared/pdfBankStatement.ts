@@ -5,12 +5,24 @@ import type { Transaction } from './types'
 // plutôt que sur le texte brut : `pdf-parse`/`pdfjs-dist` ne réinsèrent pas
 // fidèlement les espaces entre mots (deux fragments adjacents sans espace
 // réel dans le flux du PDF se retrouvent collés), donc on reconstruit la
-// table (colonnes Date/Nature/Valeur/Débit/Crédit) à partir des coordonnées.
+// table (colonnes Date/Nature/Valeur/Débit/Crédit, ou équivalent) à partir
+// des coordonnées.
 //
-// Testé et calé sur un relevé BNP Paribas ; la mise en page Date/Libellé/
-// Valeur/Débit/Crédit est partagée par la plupart des banques françaises. Un
-// relevé au format non reconnu (pas d'en-tête Débit/Crédit ni Montant) donne
-// simplement une liste vide plutôt qu'un résultat inventé.
+// Testé et calé sur deux mises en page très différentes :
+// - BNP Paribas — Date/Nature des opérations/Valeur/Débit/Crédit, dates
+//   compactes "26.12" (sans année, résolue via la période du relevé),
+//   colonnes Débit/Crédit alignées à droite, montants > 999 scindés en
+//   fragments PDF séparés par le séparateur de milliers ("1" + "809,00").
+// - Revolut — Date/Description/Argent sortant/Argent entrant/Solde, dates
+//   longues "1 juil. 2026" (année incluse), colonnes Argent sortant/entrant
+//   alignées à gauche mais Solde à droite (une colonne à ignorer, pas un
+//   montant de transaction), montants avec "€" et jamais scindés même
+//   au-delà de 999.
+// La détection des colonnes et de l'alignement est dynamique (à partir de
+// l'en-tête), donc la plupart des banques françaises qui suivent l'une de
+// ces deux conventions devraient être reconnues sans changement. Un relevé
+// au format non reconnu (pas d'en-tête Débit/Crédit/Argent sortant-entrant
+// ni Montant) donne simplement une liste vide plutôt qu'un résultat inventé.
 
 export interface PdfTextItem {
   str: string
@@ -29,19 +41,29 @@ interface AmountMatch {
   value: number
   startIdx: number
   endIdx: number
-  endWord: Word
+  word: Word
 }
 
-interface ColumnBounds {
-  debitEnd: number
-  creditEnd: number
+interface MoneyColumn {
+  kind: 'debit' | 'credit' | 'exclude'
+  start: number
+  end: number
 }
 
 const ROW_Y_TOLERANCE = 1.5
 const WORD_GAP_THRESHOLD = 1.2
 
+// Date compacte façon BNP ("26.12", "05/01/2026"), et date longue façon
+// Revolut ("1 juil. 2026", "6 août 2026" — un seul fragment PDF, espaces
+// internes conservés tels quels par `rowToWords`).
 const DATE_RE = /^(\d{2})[./](\d{2})(?:[./](\d{2,4}))?$/
-const AMOUNT_SUFFIX_RE = /^-?\d{1,3},\d{2}$/
+const LONG_DATE_RE = /^(\d{1,2})\s+([a-zéûôàè]+)\.?\s+(\d{4})$/i
+// Nombre de chiffres avant la virgule non borné : certaines banques (BNP)
+// scindent les milliers en fragments PDF séparés ("1 809,00" → "1" puis
+// "809,00", absorbés ensemble par AMOUNT_GROUP_RE ci-dessous), d'autres
+// (Revolut) gardent tout le nombre dans un seul fragment ("1500,00€") — le
+// borner à 3 chiffres aurait silencieusement ignoré ces derniers.
+const AMOUNT_SUFFIX_RE = /^-?\d+,\d{2}€?$/
 const AMOUNT_GROUP_RE = /^-?\d{1,3}$/
 
 const FRENCH_MONTHS: Record<string, number> = {
@@ -104,13 +126,17 @@ function rowText(row: PdfTextItem[]): string {
     .join(' ')
 }
 
-// Cherche le montant en fin de ligne, en absorbant les groupes de milliers
-// qui le précèdent immédiatement (ex: "1" + "809,00" → 1809.00).
-function findTrailingAmount(words: Word[]): AmountMatch | null {
-  for (let i = words.length - 1; i >= 0; i--) {
+// Trouve tous les montants d'une ligne (une transaction peut avoir plusieurs
+// colonnes monétaires — ex: Argent sortant/entrant + Solde chez Revolut — et
+// il faut les distinguer, pas juste prendre le dernier de la ligne). Absorbe
+// au passage les groupes de milliers qui précèdent immédiatement un montant
+// (ex: "1" + "809,00" → 1809.00).
+function findAllAmounts(words: Word[]): AmountMatch[] {
+  const matches: AmountMatch[] = []
+  for (let i = 0; i < words.length; i++) {
     if (!AMOUNT_SUFFIX_RE.test(words[i].text)) continue
     let startIdx = i
-    let digits = words[i].text
+    let digits = words[i].text.replace('€', '')
     let j = i - 1
     while (j >= 0 && AMOUNT_GROUP_RE.test(words[j].text)) {
       digits = words[j].text + digits
@@ -118,20 +144,9 @@ function findTrailingAmount(words: Word[]): AmountMatch | null {
       j--
     }
     const value = parseFloat(digits.replace(',', '.'))
-    if (Number.isNaN(value)) return null
-    return { value, startIdx, endIdx: i, endWord: words[i] }
+    if (!Number.isNaN(value)) matches.push({ value, startIdx, endIdx: i, word: words[i] })
   }
-  return null
-}
-
-function detectColumnBounds(allRows: PdfTextItem[][]): ColumnBounds | null {
-  for (const row of allRows) {
-    const words = rowToWords(row)
-    const debit = words.find((w) => /^d[ée]bit$/i.test(w.text))
-    const credit = words.find((w) => /^cr[ée]dit$/i.test(w.text))
-    if (debit && credit) return { debitEnd: debit.end, creditEnd: credit.end }
-  }
-  return null
+  return matches
 }
 
 function hasMontantHeader(allRows: PdfTextItem[][]): boolean {
@@ -141,33 +156,80 @@ function hasMontantHeader(allRows: PdfTextItem[][]): boolean {
 interface TableLayout {
   // Bord gauche de la colonne Date (1re colonne de l'en-tête).
   leftEdge: number
-  // Position de la colonne Nature/Libellé (2e colonne), sur laquelle les
-  // lignes de suite d'une description sont indentées.
+  // Position de la colonne Nature/Libellé/Description (2e colonne), sur
+  // laquelle les lignes de suite d'une description sont indentées.
   descColX: number
+  // Colonnes monétaires détectées (Débit/Crédit, Argent sortant/entrant,
+  // Solde à exclure...). Vide si le relevé n'a qu'une colonne "Montant".
+  columns: MoneyColumn[]
 }
 
-// Trouve la ligne d'en-tête du tableau (celle qui porte "Débit"/"Crédit" ou
-// "Montant") et ses repères de colonnes. Les mentions légales de bas de page
-// et autres identifiants de document isolés dans la marge ne respectent pas
-// ces alignements : ça permet de les exclure sans dépendre de leur texte
-// exact, qui varie d'une banque à l'autre.
-function detectTableLayout(allRows: PdfTextItem[][]): TableLayout | null {
-  for (const row of allRows) {
-    const words = rowToWords(row)
-    const isHeader = words.some(
-      (w) => /^d[ée]bit$/i.test(w.text) || /^cr[ée]dit$/i.test(w.text) || /^montant$/i.test(w.text)
-    )
-    if (isHeader && words.length > 1) {
-      const sorted = [...words].sort((a, b) => a.x - b.x)
-      return { leftEdge: sorted[0].x, descColX: sorted[1].x }
-    }
-  }
+// "Débit"/"Crédit" (BNP et la plupart des banques françaises), "Argent
+// sortant"/"Argent entrant" (Revolut) désignent la même chose sous des noms
+// différents ; "Solde" est un solde courant à ignorer, pas un montant de
+// transaction.
+function classifyColumnHeader(text: string): 'debit' | 'credit' | 'exclude' | null {
+  if (/^d[ée]bit$/i.test(text) || /sortant/i.test(text)) return 'debit'
+  if (/^cr[ée]dit$/i.test(text) || /entrant/i.test(text)) return 'credit'
+  if (/^solde/i.test(text)) return 'exclude'
   return null
 }
 
-function classifySign(endWord: Word, bounds: ColumnBounds): 1 | -1 {
-  const midpoint = (bounds.debitEnd + bounds.creditEnd) / 2
-  return endWord.end < midpoint ? -1 : 1
+// Trouve la (les) ligne(s) d'en-tête du tableau — celles dont le premier mot
+// commence par "Date" et qui portent une colonne Débit/Crédit ou équivalent —
+// et leurs repères de colonnes. Les mentions légales de bas de page et autres
+// identifiants de document isolés dans la marge ne respectent pas ces
+// alignements : ça permet de les exclure sans dépendre de leur texte exact,
+// qui varie d'une banque à l'autre. Certains relevés répètent un en-tête
+// incomplet sur une section annexe (ex: transactions "en attente" chez
+// Revolut, sans colonne Solde) : on fusionne les colonnes trouvées sur
+// toutes les lignes d'en-tête plutôt que de s'arrêter à la première, tant
+// que leurs positions restent cohérentes d'une occurrence à l'autre.
+function detectTableLayout(allRows: PdfTextItem[][]): TableLayout | null {
+  let leftEdge: number | null = null
+  let descColX: number | null = null
+  const columns = new Map<string, MoneyColumn>()
+
+  for (const row of allRows) {
+    const words = rowToWords(row)
+    if (words.length < 2 || !/^date/i.test(words[0].text)) continue
+    const kinds = words.map((w) => classifyColumnHeader(w.text))
+    if (!kinds.some((k) => k === 'debit' || k === 'credit')) continue
+
+    if (leftEdge === null) {
+      const sorted = [...words].sort((a, b) => a.x - b.x)
+      leftEdge = sorted[0].x
+      descColX = sorted[1].x
+    }
+
+    words.forEach((w, i) => {
+      const kind = kinds[i]
+      if (!kind) return
+      const key = `${kind}:${Math.round(w.x)}`
+      if (!columns.has(key)) columns.set(key, { kind, start: w.x, end: w.end })
+    })
+  }
+
+  if (leftEdge === null || descColX === null) return null
+  return { leftEdge, descColX, columns: [...columns.values()] }
+}
+
+// Classe un montant selon la colonne monétaire la plus proche. Certaines
+// colonnes sont alignées à gauche (Revolut : "Argent sortant"/"entrant"
+// démarrent exactement sous l'en-tête), d'autres à droite (BNP : Débit/
+// Crédit finissent exactement sous l'en-tête, Revolut : Solde) — on compare
+// donc aux deux bords plutôt que de supposer un alignement fixe.
+function classifyAmount(word: Word, columns: MoneyColumn[]): 'debit' | 'credit' | 'exclude' {
+  let best: MoneyColumn | null = null
+  let bestDist = Infinity
+  for (const col of columns) {
+    const dist = Math.min(Math.abs(word.x - col.start), Math.abs(word.end - col.end))
+    if (dist < bestDist) {
+      bestDist = dist
+      best = col
+    }
+  }
+  return best ? best.kind : 'exclude'
 }
 
 // Détermine l'année de chaque mois à partir de la période du relevé
@@ -224,14 +286,48 @@ function buildYearResolver(allRows: PdfTextItem[][]): (month: number) => number 
   }
 }
 
+// Résout un nom de mois français, abrégé ou non, avec ou sans point
+// ("juil.", "juillet", "août" → 7, 7, 8).
+function resolveMonthToken(token: string): number | null {
+  const clean = token.replace(/\.$/, '').toLowerCase()
+  if (FRENCH_MONTHS[clean]) return FRENCH_MONTHS[clean]
+  if (clean.length < 3) return null
+  for (const [name, num] of Object.entries(FRENCH_MONTHS)) {
+    if (name.startsWith(clean)) return num
+  }
+  return null
+}
+
+// Reconnaît une date en tout début de ligne, compacte ("26.12", résolue via
+// la période du relevé) ou longue ("1 juil. 2026", année déjà incluse).
+function matchTransactionDate(word: string, yearForMonth: (month: number) => number): string | null {
+  const compact = word.match(DATE_RE)
+  if (compact) {
+    const [, dd, mm, yy] = compact
+    const year = yy ? (yy.length === 2 ? 2000 + Number(yy) : Number(yy)) : yearForMonth(Number(mm))
+    return `${year}-${mm}-${dd}`
+  }
+  const long = word.match(LONG_DATE_RE)
+  if (long) {
+    const month = resolveMonthToken(long[2])
+    if (!month) return null
+    return `${long[3]}-${String(month).padStart(2, '0')}-${long[1].padStart(2, '0')}`
+  }
+  return null
+}
+
+function isDateWord(text: string): boolean {
+  return DATE_RE.test(text) || LONG_DATE_RE.test(text)
+}
+
 export function extractTransactionsFromPages(pages: PdfTextItem[][]): Omit<Transaction, 'id'>[] {
   const pageRows = pages.map(groupRows)
   const allRows = pageRows.flat()
-  const bounds = detectColumnBounds(allRows)
-  if (!bounds && !hasMontantHeader(allRows)) return []
+  const layout = detectTableLayout(allRows)
+  const hasMontant = hasMontantHeader(allRows)
+  if ((!layout || layout.columns.length === 0) && !hasMontant) return []
 
   const yearForMonth = buildYearResolver(allRows)
-  const layout = detectTableLayout(allRows)
 
   const transactions: Omit<Transaction, 'id'>[] = []
   const descParts: string[][] = []
@@ -252,7 +348,7 @@ export function extractTransactionsFromPages(pages: PdfTextItem[][]): Omit<Trans
       // dans la marge...) : on arrête d'alimenter la transaction en cours
       // plutôt que de deviner. Une ligne de suite légitime est toujours
       // indentée exactement sur la colonne Nature/Libellé.
-      if (layout !== null && Math.abs(words[0].x - layout.descColX) > 3 && !DATE_RE.test(first)) {
+      if (layout !== null && Math.abs(words[0].x - layout.descColX) > 3 && !isDateWord(first)) {
         openIdx = null
         continue
       }
@@ -262,23 +358,36 @@ export function extractTransactionsFromPages(pages: PdfTextItem[][]): Omit<Trans
         continue
       }
 
-      const dateMatch = first.match(DATE_RE)
-      if (dateMatch) {
-        const amount = findTrailingAmount(words)
-        if (!amount) {
+      const date = matchTransactionDate(first, yearForMonth)
+      if (date) {
+        const amounts = findAllAmounts(words)
+        const consumed = new Set<number>()
+        let signedAmount: number | null = null
+
+        if (layout && layout.columns.length > 0) {
+          for (const amt of amounts) {
+            for (let k = amt.startIdx; k <= amt.endIdx; k++) consumed.add(k)
+            const kind = classifyAmount(amt.word, layout.columns)
+            if (kind === 'exclude') continue
+            if (signedAmount === null) signedAmount = Math.abs(amt.value) * (kind === 'debit' ? -1 : 1)
+          }
+        } else if (hasMontant) {
+          const amt = amounts[amounts.length - 1]
+          if (amt) {
+            for (let k = amt.startIdx; k <= amt.endIdx; k++) consumed.add(k)
+            signedAmount = amt.value
+          }
+        }
+
+        if (signedAmount === null) {
           openIdx = null
           continue
         }
 
-        const [, dd, mm, yy] = dateMatch
-        const year = yy ? (yy.length === 2 ? 2000 + Number(yy) : Number(yy)) : yearForMonth(Number(mm))
-        const date = `${year}-${mm}-${dd}`
-        const value = bounds ? Math.abs(amount.value) * classifySign(amount.endWord, bounds) : amount.value
-
         const rest: string[] = []
         for (let i = 1; i < words.length; i++) {
-          if (i >= amount.startIdx && i <= amount.endIdx) continue
-          if (DATE_RE.test(words[i].text)) continue
+          if (consumed.has(i)) continue
+          if (isDateWord(words[i].text)) continue
           rest.push(words[i].text)
         }
 
@@ -286,7 +395,7 @@ export function extractTransactionsFromPages(pages: PdfTextItem[][]): Omit<Trans
           account_id: null,
           date,
           description: '',
-          amount: Math.round(value * 100) / 100,
+          amount: Math.round(signedAmount * 100) / 100,
           category: null,
           import_id: null,
           is_internal: 0,
