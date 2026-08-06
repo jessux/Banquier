@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.30.1](https://github.com/jessux/Banquier/compare/v1.30.0...v1.30.1) (2026-08-06)
+
+
+### Corrections de bugs
+
+* **transactions:** positionne correctement le menu de catégorisation ([6a8153a](https://github.com/jessux/Banquier/commit/6a8153a0dc3a2a983c392e71c2a06ecc3484d243))
+* **transactions:** positionne correctement le menu de catégorisation ([77cfabb](https://github.com/jessux/Banquier/commit/77cfabb297df676b9ba33684eb969b2334a3f153))
+
 ## [1.30.0](https://github.com/jessux/Banquier/compare/v1.29.1...v1.30.0) (2026-08-05)
 
 
