@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.2](https://github.com/jessux/Banquier/compare/v1.30.1...v1.30.2) (2026-08-06)
+
+
+### Corrections de bugs
+
+* **import:** rend l'import PDF 100% hors ligne et généralise le parseur (BNP + Revolut) ([c6c03e5](https://github.com/jessux/Banquier/commit/c6c03e56bbd9e5634932779eab606f528028eebe))
+
 ## [1.30.1](https://github.com/jessux/Banquier/compare/v1.30.0...v1.30.1) (2026-08-06)
 
 
