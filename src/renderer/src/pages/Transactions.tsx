@@ -89,6 +89,7 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
   const [editingNote, setEditingNote] = useState<{ id: number; note: string; tags: string } | null>(null)
   const editRef = useRef<HTMLInputElement>(null)
+  const editRefMobile = useRef<HTMLInputElement>(null)
   const patternRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -637,7 +638,7 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
                       {isEditingCat ? (
                         <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
                           <CategoryPicker
-                            inputRef={editRef}
+                            inputRef={editRefMobile}
                             value={newCategory}
                             onChange={setNewCategory}
                             categories={[...new Set([...COMMON_CATEGORIES, ...categories])].sort()}
