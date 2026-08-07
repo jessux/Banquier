@@ -3,7 +3,8 @@ import type {
   TransactionFilters,
   CsvMapping,
   Settings,
-  ProfilesState
+  ProfilesState,
+  CategorizationProposal
 } from '../shared/types'
 
 const api = {
@@ -75,8 +76,10 @@ const api = {
     )
     const promise = ipcRenderer.invoke('categorize-ai', onlyUncategorized)
     promise.finally(() => ipcRenderer.removeAllListeners('categorize-progress'))
-    return promise as Promise<{ updated: number }>
+    return promise as Promise<{ proposals: CategorizationProposal[] }>
   },
+  applyCategorization: (updates: { id: number; category: string }[]) =>
+    ipcRenderer.invoke('apply-categorization', updates) as Promise<number>,
 
   // Chat threads (mémoire conversationnelle)
   chatThreadsList: () => ipcRenderer.invoke('chat-threads-list'),

@@ -43,7 +43,8 @@ import type {
   QuoteRefreshResult,
   DcaPlan,
   PowensStatus,
-  PowensSyncResult
+  PowensSyncResult,
+  CategorizationProposal
 } from '../shared/types'
 
 
@@ -186,6 +187,10 @@ export function registerIpcHandlers(): void {
   )
 
   // --- AI Categorization ---
+  // La catégorisation par IA ne fait que proposer : elle s'appuie sur la recherche
+  // web (jamais sur ses seules connaissances internes) et renvoie des suggestions
+  // que l'utilisateur valide via `apply-categorization`. Les règles utilisateur,
+  // elles, restent déterministes et s'appliquent directement.
   ipcMain.handle('categorize-ai', async (event, onlyUncategorized: boolean) => {
     const settings = store.get('settings')
     const rules = db.getCategoryRules()
@@ -195,14 +200,14 @@ export function registerIpcHandlers(): void {
     const ruleTargets = onlyUncategorized ? allTxForRules.filter((t) => !t.category) : allTxForRules
     if (ruleTargets.length > 0) db.applyRulesToTransactions(ruleTargets.map((t) => t.id))
 
-    // Second pass: AI for remaining uncategorized transactions
+    // Second pass: AI proposals for remaining uncategorized transactions
     const afterRules = db.getTransactions({})
     const toProcess = afterRules.filter((t) => !t.category)
 
-    if (toProcess.length === 0) return { updated: 0 }
+    if (toProcess.length === 0) return { proposals: [] }
 
     const BATCH_SIZE = 30
-    let updated = 0
+    const proposals: CategorizationProposal[] = []
     const batches = Math.ceil(toProcess.length / BATCH_SIZE)
 
     event.sender.send('categorize-progress', { done: 0, total: toProcess.length })
@@ -216,10 +221,14 @@ export function registerIpcHandlers(): void {
           batch.map((t) => ({ id: t.id, description: t.description, amount: t.amount })),
           settings,
           catPaths.length > 0 ? catPaths : undefined,
-          rules
+          rules,
+          true
         )
-        db.batchUpdateCategories(results)
-        updated += results.length
+        const byId = new Map(batch.map((t) => [t.id, t]))
+        for (const r of results) {
+          const t = byId.get(r.id)
+          if (t) proposals.push({ id: t.id, description: t.description, amount: t.amount, category: r.category })
+        }
       } catch (err) {
         console.error(`[categorize-ai] batch ${i + 1}/${batches} failed:`, err)
       }
@@ -230,7 +239,12 @@ export function registerIpcHandlers(): void {
       })
     }
 
-    return { updated }
+    return { proposals }
+  })
+
+  ipcMain.handle('apply-categorization', (_, updates: { id: number; category: string }[]) => {
+    db.batchUpdateCategories(updates)
+    return updates.length
   })
 
   // --- Chat threads (mémoire conversationnelle) ---

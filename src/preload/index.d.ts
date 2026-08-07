@@ -31,7 +31,8 @@ import type {
   ProfilesState,
   MerchantStats,
   UncategorizedSummary,
-  PeriodComparison
+  PeriodComparison,
+  CategorizationProposal
 } from '../shared/types'
 
 declare global {
@@ -98,7 +99,11 @@ declare global {
       getCategoryMonthlyHistory: (category: string, months?: number) => Promise<import('../shared/types').CategoryMonthlyPoint[]>
 
       // AI Categorization
-      categorizeAi: (onlyUncategorized: boolean, onProgress: (done: number, total: number) => void) => Promise<{ updated: number }>
+      categorizeAi: (
+        onlyUncategorized: boolean,
+        onProgress: (done: number, total: number) => void
+      ) => Promise<{ proposals: CategorizationProposal[] }>
+      applyCategorization: (updates: { id: number; category: string }[]) => Promise<number>
 
       // Chat threads
       chatThreadsList: () => Promise<ChatThread[]>

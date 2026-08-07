@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Transaction, Account } from '../../../shared/types'
+import type { Transaction, Account, CategorizationProposal } from '../../../shared/types'
 import CategoryPicker from '../components/CategoryPicker'
 import { categoryBadgeStyle } from '../utils/categoryColor'
 
@@ -62,6 +62,8 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
   // Edit states
   const [categorizing, setCategorizing] = useState(false)
   const [catProgress, setCatProgress] = useState<{ done: number; total: number } | null>(null)
+  const [proposals, setProposals] = useState<(CategorizationProposal & { accepted: boolean })[] | null>(null)
+  const [applyingProposals, setApplyingProposals] = useState(false)
   const [editing, setEditing] = useState<EditingCell | null>(null)
   const [newCategory, setNewCategory] = useState('')
   const [regexPanel, setRegexPanel] = useState<RegexPanel | null>(null)
@@ -220,17 +222,34 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
       const result = await window.api.categorizeAi(onlyUncategorized, (done, total) => {
         setCatProgress({ done, total })
       })
-      setCatProgress(null)
       load()
       Promise.all([window.api.getCategories(), window.api.getCategoryPaths()]).then(([existing, paths]) => {
         setCategories([...new Set([...paths, ...existing])].sort())
       })
-      alert(`Catégorisation terminée : ${result.updated} transactions mises à jour.`)
+      if (result.proposals.length === 0) {
+        alert('Aucune nouvelle suggestion de catégorie (règles déjà appliquées).')
+      } else {
+        setProposals(result.proposals.map((p) => ({ ...p, accepted: true })))
+      }
     } catch (e) {
       alert(`Erreur : ${String(e)}`)
     } finally {
       setCategorizing(false)
       setCatProgress(null)
+    }
+  }
+
+  const applyProposals = async (): Promise<void> => {
+    if (!proposals) return
+    const updates = proposals.filter((p) => p.accepted).map(({ id, category }) => ({ id, category }))
+    setApplyingProposals(true)
+    try {
+      await window.api.applyCategorization(updates)
+      setProposals(null)
+      load()
+      showToast(`${updates.length} transaction(s) catégorisée(s)`)
+    } finally {
+      setApplyingProposals(false)
     }
   }
 
@@ -313,7 +332,7 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
               {catProgress.done}/{catProgress.total}
             </span>
           )}
-          <button className="btn btn-secondary" onClick={() => runAiCategorization(true)} disabled={categorizing} title="Catégorise uniquement les transactions sans catégorie">
+          <button className="btn btn-secondary" onClick={() => runAiCategorization(true)} disabled={categorizing} title="Propose une catégorie (via recherche web) pour les transactions sans catégorie, à valider ensuite">
             {categorizing ? <span className="spinner" /> : '🤖'} Catégoriser non catégorisées
           </button>
           <button className="btn btn-secondary" onClick={() => runAiCategorization(false)} disabled={categorizing}>
@@ -409,6 +428,45 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
             placeholder="remboursement…"
             style={{ width: 160 }}
           />
+        </div>
+      )}
+
+      {/* AI categorization proposals — pending user validation */}
+      {proposals !== null && (
+        <div style={{ background: 'var(--bg2)', border: '1px solid var(--accent)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-light)' }}>
+              🌐 {proposals.length} suggestion(s) de catégorie (recherche web) — {proposals.filter((p) => p.accepted).length} sélectionnée(s)
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button className="btn btn-secondary" onClick={() => setProposals((prev) => prev?.map((p) => ({ ...p, accepted: true })) ?? null)}>Tout cocher</button>
+              <button className="btn btn-secondary" onClick={() => setProposals((prev) => prev?.map((p) => ({ ...p, accepted: false })) ?? null)}>Tout décocher</button>
+              <button className="btn btn-primary" onClick={applyProposals} disabled={applyingProposals || proposals.every((p) => !p.accepted)}>
+                {applyingProposals ? <span className="spinner" /> : '✓'} Appliquer
+              </button>
+              <button className="btn btn-secondary" onClick={() => setProposals(null)}>✕ Annuler</button>
+            </div>
+          </div>
+          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+            {proposals.map((p, idx) => (
+              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                <input
+                  type="checkbox"
+                  checked={p.accepted}
+                  onChange={(e) => setProposals((prev) => prev?.map((x, i) => (i === idx ? { ...x, accepted: e.target.checked } : x)) ?? null)}
+                  style={{ width: 'auto', flexShrink: 0 }}
+                />
+                <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</span>
+                <span style={{ fontSize: 12, color: 'var(--text3)', whiteSpace: 'nowrap' }}>{formatEur(p.amount)}</span>
+                <CategoryPicker
+                  value={p.category}
+                  onChange={(v) => setProposals((prev) => prev?.map((x, i) => (i === idx ? { ...x, category: v } : x)) ?? null)}
+                  categories={[...new Set([...COMMON_CATEGORIES, ...categories])].sort()}
+                  style={{ width: 180 }}
+                />
+              </div>
+            ))}
+          </div>
         </div>
       )}
 

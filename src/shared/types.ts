@@ -337,6 +337,14 @@ export interface UncategorizedSummary {
   sample: Transaction[]
 }
 
+/** Suggestion de catégorie IA en attente de validation par l'utilisateur. */
+export interface CategorizationProposal {
+  id: number
+  description: string
+  amount: number
+  category: string
+}
+
 export interface NetBalance {
   startDate: string | null
   endDate: string | null

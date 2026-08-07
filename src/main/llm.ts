@@ -26,12 +26,15 @@ const OPENROUTER_BASE = 'https://openrouter.ai/api/v1'
  * Construit le modèle de chat LangChain pointé sur OpenRouter (API compatible
  * OpenAI). Le fetch custom porte la résolution proxy et le fallback TLS.
  */
-function createChatModel(settings: Settings): ChatOpenAI {
+function createChatModel(settings: Settings, webSearch = false): ChatOpenAI {
   return new ChatOpenAI({
     model: settings.openrouterModel || 'openrouter/free',
     apiKey: settings.openrouterApiKey,
     // Nécessaire pour lire delta.reasoning (OpenRouter), non mappé par LangChain.
     __includeRawResponse: true,
+    // Plugin de recherche web natif OpenRouter (Exa) : injecte des résultats
+    // pertinents dans le contexte avant l'appel au modèle, sans boucle d'outils.
+    modelKwargs: webSearch ? { plugins: [{ id: 'web', max_results: 3 }] } : undefined,
     configuration: {
       baseURL: OPENROUTER_BASE,
       defaultHeaders: {
@@ -73,13 +76,14 @@ function chunkReasoning(chunk: AIMessageChunk): string {
 
 export async function callOpenRouterOnce(
   messages: { role: string; content: string }[],
-  settings: Settings
+  settings: Settings,
+  webSearch = false
 ): Promise<string> {
   if (!settings.openrouterApiKey) {
     throw new Error('Clé API OpenRouter non configurée')
   }
 
-  const model = createChatModel(settings)
+  const model = createChatModel(settings, webSearch)
   const response = await model.invoke(
     messages.map((m) => {
       if (m.role === 'system') return new SystemMessage(m.content)
@@ -406,7 +410,8 @@ export async function categorizeBatch(
   transactions: { id: number; description: string; amount: number }[],
   settings: Settings,
   availableCategories: string[] = DEFAULT_CATEGORIES,
-  rules: { pattern: string; category: string }[] = []
+  rules: { pattern: string; category: string }[] = [],
+  webSearch = false
 ): Promise<{ id: number; category: string }[]> {
   const catList = availableCategories.length > 0 ? availableCategories : DEFAULT_CATEGORIES
   const fallback = catList.includes('Autre') ? 'Autre' : catList[catList.length - 1]
@@ -422,13 +427,13 @@ export async function categorizeBatch(
   const prompt = `Catégorise ces transactions bancaires françaises.
 Retourne UNIQUEMENT un tableau JSON valide, dans le même ordre, avec exactement ${transactions.length} éléments.
 Format: ["Catégorie1", "Catégorie2", ...]
-
+${webSearch ? "Utilise la recherche internet pour identifier l'activité réelle de chaque marchand avant de choisir sa catégorie. Ne devine jamais uniquement sur la base de tes connaissances internes : vérifie via une recherche web dès que le nom du marchand n'est pas évident.\n" : ''}
 Catégories autorisées: ${catList.join(', ')}
 ${rulesSection}
 Transactions:
 ${lines}`
 
-  const response = await callOpenRouterOnce([{ role: 'user', content: prompt }], settings)
+  const response = await callOpenRouterOnce([{ role: 'user', content: prompt }], settings, webSearch)
 
   const match = response.match(/\[[\s\S]*?\]/)
   if (!match) return []
