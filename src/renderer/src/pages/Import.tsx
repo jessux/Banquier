@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Account, CsvMapping, CsvPreview, ImportResult } from '../../../shared/types'
+import type { Account, CsvMapping, CsvPreview, Import as ImportRecord, ImportResult } from '../../../shared/types'
 
 type Step = 'drop' | 'mapping' | 'result'
 
@@ -35,10 +35,23 @@ export default function Import(): JSX.Element {
   const [error, setError] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const dropRef = useRef<HTMLDivElement>(null)
+  const [imports, setImports] = useState<ImportRecord[]>([])
+  const [deletingImportId, setDeletingImportId] = useState<number | null>(null)
 
   useEffect(() => {
     window.api.getAccounts().then(setAccounts)
+    loadImports()
   }, [])
+
+  const loadImports = (): void => {
+    window.api.getImports().then(setImports)
+  }
+
+  const handleDeleteImport = async (importId: number): Promise<void> => {
+    await window.api.deleteTransactions(importId)
+    setImports((prev) => prev.filter((i) => i.id !== importId))
+    setDeletingImportId(null)
+  }
 
   const handleFilePick = async (): Promise<void> => {
     const path = await window.api.openFileDialog([
@@ -144,6 +157,7 @@ export default function Import(): JSX.Element {
       }
       setResult(res)
       setStep('result')
+      loadImports()
     } catch (e) {
       setError(String(e))
     } finally {
@@ -184,6 +198,47 @@ export default function Import(): JSX.Element {
             <p className="text-muted text-sm">Formats supportés : CSV, PDF</p>
           </div>
           {error && <p style={{ color: 'var(--red)', marginTop: 12 }}>{error}</p>}
+
+          {imports.length > 0 && (
+            <div className="card" style={{ marginTop: 24 }}>
+              <div className="card-title" style={{ marginBottom: 12 }}>Historique des imports</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {imports.map((imp) => (
+                  <div
+                    key={imp.id}
+                    style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      padding: '8px 4px', borderBottom: '1px solid var(--border)', gap: 12
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {imp.filename || 'Import sans nom'}
+                      </div>
+                      <div className="text-muted text-sm">
+                        {new Date(imp.imported_at).toLocaleString('fr-FR')} · {imp.transaction_count} transaction{imp.transaction_count > 1 ? 's' : ''}
+                      </div>
+                    </div>
+                    {deletingImportId === imp.id ? (
+                      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                        <span className="text-sm" style={{ color: 'var(--red)', alignSelf: 'center' }}>Supprimer ?</span>
+                        <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12, color: 'var(--red)', borderColor: 'rgba(239,68,68,0.4)' }} onClick={() => handleDeleteImport(imp.id)}>Oui</button>
+                        <button className="btn btn-secondary" style={{ padding: '4px 10px', fontSize: 12 }} onClick={() => setDeletingImportId(null)}>Non</button>
+                      </div>
+                    ) : (
+                      <button
+                        className="btn btn-secondary"
+                        style={{ padding: '4px 10px', fontSize: 12, color: 'var(--red)', flexShrink: 0 }}
+                        onClick={() => setDeletingImportId(imp.id)}
+                      >
+                        Supprimer
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
 
