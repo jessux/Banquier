@@ -1,5 +1,113 @@
 # Changelog
 
+## [1.30.2](https://github.com/jessux/Banquier/compare/v1.30.1...v1.30.2) (2026-08-06)
+
+
+### Corrections de bugs
+
+* **import:** rend l'import PDF 100% hors ligne et généralise le parseur (BNP + Revolut) ([c6c03e5](https://github.com/jessux/Banquier/commit/c6c03e56bbd9e5634932779eab606f528028eebe))
+
+## [1.30.1](https://github.com/jessux/Banquier/compare/v1.30.0...v1.30.1) (2026-08-06)
+
+
+### Corrections de bugs
+
+* **transactions:** positionne correctement le menu de catégorisation ([6a8153a](https://github.com/jessux/Banquier/commit/6a8153a0dc3a2a983c392e71c2a06ecc3484d243))
+* **transactions:** positionne correctement le menu de catégorisation ([77cfabb](https://github.com/jessux/Banquier/commit/77cfabb297df676b9ba33684eb969b2334a3f153))
+
+## [1.30.0](https://github.com/jessux/Banquier/compare/v1.29.1...v1.30.0) (2026-08-05)
+
+
+### Nouvelles fonctionnalités
+
+* **mobile:** porte l'import PDF (Phase 5) ([1cf1005](https://github.com/jessux/Banquier/commit/1cf10053ec1de06ccd16929055a3886e57d5d737))
+* **mobile:** porte l'import PDF (Phase 5) ([f2bc9f5](https://github.com/jessux/Banquier/commit/f2bc9f5fba445ae867bd45c58028c82514b315aa))
+* **mobile:** porte l'import PDF (Phase 5) ([#81](https://github.com/jessux/Banquier/issues/81)) ([1cf1005](https://github.com/jessux/Banquier/commit/1cf10053ec1de06ccd16929055a3886e57d5d737))
+* **mobile:** porte le suivi du Patrimoine (Phase 4) ([92a1142](https://github.com/jessux/Banquier/commit/92a1142cbbd60409a76dc19564d9d6ff0a969340))
+* **mobile:** porte le suivi du Patrimoine (Phase 4) ([f9af988](https://github.com/jessux/Banquier/commit/f9af988295b6fc28fcaec14c22b5de643c9aeffe))
+* **mobile:** porte le suivi du Patrimoine (Phase 4) ([#80](https://github.com/jessux/Banquier/issues/80)) ([92a1142](https://github.com/jessux/Banquier/commit/92a1142cbbd60409a76dc19564d9d6ff0a969340))
+* **mobile:** porte Récurrences, Comparaison et Simulateur (Phase 6) ([7ae1509](https://github.com/jessux/Banquier/commit/7ae15092b853cd14f2b687fb6cdb98004540de6e))
+* **mobile:** porte Récurrences, Comparaison et Simulateur (Phase 6) ([cce6335](https://github.com/jessux/Banquier/commit/cce633560c1acd7019c7a804935e3c75927075e8))
+* **mobile:** porte Récurrences, Comparaison et Simulateur (Phase 6) ([#79](https://github.com/jessux/Banquier/issues/79)) ([7ae1509](https://github.com/jessux/Banquier/commit/7ae15092b853cd14f2b687fb6cdb98004540de6e))
+
+## [1.29.1](https://github.com/jessux/Banquier/compare/v1.29.0...v1.29.1) (2026-08-05)
+
+
+### Corrections de bugs
+
+* **icons:** aligne le fond de l'icône desktop/iOS sur l'indigo --accent de l'app ([cbabb50](https://github.com/jessux/Banquier/commit/cbabb50c6ee399c7c90b7270ddcbeaa2407b54cf))
+* **icons:** recentre le glyphe B sur toutes les icônes ([afbad56](https://github.com/jessux/Banquier/commit/afbad56277941fd733361a2d9097f6d5988e1393))
+* **mobile:** ouvre le lien de mise à jour APK hors Custom Tab ([6adafb9](https://github.com/jessux/Banquier/commit/6adafb9babdd85084c368ab64e39f4a087713f58))
+
+## [1.29.0](https://github.com/jessux/Banquier/compare/v1.28.0...v1.29.0) (2026-08-05)
+
+
+### Nouvelles fonctionnalités
+
+* **mobile:** publie le build simulateur iOS sur les releases ([1c56982](https://github.com/jessux/Banquier/commit/1c5698252db8286e3675dce7e8be473046164094))
+* **mobile:** publie le build simulateur iOS sur les releases ([5abcd47](https://github.com/jessux/Banquier/commit/5abcd47bd52bf36951667732d48b0fd5b8a7ef39))
+
+## [1.28.0](https://github.com/jessux/Banquier/compare/v1.27.5...v1.28.0) (2026-08-04)
+
+
+### Nouvelles fonctionnalités
+
+* **mobile:** liste de transactions façon appli bancaire mobile ([91af3cb](https://github.com/jessux/Banquier/commit/91af3cb0baf2f5af91c4e0c748e8a6cbb3efd76b))
+
+
+### Corrections de bugs
+
+* **mobile:** fausse "Connexion annulée" quand Powens tarde à enregistrer la banque ([d78d000](https://github.com/jessux/Banquier/commit/d78d000e3aef61c49af16b51f298687d2e22457b))
+* **mobile:** fausse Connexion annulée quand Powens tarde à enregistrer la banque ([425fa03](https://github.com/jessux/Banquier/commit/425fa03ed9b0da302e7dd6c77be72d850f03b8e9))
+* **mobile:** ne plus jamais lever "Connexion annulée" depuis powensConnect ([378f441](https://github.com/jessux/Banquier/commit/378f4411ba07300e6e3d2b19ab22c4d0e8dfd940))
+
+## [1.27.5](https://github.com/jessux/Banquier/compare/v1.27.4...v1.27.5) (2026-08-04)
+
+
+### Corrections de bugs
+
+* **mobile:** délai deep link, toast fermable, topbar plus grande ([068039e](https://github.com/jessux/Banquier/commit/068039e35ee90f1fe66b9912cef979258b3afa04))
+* **mobile:** délai deep link, toast fermable, topbar plus grande, icône B, thème clair, tableaux ([ce92088](https://github.com/jessux/Banquier/commit/ce92088b5297fb80ffbc549bb9085dc420097aa8))
+* **mobile:** icône B, thème clair cassé sur plusieurs pages, tableaux non scrollables ([99c4a57](https://github.com/jessux/Banquier/commit/99c4a57cb0fdc0232d62af007d76ee4f7ab6cded))
+
+## [1.27.4](https://github.com/jessux/Banquier/compare/v1.27.3...v1.27.4) (2026-08-04)
+
+
+### Corrections de bugs
+
+* **mobile:** corriger le crash SQLite, la signature APK et ajouter la vérif de mise à jour ([1963330](https://github.com/jessux/Banquier/commit/19633308382e2000cee5298d4cbb2c437e668cbe))
+* **mobile:** crash SQLite, signature APK, vérif de mise à jour, délai deep link ([91a451f](https://github.com/jessux/Banquier/commit/91a451f4a4cbacedc6b15e079f7e91fc7bc6776d))
+* **mobile:** réduire le délai de grâce du deep link Powens à 2s ([b766033](https://github.com/jessux/Banquier/commit/b766033e353eec72d7c40738b7532204d77c2c28))
+
+## [1.27.3](https://github.com/jessux/Banquier/compare/v1.27.2...v1.27.3) (2026-08-04)
+
+
+### Corrections de bugs
+
+* **mobile:** débloquer la connexion Powens et ajouter les notifications système ([fb9f6ba](https://github.com/jessux/Banquier/commit/fb9f6ba1f9ff79949baa98d402da0560c6afb6c1))
+* **mobile:** débloquer la connexion Powens et ajouter les notifications système ([ece8500](https://github.com/jessux/Banquier/commit/ece85002a277e47a9460e36481db6171003930ab))
+
+## [1.27.2](https://github.com/jessux/Banquier/compare/v1.27.1...v1.27.2) (2026-08-04)
+
+
+### Corrections de bugs
+
+* **mobile:** allonger le délai de grâce du deep link Powens ([2d7bb3f](https://github.com/jessux/Banquier/commit/2d7bb3ffcdf97cbdc5b573e9b9e9068dbdadd7b5))
+* **mobile:** allonger le délai de grâce du deep link Powens ([084fbb4](https://github.com/jessux/Banquier/commit/084fbb46929f97d04d11aa00d75b93d707e5ca09))
+* **mobile:** délai de grâce du deep link Powens insuffisant ([f175957](https://github.com/jessux/Banquier/commit/f17595762637c7323a9ac920dcbd5ef5dc38e2f0))
+* **mobile:** remonter le délai de grâce du deep link Powens à 8s ([6348eea](https://github.com/jessux/Banquier/commit/6348eea74835e293bc14aca11b2980310324e283))
+* **mobile:** réparer l'ajout de compte Powens ([ef36e9a](https://github.com/jessux/Banquier/commit/ef36e9aa1648f70b7f176a4b76c93d685024394d))
+* **mobile:** réparer l'ajout de compte Powens ([c361a69](https://github.com/jessux/Banquier/commit/c361a692cd83ad915ca9a177573a173cb5e01699))
+* **mobile:** sérialiser les transactions SQLite pour éviter beginTransactionAlready ([584ebce](https://github.com/jessux/Banquier/commit/584ebce8d3926d2fb0f62bc56fb12ad3a1fe73fe))
+* **mobile:** sérialiser les transactions SQLite pour éviter beginTransactionAlready ([7c969fb](https://github.com/jessux/Banquier/commit/7c969fb7736e99bf10f37bfa7c1f383a580884b8))
+
+## [1.27.1](https://github.com/jessux/Banquier/compare/v1.27.0...v1.27.1) (2026-07-27)
+
+
+### Corrections de bugs
+
+* afficher un retour visuel pour la sync Powens automatique au démarrage ([5f3fee7](https://github.com/jessux/Banquier/commit/5f3fee786c013c8e0b0f6c2f9af5f07687750ca3))
+
 ## [1.27.0](https://github.com/jessux/Banquier/compare/v1.26.1...v1.27.0) (2026-07-21)
 
 

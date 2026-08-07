@@ -5,9 +5,10 @@
 ### ⬇️ Télécharger Banquier
 
 - **[➡️ Dernière version (installeur Windows)](https://github.com/jessux/Banquier/releases/latest)** — le plus simple, téléchargez le `.exe` et lancez-le
+- **[📱 Android](https://github.com/jessux/Banquier/releases/latest)** — le fichier `.apk` de la même release (voir [`docs/mobile.md`](docs/mobile.md) pour les fonctionnalités déjà portées)
 - **[📜 Toutes les versions / historique des releases](https://github.com/jessux/Banquier/releases)** — versions précédentes et notes de version
 
-> Astuce : dans la page d'une release, le fichier d'installation se trouve dans la section **« Assets »** (cliquez pour la déplier), c'est le fichier qui se termine par `.exe`.
+> Astuce : dans la page d'une release, les fichiers se trouvent dans la section **« Assets »** (cliquez pour la déplier) : `.exe` pour Windows, `.apk` pour Android.
 
 Banquier est une application de bureau qui importe vos relevés (CSV, PDF), les catégorise automatiquement par IA, et vous donne une vision claire de vos finances. Tout tourne sur votre machine. Vos données ne quittent jamais votre disque.
 
@@ -73,6 +74,14 @@ npm run dev
 npm run build:win        # installeur .exe (NSIS)
 npm run build:win:dir    # dossier non packagé (test rapide)
 ```
+
+### Android
+
+Banquier est aussi disponible en app Android (Phase 1 : cœur hors-ligne — comptes, transactions, import CSV, catégories, règles, budgets, dashboard). Voir [`docs/mobile.md`](docs/mobile.md) pour le détail et la roadmap.
+
+### iOS
+
+Le portage iOS est en chantier (scaffolding du projet Xcode fait, pas encore signé ni distribuable — voir [`docs/mobile.md#ios`](docs/mobile.md#ios)). Chaque release publie un build simulateur (`banquier-ios-simulator-*.zip`, à ouvrir dans Xcode sur un Mac) dans l'onglet [Releases](https://github.com/jessux/Banquier/releases) — pas encore de build installable sur iPhone.
 
 ---
 

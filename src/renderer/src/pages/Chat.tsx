@@ -263,7 +263,7 @@ export default function Chat(): JSX.Element {
                   title={m.content}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6,
-                    padding: '4px 6px', borderRadius: 6, fontSize: 11, color: '#8b93a7'
+                    padding: '4px 6px', borderRadius: 6, fontSize: 11, color: 'var(--text3)'
                   }}
                 >
                   <span style={{
@@ -332,14 +332,14 @@ export default function Chat(): JSX.Element {
                         open={loading && i === messages.length - 1 && !msg.content}
                         style={{
                           marginBottom: 10, padding: '6px 10px', borderRadius: 8,
-                          background: '#161927', border: '1px solid var(--border)'
+                          background: 'var(--bg)', border: '1px solid var(--border)'
                         }}
                       >
                         <summary style={{ cursor: 'pointer', fontSize: 12, color: 'var(--text3)', userSelect: 'none' }}>
                           🧠 Raisonnement du modèle
                         </summary>
                         <div style={{
-                          marginTop: 6, fontSize: 12, color: '#8b93a7', fontStyle: 'italic',
+                          marginTop: 6, fontSize: 12, color: 'var(--text3)', fontStyle: 'italic',
                           whiteSpace: 'pre-wrap', maxHeight: 240, overflowY: 'auto'
                         }}>
                           {msg.reasoning}
@@ -352,7 +352,7 @@ export default function Chat(): JSX.Element {
                           <span key={j} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4,
                             padding: '2px 8px', borderRadius: 999,
-                            background: '#1e2130', border: '1px solid var(--border)',
+                            background: 'var(--bg3)', border: '1px solid var(--border)',
                             fontSize: 11, color: 'var(--text3)'
                           }}>
                             {tc}
@@ -364,8 +364,8 @@ export default function Chat(): JSX.Element {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                         <div style={{
                           padding: '10px 14px', borderRadius: 8,
-                          background: '#2a1a1a', border: '1px solid #7f1d1d',
-                          color: '#fca5a5', fontSize: 13
+                          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.35)',
+                          color: 'var(--red)', fontSize: 13
                         }}>
                           <strong>⚠️ Limite de taux OpenRouter (429)</strong>
                           <p style={{ margin: '6px 0 0', lineHeight: 1.5 }}>

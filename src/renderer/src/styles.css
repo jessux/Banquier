@@ -67,19 +67,39 @@ body {
 }
 
 /* Toast synchronisation Powens */
-.sync-toast {
+
+/* Plusieurs toasts peuvent coexister (progression de synchro, résultat, budget
+   dépassé) : la pile les empile au lieu de les superposer au même point fixe. */
+.sync-toast-stack {
   position: fixed;
   bottom: 24px;
   right: 24px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.sync-toast-stack > * {
+  pointer-events: auto;
+}
+
+.sync-toast {
+  /* Fond entièrement opaque et distinct de l'arrière-plan (sidebar/contenu
+     assourdis derrière) : --bg3 seul, sans halo, pouvait donner une impression
+     de transparence une fois superposé à un panneau ouvert (ex. le menu mobile). */
   background: var(--bg3);
+  opacity: 1;
+  isolation: isolate;
   border: 1px solid var(--accent);
   border-radius: var(--radius);
   padding: 14px 16px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
-  z-index: 9999;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(0, 0, 0, 0.35);
   max-width: 340px;
   animation: toast-in 0.25s ease;
 }
@@ -195,6 +215,56 @@ body {
   text-align: center;
 }
 
+/* Mobile top bar + drawer (hidden on desktop, see the responsive block at the
+   bottom of this file for the phone-width behavior). */
+.mobile-topbar {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* 10px de marge sous l'encoche/status bar (avant : collée dessus, d'où
+     l'impression de logo/burger « trop haut ») + 44px de zone de contenu,
+     assez haute pour des icônes/texte plus gros sans être rognés. */
+  height: calc(env(safe-area-inset-top) + 54px);
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  padding-top: calc(env(safe-area-inset-top) + 10px);
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  z-index: 300;
+}
+
+.hamburger-btn {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 28px;
+  line-height: 1;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.mobile-topbar-logo {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text);
+}
+
+.mobile-topbar-logo span {
+  color: var(--accent);
+}
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 350;
+}
+
 /* Cards */
 .card {
   background: var(--bg2);
@@ -280,6 +350,24 @@ body {
   color: white;
 }
 
+/* Page Catégories : boutons inline compacts (éditer une sous-catégorie,
+   ajouter, valider). Densité desktop conservée telle qu'avant ; agrandis sur
+   mobile via le bloc @media plus bas, où ils servent de vraies cibles tactiles. */
+.cat-compact-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+.cat-icon-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text3);
+  line-height: 1;
+  padding: 4px;
+  font-size: 15px;
+}
+
 /* Form elements */
 input, select, textarea {
   background: var(--bg3);
@@ -356,6 +444,79 @@ tbody td {
 /* Amount colors */
 .amount-negative { color: var(--red); font-weight: 500; }
 .amount-positive { color: var(--green); font-weight: 500; }
+
+/* Liste de transactions "mobile" (masquée par défaut, activée en @media ci-dessous) */
+.tx-mobile-list {
+  display: none;
+}
+
+.tx-date-sep {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text2);
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 16px 2px 8px;
+}
+
+.tx-date-sep:first-child {
+  padding-top: 2px;
+}
+
+.tx-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 2px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.tx-row:last-child {
+  border-bottom: none;
+}
+
+.tx-icon-circle {
+  flex-shrink: 0;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: #fff;
+}
+
+.tx-row-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.tx-row-title {
+  font-size: 15px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tx-row-sub {
+  font-size: 12.5px;
+  color: var(--accent-light);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-top: 2px;
+}
+
+.tx-row-amount {
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 
 /* Category badge */
 .category-badge {
@@ -727,3 +888,188 @@ tbody td {
 .badge-success { background: rgba(34, 197, 94, 0.15); color: var(--green); }
 .badge-warning { background: rgba(245, 158, 11, 0.15); color: var(--yellow); }
 .badge-error { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+
+/* ==========================================================================
+   Responsive (phones) — the sidebar becomes an off-canvas drawer opened via
+   the hamburger top bar, grids collapse, and content gets breathing room
+   around notches/system bars. Desktop (Electron) is untouched above 768px.
+   ========================================================================== */
+@media (max-width: 768px) {
+  body {
+    font-size: 15px;
+  }
+
+  .mobile-topbar {
+    display: flex;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+  }
+
+  .layout {
+    padding-top: calc(env(safe-area-inset-top) + 54px);
+  }
+
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 82vw;
+    max-width: 300px;
+    z-index: 400;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease, visibility 0s linear 0.22s;
+    padding-top: calc(16px + env(safe-area-inset-top));
+    padding-bottom: env(safe-area-inset-bottom);
+    box-shadow: 4px 0 32px rgba(0, 0, 0, 0.4);
+    /* Off-screen via transform alone still leaves nav links/profile controls
+       keyboard-focusable — hide them from the tab order until opened. */
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+    transition: transform 0.22s ease;
+  }
+
+  .main-content {
+    padding: 16px;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  }
+
+  .page-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  /* Bigger, thumb-friendly tap targets */
+  .nav-item {
+    padding: 12px;
+    font-size: 15px;
+  }
+
+  .btn {
+    padding: 10px 16px;
+    font-size: 15px;
+  }
+
+  input, select, textarea {
+    font-size: 15px;
+    padding: 10px 12px;
+  }
+
+  .grid-3, .grid-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .card {
+    padding: 16px;
+  }
+
+  .card-value {
+    font-size: 22px;
+  }
+
+  .filters-bar input,
+  .filters-bar select {
+    min-width: 0;
+    flex: 1 1 140px;
+  }
+
+  /* Chat: thread list becomes a horizontally-scrollable strip above the
+     conversation instead of a fixed 240px side column. */
+  .chat-layout {
+    flex-direction: column;
+    height: calc(100vh - 54px - env(safe-area-inset-top) - 32px);
+  }
+
+  .thread-sidebar {
+    width: 100%;
+    flex-direction: row;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding-right: 0;
+    padding-bottom: 10px;
+    max-height: 30vh;
+  }
+
+  .thread-list {
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: hidden;
+    flex-wrap: nowrap;
+  }
+
+  .thread-item {
+    flex-shrink: 0;
+    max-width: 180px;
+  }
+
+  .chat-message {
+    max-width: 100%;
+  }
+
+  .chat-bubble {
+    max-width: 100%;
+  }
+
+  .chat-input-area textarea {
+    height: 52px;
+    min-height: 52px;
+  }
+
+  /* The budget/Powens-sync toasts are fixed bottom-right on desktop, which on a
+     phone collides with the chat input area or thumb zone. Pin the stack as a
+     top banner instead. */
+  .sync-toast-stack {
+    left: 16px;
+    right: 16px;
+    bottom: auto;
+    top: calc(env(safe-area-inset-top) + 54px + 12px);
+    align-items: stretch;
+  }
+
+  .sync-toast {
+    max-width: none;
+  }
+
+  /* Page Catégories : boutons denses pensés pour souris (padding 3-4px,
+     police 12-15px) — trop petits comme cibles tactiles. Zone de frappe visée
+     : ~40px, en jouant sur le padding plutôt que juste la police pour ne pas
+     casser l'alignement des lignes. */
+  .cat-compact-btn {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+
+  .cat-icon-btn {
+    padding: 10px;
+    font-size: 20px;
+  }
+
+  /* Page Transactions : le tableau desktop laisse place à une liste style appli
+     bancaire mobile (pastille de catégorie + séparateurs de date). */
+  .table-wrapper {
+    display: none;
+  }
+
+  .tx-mobile-list {
+    display: block;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid-2, .grid-3, .grid-4 {
+    grid-template-columns: 1fr;
+  }
+}

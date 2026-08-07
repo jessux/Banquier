@@ -3,6 +3,13 @@ name: Release Please
 on:
   push:
     branches: [main]
+  # Filet de secours : les push/merges effectués par l'app GitHub de Claude
+  # Code ne déclenchent pas l'événement `push` (protection anti-boucle
+  # standard de GitHub pour les tokens d'app), donc un fix mergé par Claude
+  # ne fait pas avancer Release Please tout seul. Un humain peut lancer ce
+  # workflow manuellement depuis l'onglet Actions pour rattraper les commits
+  # déjà sur main.
+  workflow_dispatch: {}
 
 permissions:
   contents: write
@@ -31,3 +38,27 @@ jobs:
     uses: ./.github/workflows/build-installers.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
+
+  build-android:
+    name: Build Android APK
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/android-build.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      # Attache l'APK à la release existante sans la repasser en pre-release.
+      prerelease: false
+
+  build-ios:
+    name: Build iOS (simulateur)
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/ios-build.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      # Attache le zip à la release existante sans la repasser en pre-release.
+      prerelease: false

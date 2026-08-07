@@ -110,7 +110,7 @@ export default function BudgetPage(): JSX.Element {
       style={{
         width: 28, height: 28, borderRadius: '50%', border: 'none',
         cursor: dir === 1 && monthOffset >= 0 ? 'default' : 'pointer',
-        background: 'var(--bg3)', color: dir === 1 && monthOffset >= 0 ? '#3e4259' : 'var(--text2)',
+        background: 'var(--bg3)', color: dir === 1 && monthOffset >= 0 ? 'var(--text4)' : 'var(--text2)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, flexShrink: 0
       }}
     >
@@ -181,7 +181,7 @@ export default function BudgetPage(): JSX.Element {
               const isEditing = editingId === b.id
               return (
                 <div key={b.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                     <span style={{ fontWeight: 500, fontSize: 14, minWidth: 140, flex: '0 0 auto' }}>{b.category}</span>
                     <ProgressBar pct={pct} over={over} />
                     {isEditing ? (

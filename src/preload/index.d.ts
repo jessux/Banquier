@@ -26,6 +26,8 @@ import type {
   SymbolSuggestion,
   PowensStatus,
   PowensSyncResult,
+  PowensProgress,
+  NotificationsStatus,
   Budget,
   BudgetWithSpent,
   ProfilesState,
@@ -146,6 +148,21 @@ declare global {
       powensSync: (minDate?: string, maxDate?: string) => Promise<PowensSyncResult>
       powensDisconnect: () => Promise<void>
       powensStartupSync: () => Promise<PowensSyncResult | null>
+      /** Avancement de la synchronisation en cours. Fourni uniquement par la couche
+       *  mobile (src/mobile/window-api.ts) — sur desktop la sync est assez rapide pour
+       *  qu'un simple « Patientez… » suffise. Renvoie une fonction de désabonnement. */
+      onPowensProgress?: (cb: (progress: PowensProgress) => void) => () => void
+
+      /** Notifications système. Android uniquement pour l'instant : sur desktop la
+       *  propriété est absente et l'UI masque la section correspondante. */
+      notifications?: {
+        status: () => Promise<NotificationsStatus>
+        request: () => Promise<NotificationsStatus>
+        setEnabled: (enabled: boolean) => Promise<NotificationsStatus>
+        setDailyHour: (hour: number | null) => Promise<NotificationsStatus>
+        budgetAlert: (categories: string[], overCount: number) => Promise<void>
+        test: () => Promise<void>
+      }
 
       // Patrimoine
       getAssets: () => Promise<Asset[]>

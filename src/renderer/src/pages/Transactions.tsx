@@ -1,12 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Transaction, Account, CategorizationProposal } from '../../../shared/types'
 import CategoryPicker from '../components/CategoryPicker'
-import { categoryBadgeStyle } from '../utils/categoryColor'
+import { categoryBadgeStyle, categoryCircleColor, categoryIcon } from '../utils/categoryColor'
 
 const PAGE_SIZE = 75
 
 function formatEur(n: number): string {
   return n.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })
+}
+
+function formatDateSeparator(dateStr: string): string {
+  const label = new Date(dateStr).toLocaleDateString('fr-FR', {
+    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  })
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
+/** Regroupe les transactions (déjà triées) par jour consécutif, pour l'affichage mobile avec séparateurs de date. */
+function groupByDay(txs: Transaction[]): { key: string; label: string; items: Transaction[] }[] {
+  const groups: { key: string; label: string; items: Transaction[] }[] = []
+  for (const tx of txs) {
+    const key = tx.date.slice(0, 10)
+    const last = groups[groups.length - 1]
+    if (last && last.key === key) last.items.push(tx)
+    else groups.push({ key, label: formatDateSeparator(tx.date), items: [tx] })
+  }
+  return groups
 }
 
 const COMMON_CATEGORIES = [
@@ -72,6 +91,7 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
   const [editingNote, setEditingNote] = useState<{ id: number; note: string; tags: string } | null>(null)
   const editRef = useRef<HTMLInputElement>(null)
+  const editRefMobile = useRef<HTMLInputElement>(null)
   const patternRef = useRef<HTMLInputElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const searchRef = useRef<HTMLInputElement>(null)
@@ -365,7 +385,7 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
           <span onClick={() => monthOffset === null ? applyMonth(0) : clearMonth()} style={{ fontSize: 13, color: monthOffset !== null ? 'var(--text)' : 'var(--text3)', minWidth: 110, textAlign: 'center', cursor: 'pointer', fontWeight: monthOffset !== null ? 500 : 400, userSelect: 'none' }}>
             {monthOffset !== null ? monthLabel(monthOffset) : 'Mois…'}
           </span>
-          <button onClick={() => applyMonth((monthOffset ?? 0) + 1)} disabled={monthOffset !== null && monthOffset >= 0} style={{ width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: monthOffset !== null && monthOffset >= 0 ? 'default' : 'pointer', background: 'transparent', color: monthOffset !== null && monthOffset >= 0 ? '#3e4259' : 'var(--text2)', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+          <button onClick={() => applyMonth((monthOffset ?? 0) + 1)} disabled={monthOffset !== null && monthOffset >= 0} style={{ width: 26, height: 26, borderRadius: '50%', border: 'none', cursor: monthOffset !== null && monthOffset >= 0 ? 'default' : 'pointer', background: 'transparent', color: monthOffset !== null && monthOffset >= 0 ? 'var(--text4)' : 'var(--text2)', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
         </div>
         <input type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setMonthOffset(null) }} style={{ width: 140 }} />
         <input type="date" value={endDate} onChange={(e) => { setEndDate(e.target.value); setMonthOffset(null) }} style={{ width: 140 }} />
@@ -655,6 +675,49 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
               })}
             </tbody>
           </table>
+        </div>
+
+        {/* Liste mobile : pastille de catégorie + séparateurs de date, façon appli bancaire */}
+        <div className="tx-mobile-list">
+          {groupByDay(transactions).map((group) => (
+            <div key={group.key}>
+              <div className="tx-date-sep">{group.label}</div>
+              {group.items.map((tx) => {
+                const isInternal = tx.is_internal === 1
+                const accountName = accounts.find((a) => a.id === tx.account_id)?.name
+                const isEditingCat = editing?.id === tx.id
+                return (
+                  <div key={tx.id} className="tx-row" style={{ opacity: isInternal ? 0.5 : 1 }} onClick={() => !isEditingCat && startEdit(tx)}>
+                    <div className="tx-icon-circle" style={{ background: categoryCircleColor(tx.category) }}>
+                      {categoryIcon(tx.category, tx.description)}
+                    </div>
+                    <div className="tx-row-main">
+                      <div className="tx-row-title">{tx.description}</div>
+                      {isEditingCat ? (
+                        <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', gap: 6, alignItems: 'center', marginTop: 4 }}>
+                          <CategoryPicker
+                            inputRef={editRefMobile}
+                            value={newCategory}
+                            onChange={setNewCategory}
+                            categories={[...new Set([...COMMON_CATEGORIES, ...categories])].sort()}
+                            onConfirm={() => commitEdit(tx.id, newCategory)}
+                            onCancel={() => setEditing(null)}
+                            style={{ flex: 1 }}
+                          />
+                          <button className="btn btn-primary" style={{ padding: '4px 8px', fontSize: 12 }} onClick={() => commitEdit(tx.id, newCategory)}>OK</button>
+                        </div>
+                      ) : (
+                        <div className="tx-row-sub">{[tx.category || 'Sans catégorie', accountName].filter(Boolean).join(' • ')}</div>
+                      )}
+                    </div>
+                    <div className={`tx-row-amount ${tx.amount < 0 ? 'amount-negative' : 'amount-positive'}`}>
+                      {formatEur(tx.amount)}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ))}
         </div>
 
         {/* Pagination */}

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Icône de notification (barre de statut). Android n'affiche que la silhouette du
+  small icon : elle doit être monochrome blanche sur fond transparent, sinon on
+  obtient un carré blanc plein. C'est pourquoi on ne réutilise pas ic_launcher ici.
+  Motif : un bâtiment de banque (fronton + colonnes).
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,3L2,8.5V10h20V8.5L12,3z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M4,11h2.5v7H4V11zM10.75,11h2.5v7h-2.5V11zM17.5,11H20v7h-2.5V11z" />
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M2,19h20v2H2V19z" />
+</vector>

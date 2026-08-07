@@ -5,7 +5,7 @@ import path from 'path'
 import * as db from './database'
 import * as profiles from './profiles'
 import { previewCsv, parseCsvToTransactions } from './parsers/csv'
-import { extractPdfText, buildPdfParsePrompt, parseLlmJsonResponse } from './parsers/pdf'
+import { extractPdfTransactions } from './parsers/pdf'
 import {
   callOpenRouterOnce,
   runFinancialChat,
@@ -135,17 +135,11 @@ export function registerIpcHandlers(): void {
   )
 
   // --- PDF Import ---
+  // Analyse 100% locale (aucun appel réseau) : le tableau du relevé est
+  // reconstruit à partir des positions du texte dans le PDF. Voir
+  // src/shared/pdfBankStatement.ts.
   ipcMain.handle('import-pdf', async (_, filePath: string, accountId: number | null) => {
-    const text = await extractPdfText(filePath)
-    const prompt = buildPdfParsePrompt(text)
-    const settings = store.get('settings')
-
-    const response = await callOpenRouterOnce(
-      [{ role: 'user', content: prompt }],
-      settings
-    )
-
-    const transactions = parseLlmJsonResponse(response)
+    const transactions = await extractPdfTransactions(filePath)
     if (transactions.length === 0) {
       return { imported: 0, duplicates: 0, errors: 1, importId: -1 }
     }

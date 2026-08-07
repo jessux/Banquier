@@ -112,6 +112,15 @@ export interface Settings {
   proxyUrl?: string
   /** Thème de l'interface. Par défaut : sombre. */
   theme?: 'dark' | 'light'
+  /** Notifications système (Android). Par défaut : activées si la permission est accordée. */
+  notificationsEnabled?: boolean
+  /** Heure (0-23) du rappel quotidien de synchronisation. null/undefined = pas de rappel. */
+  notificationsDailyHour?: number | null
+  /** Marqueur interne : un parcours de connexion Powens a été lancé et n'a pas encore
+   *  abouti. Sur Android, l'activité peut être détruite pendant le Custom Tab bancaire ;
+   *  ce drapeau permet de reprendre l'import au redémarrage au lieu de perdre la banque
+   *  tout juste rattachée. */
+  powensConnectPending?: boolean
 }
 
 /** État de la connexion Powens. */
@@ -131,6 +140,38 @@ export interface PowensSyncResult {
   firstDate?: string | null
   /** Message d'erreur si la sync a échoué (token expiré, réseau…). */
   error?: string
+  /** Avertissement non bloquant : l'import a abouti mais une banque est en erreur
+   *  côté Powens (identifiants refusés, authentification forte à revalider…). */
+  warning?: string
+}
+
+/** Étape courante d'une synchronisation Powens, telle qu'affichée à l'utilisateur. */
+export type PowensPhase = 'idle' | 'webview' | 'waiting' | 'importing' | 'done' | 'error'
+
+/** Avancement d'une synchronisation Powens, poussé par la couche mobile. */
+export interface PowensProgress {
+  phase: PowensPhase
+  message: string
+}
+
+/** État observable du job Powens (connexion ou synchronisation) tournant en fond. */
+export interface PowensJobState extends PowensProgress {
+  kind: 'connect' | 'sync' | 'startup' | null
+  startedAt: number | null
+  result: PowensSyncResult | null
+  error: string | null
+}
+
+/** État des notifications système (Android uniquement). */
+export interface NotificationsStatus {
+  /** false sur desktop : les notifications système ne sont pas encore portées. */
+  supported: boolean
+  /** Permission Android POST_NOTIFICATIONS accordée. */
+  granted: boolean
+  /** Préférence utilisateur (indépendante de la permission système). */
+  enabled: boolean
+  /** Heure du rappel quotidien, null si désactivé. */
+  dailyHour: number | null
 }
 
 // --- Patrimoine ---

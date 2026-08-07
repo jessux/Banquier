@@ -1,0 +1,144 @@
+name: Build Android APK
+
+# Compile un APK debug de Banquier pour Android. Nécessaire car l'environnement
+# de développement habituel n'a pas le SDK Android installé — c'est cette CI qui
+# produit le seul .apk téléchargeable.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'src/mobile/**'
+      - 'src/main/memory.ts'
+      - 'src/renderer/**'
+      - 'src/shared/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android-build.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'src/mobile/**'
+      - 'src/main/memory.ts'
+      - 'src/renderer/**'
+      - 'src/shared/**'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android-build.yml'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag de la pre-release à créer (laisser vide pour un nom auto-généré)'
+        required: false
+        type: string
+      prerelease:
+        description: 'Publier en pre-release (décocher pour attacher à une release existante)'
+        required: false
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      tag:
+        required: false
+        type: string
+      prerelease:
+        # true  → crée une pre-release dédiée (tags android-preview-*)
+        # false → attache seulement l'APK à la release existante du tag
+        #         (appelé par release-please.yml, comme les installeurs desktop)
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build debug APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: 1
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check mobile module
+        run: npm run typecheck:mobile
+
+      - name: Build web assets + sync Capacitor
+        run: npm run build:android
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      # `app-debug.apk` ne dit rien à quelqu'un qui télécharge depuis une release
+      # — on le renomme d'après le tag (ou le n° de build) avant publication.
+      - name: Name the APK for distribution
+        id: apk
+        run: |
+          NAME="banquier-${{ inputs.tag || format('preview-{0}', github.run_number) }}.apk"
+          cp android/app/build/outputs/apk/debug/app-debug.apk "$NAME"
+          echo "path=$NAME" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banquier-android-debug
+          path: ${{ steps.apk.outputs.path }}
+
+      # Cas 1 — pre-release dédiée : déclenché manuellement (workflow_dispatch)
+      # ou par un tag android-preview-* via android-release.yml. Crée la release
+      # de toutes pièces, pour un lien de téléchargement stable et direct
+      # (contrairement à l'artefact CI, qui expire et exige d'être connecté).
+      # ⚠️ Ne pas tester `github.event_name` ici : dans un workflow réutilisable,
+      # il vaut l'événement de l'APPELANT (`push` pour release-please.yml comme
+      # pour android-release.yml), jamais `workflow_call`. La présence de
+      # `inputs` suffit à distinguer les appels dispatch/call des push directs,
+      # où le contexte est vide.
+      - name: Publish pre-release with APK
+        if: inputs.prerelease
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.tag || format('android-preview-{0}', github.run_number) }}
+          name: Banquier Android (pre-release) — build ${{ github.run_number }}
+          prerelease: true
+          files: ${{ steps.apk.outputs.path }}
+          body: |
+            APK de test (build debug, non signé) — généré automatiquement depuis `${{ github.sha }}`.
+
+            Couvre les Phases 1-3 du portage Android : cœur hors-ligne (comptes, transactions,
+            import CSV, catégories, règles, budgets, dashboard), IA (catégorisation + chat),
+            synchronisation bancaire Powens (non testée en conditions réelles — voir docs/mobile.md).
+
+            ⚠️ Build de test, non signé pour la production. Android peut demander d'autoriser
+            l'installation depuis une source inconnue.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Cas 2 — release officielle : appelé par release-please.yml, exactement
+      # comme build-installers.yml pour les binaires desktop. On se contente
+      # d'attacher l'APK à la release déjà créée : `gh release upload` ne touche
+      # ni au titre, ni aux notes de version, ni au flag pre-release.
+      - name: Attach APK to the release
+        if: inputs.tag != '' && !inputs.prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "${{ inputs.tag }}" "${{ steps.apk.outputs.path }}" --clobber
