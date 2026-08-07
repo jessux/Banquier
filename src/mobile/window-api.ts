@@ -18,6 +18,7 @@ import { checkForUpdates } from './updater'
 import { POWENS_CREDS, initAuth, getTempCode, getConnections, type PowensCreds } from './powens'
 import { openConnectWebview } from './powens-webview'
 import { importPowens, onProgress as onPowensProgress, emitProgress } from './powens-sync'
+import type { CategorizationProposal } from '../shared/types'
 import { getCurrentPriceEur, isMarketType, searchSymbols } from './quotes'
 import type { Asset, AssetInput, AssetType, QuoteRefreshResult, TransactionFilters } from '../shared/types'
 import pkg from '../../package.json'
@@ -152,13 +153,13 @@ export function createMobileApi(): Window['api'] {
       const ruleTargets = onlyUncategorized ? allTxForRules.filter((t) => !t.category) : allTxForRules
       if (ruleTargets.length > 0) await rulesApi.applyRulesToTransactions(ruleTargets.map((t) => t.id))
 
-      // Second pass: AI for remaining uncategorized transactions
+      // Second pass: AI proposals for remaining uncategorized transactions
       const afterRules = await transactionsApi.getTransactions({})
       const toProcess = afterRules.filter((t) => !t.category)
-      if (toProcess.length === 0) return { updated: 0 }
+      if (toProcess.length === 0) return { proposals: [] }
 
       const BATCH_SIZE = 30
-      let updated = 0
+      const proposals: CategorizationProposal[] = []
       const batches = Math.ceil(toProcess.length / BATCH_SIZE)
       onProgress(0, toProcess.length)
 
@@ -172,15 +173,22 @@ export function createMobileApi(): Window['api'] {
             catPaths.length > 0 ? catPaths : undefined,
             rules
           )
-          await transactionsApi.batchUpdateCategories(results)
-          updated += results.length
+          const byId = new Map(batch.map((t) => [t.id, t]))
+          for (const r of results) {
+            const t = byId.get(r.id)
+            if (t) proposals.push({ id: t.id, description: t.description, amount: t.amount, category: r.category })
+          }
         } catch (err) {
           console.error(`[categorize-ai] batch ${i + 1}/${batches} failed:`, err)
         }
         onProgress(Math.min((i + 1) * BATCH_SIZE, toProcess.length), toProcess.length)
       }
 
-      return { updated }
+      return { proposals }
+    },
+    applyCategorization: async (updates) => {
+      await transactionsApi.batchUpdateCategories(updates)
+      return updates.length
     },
 
     // Chat threads
