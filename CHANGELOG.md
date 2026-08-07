@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.1](https://github.com/jessux/Banquier/compare/v1.31.0...v1.31.1) (2026-08-07)
+
+
+### Corrections de bugs
+
+* supprime le doublon d'import CategorizationProposal dans window-api ([0a3c8b8](https://github.com/jessux/Banquier/commit/0a3c8b8bcbf8a4658a0fbc7590ec204900a90f3a))
+
 ## [1.31.0](https://github.com/jessux/Banquier/compare/v1.30.2...v1.31.0) (2026-08-07)
 
 
