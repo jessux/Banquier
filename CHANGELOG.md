@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.31.0](https://github.com/jessux/Banquier/compare/v1.30.2...v1.31.0) (2026-08-07)
+
+
+### Nouvelles fonctionnalités
+
+* add category color utilities and shared types ([dd4031c](https://github.com/jessux/Banquier/commit/dd4031c94c9c8cf13f0838b87611c2cc09e737d7))
+* ajout de la catégorisation par IA avec propositions validées par l'utilisateur ([d327a5c](https://github.com/jessux/Banquier/commit/d327a5c99a9c6df4f55aeba91c534d2e3f5e9a2d))
+* améliore la catégorisation des transactions avec des propositions d'IA ([7615fc8](https://github.com/jessux/Banquier/commit/7615fc819bbab7ffabf65e4d4cbf4592aae84e31))
+
 ## [1.30.2](https://github.com/jessux/Banquier/compare/v1.30.1...v1.30.2) (2026-08-06)
 
 
