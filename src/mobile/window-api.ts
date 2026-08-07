@@ -18,6 +18,7 @@ import { checkForUpdates } from './updater'
 import { POWENS_CREDS, initAuth, getTempCode, getConnections, type PowensCreds } from './powens'
 import { openConnectWebview } from './powens-webview'
 import { importPowens, onProgress as onPowensProgress, emitProgress } from './powens-sync'
+import type { CategorizationProposal } from '../shared/types'
 import { getCurrentPriceEur, isMarketType, searchSymbols } from './quotes'
 import type {
   Asset,
