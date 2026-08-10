@@ -136,8 +136,8 @@ function StepCategorization(): JSX.Element {
     {
       num: '3',
       color: 'var(--green)',
-      title: 'IA (1 clic)',
-      desc: 'Avec une clé OpenRouter, le bouton "Catégoriser" traite tout en automatique.',
+      title: 'IA (avec validation)',
+      desc: 'Avec une clé OpenRouter, le bouton "Catégoriser" propose une catégorie par transaction — vous cochez/corrigez, puis validez avant application.',
       detail: 'L\'IA apprend de vos règles existantes pour rester cohérente.',
     },
   ]
