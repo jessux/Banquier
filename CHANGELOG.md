@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.32.0](https://github.com/jessux/Banquier/compare/v1.31.1...v1.32.0) (2026-08-10)
+
+
+### Nouvelles fonctionnalités
+
+* ajoute le prévisionnel de trésorerie et les objectifs d'épargne ([067f9e9](https://github.com/jessux/Banquier/commit/067f9e938d2ef8447ae2450c428f3aa30e440761))
+* ajoute un simulateur de prêt/crédit ([880584d](https://github.com/jessux/Banquier/commit/880584ddb754c7835b65d482715e925a158c0ad7))
+* simulateur de prêt, prévisionnel de trésorerie et objectifs d'épargne ([fcb6c0d](https://github.com/jessux/Banquier/commit/fcb6c0d38addb48f45a8d7edcc37fb9e237185d9))
+* **tests:** add unit tests for database and LLM functionality ([881409c](https://github.com/jessux/Banquier/commit/881409c573c6d4625651ffbf32743ad0c3dd801d))
+
+
+### Corrections de bugs
+
+* ajoute outDir manquant à tsconfig.web.json ([2af3642](https://github.com/jessux/Banquier/commit/2af3642f3f2673d3dc45ce18af2e4ca4d9299f97))
+* remplace les URLs du registre npm interne dans package-lock.json ([8b979cb](https://github.com/jessux/Banquier/commit/8b979cba34d05a4b1522da913ded97ed5da5df16))
+* supprime les artefacts .js/.d.ts compilés qui masquaient le vrai code renderer ([d279f91](https://github.com/jessux/Banquier/commit/d279f910663bddaddbbf053a6cd4e3a3b416adea))
+* update AI categorization step title and description for clarity ([9b2fb48](https://github.com/jessux/Banquier/commit/9b2fb48d20d62df485d5d7219920ecdd1de77245))
+
+
+### Documentation
+
+* add limitations section to clarify project status and known issues ([c2eb9c5](https://github.com/jessux/Banquier/commit/c2eb9c5fa9c771301705732a494bd7032554ca4f))
+* met à jour le README et la doc mobile pour les nouvelles fonctionnalités ([a7aa1c3](https://github.com/jessux/Banquier/commit/a7aa1c36eb03f2cc75f6ad7ddaba6650033d3d19))
+
 ## [1.31.1](https://github.com/jessux/Banquier/compare/v1.31.0...v1.31.1) (2026-08-07)
 
 
