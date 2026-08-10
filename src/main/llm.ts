@@ -435,11 +435,27 @@ ${lines}`
 
   const response = await callOpenRouterOnce([{ role: 'user', content: prompt }], settings, webSearch)
 
+  return parseCategorizationResponse(response, transactions, catList, fallback)
+}
+
+/** Extrait/valide le tableau JSON de catégories renvoyé par le LLM. Séparée de
+ *  categorizeBatch pour être testable sans appel réseau. */
+export function parseCategorizationResponse(
+  response: string,
+  transactions: { id: number; description: string; amount: number }[],
+  catList: string[],
+  fallback: string
+): { id: number; category: string }[] {
   const match = response.match(/\[[\s\S]*?\]/)
   if (!match) return []
 
   try {
     const categories = JSON.parse(match[0]) as string[]
+    // Le mapping catégorie↔transaction se fait par position dans le tableau :
+    // un décalage de longueur (ligne fusionnée/omise par le modèle) ferait
+    // silencieusement assigner la mauvaise catégorie à toutes les transactions
+    // suivantes. On rejette le lot plutôt que de risquer un mauvais classement.
+    if (!Array.isArray(categories) || categories.length !== transactions.length) return []
     return transactions.map((t, i) => ({
       id: t.id,
       category: catList.includes(categories[i]) ? categories[i] : fallback

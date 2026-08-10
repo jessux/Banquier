@@ -41,6 +41,12 @@ export function getActiveDbPath(): string {
 }
 
 export function initDatabase(dbPath?: string): void {
+  // Le changement de profil ré-appelle initDatabase() sur une instance déjà
+  // ouverte (voir switch-profile côté ipc.ts) : sans fermeture explicite, la
+  // connexion précédente fuit (handle WAL non relâché).
+  if (db) {
+    try { db.close() } catch { /* déjà fermée */ }
+  }
   activeDbPath = dbPath ?? path.join(app.getPath('userData'), 'banquier.db')
   db = new Database(activeDbPath)
   db.exec('PRAGMA journal_mode = WAL')
@@ -48,6 +54,10 @@ export function initDatabase(dbPath?: string): void {
   createTables()
   migrate()
   seedCategories()
+}
+
+export function closeDatabase(): void {
+  db?.close()
 }
 
 function migrate(): void {
@@ -895,12 +905,16 @@ export function renameCategory(id: number, name: string): void {
     if (cat.parent_id === null) {
       // Top-level rename: update "OldName" and "OldName > *"
       const old = cat.name
+      // % et _ dans le nom sont des jokers LIKE — les échapper pour ne pas
+      // faire déraper le renommage vers des catégories sans rapport
+      // (ex. "100% Bio" matcherait aussi "1000000 Bio").
+      const escapedOld = old.replace(/[\\%_]/g, '\\$&')
       db.run('UPDATE transactions SET category = ? WHERE category = ?', [newName, old])
       db.run('UPDATE category_rules SET category = ? WHERE category = ?', [newName, old])
 
       const subRows = db.all(
-        "SELECT id, category FROM transactions WHERE category LIKE ?",
-        [old + ' > %']
+        "SELECT id, category FROM transactions WHERE category LIKE ? ESCAPE '\\'",
+        [escapedOld + ' > %']
       ) as { id: number; category: string }[]
       for (const row of subRows) {
         db.run('UPDATE transactions SET category = ? WHERE id = ?', [
@@ -908,8 +922,8 @@ export function renameCategory(id: number, name: string): void {
         ])
       }
       const ruleRows = db.all(
-        "SELECT id, category FROM category_rules WHERE category LIKE ?",
-        [old + ' > %']
+        "SELECT id, category FROM category_rules WHERE category LIKE ? ESCAPE '\\'",
+        [escapedOld + ' > %']
       ) as { id: number; category: string }[]
       for (const row of ruleRows) {
         db.run('UPDATE category_rules SET category = ? WHERE id = ?', [
