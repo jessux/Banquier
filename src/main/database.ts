@@ -194,6 +194,17 @@ function createTables(): void {
       powens_id  TEXT PRIMARY KEY,
       deleted_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS savings_goals (
+      id            INTEGER PRIMARY KEY AUTOINCREMENT,
+      name          TEXT NOT NULL,
+      target_amount REAL NOT NULL,
+      target_date   TEXT,
+      account_id    INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+      manual_amount REAL NOT NULL DEFAULT 0,
+      created_at    TEXT NOT NULL,
+      archived      INTEGER NOT NULL DEFAULT 0
+    );
   `)
 }
 
@@ -1065,6 +1076,85 @@ export function getBudgetsWithSpent(startDate?: string, endDate?: string): (Budg
   })
 }
 
+// --- Objectifs d'épargne ---
+
+export interface SavingsGoalRow {
+  id: number
+  name: string
+  target_amount: number
+  target_date: string | null
+  account_id: number | null
+  manual_amount: number
+  created_at: string
+  archived: number
+}
+
+export interface SavingsGoalWithProgress extends SavingsGoalRow {
+  /** Compte lié : solde converti (fx_rate) si connu. Sinon (pas de compte lié
+   *  ou solde inconnu) : montant saisi manuellement (manual_amount). */
+  currentAmount: number
+  /** false si un compte est lié mais que son solde n'est pas connu (compte manuel sans sync). */
+  balanceKnown: boolean
+  accountName: string | null
+}
+
+export function getSavingsGoals(): SavingsGoalRow[] {
+  return db.all('SELECT * FROM savings_goals WHERE archived = 0 ORDER BY created_at DESC') as SavingsGoalRow[]
+}
+
+export function createSavingsGoal(
+  name: string,
+  targetAmount: number,
+  targetDate: string | null,
+  accountId: number | null
+): SavingsGoalRow {
+  const now = new Date().toISOString()
+  const result = db.run(
+    'INSERT INTO savings_goals (name, target_amount, target_date, account_id, manual_amount, created_at, archived) VALUES (?, ?, ?, ?, 0, ?, 0)',
+    [name.trim(), targetAmount, targetDate, accountId, now]
+  )
+  return db.get('SELECT * FROM savings_goals WHERE id = ?', [result.lastInsertRowid]) as SavingsGoalRow
+}
+
+export function updateSavingsGoal(
+  id: number,
+  name: string,
+  targetAmount: number,
+  targetDate: string | null,
+  accountId: number | null
+): void {
+  db.run(
+    'UPDATE savings_goals SET name = ?, target_amount = ?, target_date = ?, account_id = ? WHERE id = ?',
+    [name.trim(), targetAmount, targetDate, accountId, id]
+  )
+}
+
+/** Met à jour le montant épargné saisi à la main (objectifs sans compte lié, ou en complément). */
+export function updateSavingsGoalManualAmount(id: number, amount: number): void {
+  db.run('UPDATE savings_goals SET manual_amount = ? WHERE id = ?', [Math.max(0, amount), id])
+}
+
+export function deleteSavingsGoal(id: number): void {
+  db.run('DELETE FROM savings_goals WHERE id = ?', [id])
+}
+
+export function getSavingsGoalsWithProgress(): SavingsGoalWithProgress[] {
+  const goals = getSavingsGoals()
+  if (goals.length === 0) return []
+  const accounts = db.all('SELECT * FROM accounts') as Account[]
+  const accountById = new Map(accounts.map((a) => [a.id, a]))
+
+  return goals.map((g) => {
+    if (g.account_id != null) {
+      const account = accountById.get(g.account_id)
+      const balanceKnown = account?.balance != null
+      const currentAmount = balanceKnown ? (account!.balance as number) * account!.fx_rate : 0
+      return { ...g, currentAmount, balanceKnown, accountName: account?.name ?? null }
+    }
+    return { ...g, currentAmount: g.manual_amount, balanceKnown: true, accountName: null }
+  })
+}
+
 /** Dépense mensuelle moyenne d'une catégorie (sous-catégories incluses) sur les N derniers mois complets. */
 export function getCategoryMonthlyAverage(
   category: string,
@@ -1324,7 +1414,24 @@ export function getRecurringExpenses(
   startDate?: string,
   endDate?: string
 ): RecurringSummary {
-  const conditions = ['amount < 0', 'is_internal = 0']
+  return detectRecurringTransactions('debit', startDate, endDate)
+}
+
+/** Revenus récurrents (salaire, virements réguliers…) — même algorithme que
+ *  getRecurringExpenses, appliqué aux transactions créditrices. */
+export function getRecurringIncome(
+  startDate?: string,
+  endDate?: string
+): RecurringSummary {
+  return detectRecurringTransactions('credit', startDate, endDate)
+}
+
+function detectRecurringTransactions(
+  direction: 'debit' | 'credit',
+  startDate?: string,
+  endDate?: string
+): RecurringSummary {
+  const conditions = [direction === 'debit' ? 'amount < 0' : 'amount > 0', 'is_internal = 0']
   const params: unknown[] = []
   if (startDate) { conditions.push('date >= ?'); params.push(startDate) }
   if (endDate) { conditions.push('date <= ?'); params.push(endDate) }

@@ -76,6 +76,30 @@ describe('getRecurringExpenses', () => {
   })
 })
 
+describe('getRecurringIncome', () => {
+  it('détecte un salaire mensuel régulier et ignore les dépenses', () => {
+    insertTx([
+      { account_id: null, date: '2025-01-01', description: 'VIR SALAIRE EMPLOYEUR', amount: 2500, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-02-01', description: 'VIR SALAIRE EMPLOYEUR', amount: 2500, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-03-01', description: 'VIR SALAIRE EMPLOYEUR', amount: 2500, category: null, is_internal: 0 },
+      // Dépenses présentes dans la même base : ne doivent pas apparaître ici
+      // (c'est le rôle de getRecurringExpenses), ni l'inverse.
+      { account_id: null, date: '2025-01-05', description: 'PRLV NETFLIX.COM', amount: -13.49, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-02-05', description: 'PRLV NETFLIX.COM', amount: -13.49, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-03-05', description: 'PRLV NETFLIX.COM', amount: -13.49, category: null, is_internal: 0 }
+    ])
+
+    const income = db.getRecurringIncome()
+    expect(income.items).toHaveLength(1)
+    expect(income.items[0].frequency).toBe('mensuel')
+    expect(income.items[0].averageAmount).toBeCloseTo(2500)
+
+    const expenses = db.getRecurringExpenses()
+    expect(expenses.items).toHaveLength(1)
+    expect(expenses.items[0].merchant).toContain('NETFLIX')
+  })
+})
+
 describe('applyRulesToTransactions', () => {
   it('applique la première règle correspondante et catégorise', () => {
     db.upsertCategoryRule('AMAZON', 'Shopping')
@@ -159,5 +183,52 @@ describe('getBudgetsWithSpent', () => {
 
     const [budget] = db.getBudgetsWithSpent('2025-01-01', '2025-01-31')
     expect(budget.spent).toBe(65)
+  })
+})
+
+describe('objectifs d’épargne', () => {
+  it('un objectif sans compte lié suit le montant saisi manuellement', () => {
+    const goal = db.createSavingsGoal('Vacances', 3000, '2026-06-30', null)
+    db.updateSavingsGoalManualAmount(goal.id, 450)
+
+    const [withProgress] = db.getSavingsGoalsWithProgress()
+    expect(withProgress.currentAmount).toBe(450)
+    expect(withProgress.balanceKnown).toBe(true)
+    expect(withProgress.accountName).toBeNull()
+  })
+
+  it('un objectif lié à un compte suit le solde du compte (converti via fx_rate)', () => {
+    const account = db.createAccount('Livret A', 'Banque Test', 'EUR')
+    db.updateAccountBalance(account.id, 1200)
+    db.updateAccountFxRate(account.id, 1.1)
+    const goal = db.createSavingsGoal('Épargne de précaution', 5000, null, account.id)
+
+    const [withProgress] = db.getSavingsGoalsWithProgress()
+    expect(withProgress.currentAmount).toBeCloseTo(1320) // 1200 * 1.1
+    expect(withProgress.balanceKnown).toBe(true)
+    expect(withProgress.accountName).toBe('Livret A')
+  })
+
+  it('un objectif lié à un compte sans solde connu affiche une progression indisponible plutôt que 0 trompeur', () => {
+    const account = db.createAccount('Compte manuel', 'Banque Test', 'EUR')
+    const goal = db.createSavingsGoal('Achat voiture', 8000, null, account.id)
+
+    const [withProgress] = db.getSavingsGoalsWithProgress()
+    expect(withProgress.balanceKnown).toBe(false)
+    expect(withProgress.currentAmount).toBe(0)
+    expect(withProgress.id).toBe(goal.id)
+  })
+
+  it('update et delete fonctionnent', () => {
+    const goal = db.createSavingsGoal('Objectif', 1000, null, null)
+    db.updateSavingsGoal(goal.id, 'Objectif renommé', 1500, '2026-12-31', null)
+
+    let [updated] = db.getSavingsGoalsWithProgress()
+    expect(updated.name).toBe('Objectif renommé')
+    expect(updated.target_amount).toBe(1500)
+    expect(updated.target_date).toBe('2026-12-31')
+
+    db.deleteSavingsGoal(goal.id)
+    expect(db.getSavingsGoalsWithProgress()).toHaveLength(0)
   })
 })

@@ -3,6 +3,7 @@ import * as transactionsApi from './api/transactions'
 import * as categoriesApi from './api/categories'
 import * as rulesApi from './api/rules'
 import * as budgetsApi from './api/budgets'
+import * as goalsApi from './api/goals'
 import * as importsApi from './api/imports'
 import * as dashboardApi from './api/dashboard'
 import * as chatApi from './api/chat'
@@ -137,6 +138,7 @@ export function createMobileApi(): Window['api'] {
     getCategoryStats: dashboardApi.getCategoryStats,
     getDashboardSummary: dashboardApi.getDashboardSummary,
     getRecurringExpenses: dashboardApi.getRecurringExpenses,
+    getRecurringIncome: dashboardApi.getRecurringIncome,
     getTopMerchants: dashboardApi.getTopMerchants,
     getUncategorized: dashboardApi.getUncategorized,
     comparePeriods: dashboardApi.comparePeriods,
@@ -147,6 +149,11 @@ export function createMobileApi(): Window['api'] {
     upsertBudget: budgetsApi.upsertBudget,
     deleteBudget: budgetsApi.deleteBudget,
     getCategoryMonthlyAverage: budgetsApi.getCategoryMonthlyAverage,
+    getSavingsGoals: goalsApi.getSavingsGoalsWithProgress,
+    createSavingsGoal: goalsApi.createSavingsGoal,
+    updateSavingsGoal: goalsApi.updateSavingsGoal,
+    updateSavingsGoalAmount: goalsApi.updateSavingsGoalAmount,
+    deleteSavingsGoal: goalsApi.deleteSavingsGoal,
     getCategoryMonthlyHistory: dashboardApi.getCategoryMonthlyHistory,
 
     // AI Categorization — ne fait que proposer, comme sur desktop (src/main/ipc.ts) :

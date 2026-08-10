@@ -194,6 +194,17 @@ const SCHEMA_SQL = `
     fees       REAL NOT NULL DEFAULT 0,
     active     INTEGER NOT NULL DEFAULT 1
   );
+
+  CREATE TABLE IF NOT EXISTS savings_goals (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    name          TEXT NOT NULL,
+    target_amount REAL NOT NULL,
+    target_date   TEXT,
+    account_id    INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+    manual_amount REAL NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL,
+    archived      INTEGER NOT NULL DEFAULT 0
+  );
 `
 
 const DEFAULT_CATEGORY_TREE: { name: string; children?: string[] }[] = [

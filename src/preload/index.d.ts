@@ -31,6 +31,8 @@ import type {
   Budget,
   BudgetWithSpent,
   ProfilesState,
+  SavingsGoal,
+  SavingsGoalWithProgress,
   MerchantStats,
   UncategorizedSummary,
   PeriodComparison,
@@ -88,6 +90,7 @@ declare global {
       getCategoryStats: (startDate?: string, endDate?: string) => Promise<CategoryStats[]>
       getDashboardSummary: (startDate?: string, endDate?: string, excludeCategories?: string[]) => Promise<DashboardSummary>
       getRecurringExpenses: (startDate?: string, endDate?: string) => Promise<RecurringSummary>
+      getRecurringIncome: (startDate?: string, endDate?: string) => Promise<RecurringSummary>
       getTopMerchants: (startDate?: string, endDate?: string, limit?: number) => Promise<MerchantStats[]>
       getUncategorized: (startDate?: string, endDate?: string, limit?: number) => Promise<UncategorizedSummary>
       comparePeriods: (aStart: string, aEnd: string, bStart: string, bEnd: string) => Promise<PeriodComparison>
@@ -99,6 +102,13 @@ declare global {
       deleteBudget: (id: number) => Promise<void>
       getCategoryMonthlyAverage: (category: string, months?: number) => Promise<{ average: number; monthsWithData: number }>
       getCategoryMonthlyHistory: (category: string, months?: number) => Promise<import('../shared/types').CategoryMonthlyPoint[]>
+
+      // Objectifs d'épargne
+      getSavingsGoals: () => Promise<SavingsGoalWithProgress[]>
+      createSavingsGoal: (name: string, targetAmount: number, targetDate: string | null, accountId: number | null) => Promise<SavingsGoal>
+      updateSavingsGoal: (id: number, name: string, targetAmount: number, targetDate: string | null, accountId: number | null) => Promise<void>
+      updateSavingsGoalAmount: (id: number, amount: number) => Promise<void>
+      deleteSavingsGoal: (id: number) => Promise<void>
 
       // AI Categorization
       categorizeAi: (
