@@ -58,44 +58,12 @@ Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elle
 | 🔒 **Vie privée** | Données stockées localement (SQLite) — IA, Powens et cotations Patrimoine sont les 3 seules fonctions qui contactent des services externes, et restent optionnelles |
 
 ---
-## Soutenir le projet
 
-Si Banquier vous est utile, vous pouvez soutenir son développement sur [Ko-fi](https://ko-fi.com/gabrielkahlouche).
+## Android & iOS
 
----
-## Stack
+Banquier est aussi disponible en app Android, avec l'essentiel des fonctionnalités desktop portées : cœur hors-ligne (comptes, transactions, import CSV, catégories, règles, budgets, dashboard), catégorisation IA et chat, sync Powens, Patrimoine, import PDF, récurrences/comparaison/simulateur. Seul le cœur hors-ligne est aujourd'hui validé en usage réel ; le reste fonctionne mais n'a pas encore été testé de bout en bout sur un appareil physique. Voir [`docs/mobile.md`](docs/mobile.md) pour le détail.
 
-```
-Electron 31 · React 18 · TypeScript · SQLite (WASM) · Vite · Capacitor (Android/iOS)
-LangChain / OpenRouter · Powens · CoinGecko & Yahoo Finance
-```
-
----
-
-## Démarrage rapide
-
-```bash
-# Installer les dépendances
-npm install
-
-# Lancer en mode développement
-npm run dev
-```
-
-### Build Windows
-
-```bash
-npm run build:win        # installeur .exe (NSIS)
-npm run build:win:dir    # dossier non packagé (test rapide)
-```
-
-### Android
-
-Banquier est aussi disponible en app Android, avec l'essentiel des fonctionnalités desktop portées : cœur hors-ligne (comptes, transactions, import CSV, catégories, règles, budgets, dashboard), catégorisation IA et chat, sync Powens, Patrimoine, import PDF, récurrences/comparaison/simulateur. Seul le cœur hors-ligne est aujourd'hui validé en usage réel ; le reste fonctionne mais n'a pas encore été testé de bout en bout sur un appareil physique. Voir [`docs/mobile.md`](docs/mobile.md) pour le détail phase par phase et la roadmap.
-
-### iOS
-
-Le portage iOS est un scaffolding (projet Xcode généré, schéma d'URL configuré) : pas encore signé, pas encore testé même en simulateur, et sans aucune des fonctionnalités métier vérifiées sur cette plateforme (voir [`docs/mobile.md#ios`](docs/mobile.md#ios)). Chaque release publie un build simulateur (`banquier-ios-simulator-*.zip`, à ouvrir dans Xcode sur un Mac) dans l'onglet [Releases](https://github.com/jessux/Banquier/releases) — pas encore de build installable sur iPhone.
+Le portage iOS n'en est qu'à ses débuts : pas encore de version installable sur iPhone.
 
 ---
 
@@ -144,16 +112,13 @@ Sans clé API, tout le reste de l'application fonctionne normalement.
 
 ## Proxy d'entreprise
 
-Banquier détecte automatiquement le proxy configuré dans Windows (Internet Options / registre) — aucune action requise dans la plupart des cas.
+Si vous êtes sur un PC professionnel derrière un proxy, Banquier le détecte automatiquement (Internet Options / registre Windows) — aucune action requise dans la plupart des cas.
 
-Si nécessaire, vous pouvez forcer un proxy via variable d'environnement (prioritaire sur le proxy système) :
+---
 
-```bash
-set HTTPS_PROXY=http://proxy.entreprise.com:8080
-npm run dev
-```
+## Soutenir le projet
 
-Les appels OpenRouter et Powens passent tous les deux par le proxy détecté.
+Si Banquier vous est utile, vous pouvez soutenir son développement sur [Ko-fi](https://ko-fi.com/gabrielkahlouche).
 
 ---
 
@@ -163,26 +128,9 @@ Le projet est fonctionnel mais tout n'a pas le même niveau de maturité (tests,
 
 ---
 
-## Structure du projet
+## Vous êtes développeur ?
 
-```
-src/
-├── main/                 # Processus Electron
-│   ├── database.ts       # SQLite — comptes, transactions, catégories, budgets, patrimoine…
-│   ├── ipc.ts             # API IPC exposée au renderer (~90 handlers)
-│   ├── llm.ts             # Chat IA, catégorisation par lot, appel d'outils, streaming
-│   ├── powens.ts          # OpenBanking — connexion et synchronisation
-│   ├── quotes.ts          # Cotations marché (CoinGecko, Yahoo Finance) pour le Patrimoine
-│   ├── profiles.ts        # Profils multiples (une base SQLite par profil)
-│   ├── mobile-server.ts   # Serveur d'accès mobile en lecture seule (QR code)
-│   ├── proxy.ts           # Détection/config du proxy d'entreprise
-│   ├── updater.ts         # Mise à jour auto + sauvegarde pré-mise à jour
-│   └── parsers/           # CSV (PapaParse) · PDF (pdf-parse)
-├── mobile/               # Portage Capacitor (Android/iOS) — logique métier dédiée
-├── preload/              # Bridge contextIsolation
-├── renderer/             # React — Dashboard, Transactions, Import, Budgets, Patrimoine, Chat…
-└── shared/               # Types partagés + parsing PDF partagé main/mobile
-```
+La stack technique, les commandes de build et la structure du code sont documentées dans [`docs/developpement.md`](docs/developpement.md).
 
 ---
 
