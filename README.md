@@ -44,10 +44,12 @@ Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elle
 | 📄 **Pagination** | Affichage 75 transactions/page, tri serveur — fluide même sur 10 000+ entrées |
 | 📊 **Dashboard** | Dépenses, revenus, tendances mois par mois, répartition par catégorie, top marchands + aperçu des budgets |
 | 🎯 **Budgets** | Plafonds mensuels par catégorie, montant suggéré automatiquement, alertes visuelles de dépassement |
+| 🏆 **Objectifs d'épargne** | Montant cible + échéance optionnelle, progression automatique si lié à un compte, ou saisie manuelle sinon |
 | 🔁 **Récurrences** | Détection automatique des abonnements/prélèvements récurrents, statut actif/probablement résilié, coût mensuel/annuel estimé |
 | ⚖️ **Comparaison** | Compare les dépenses par catégorie entre deux périodes (mois, année ou plage personnalisée) |
+| 📈 **Prévisionnel** | Projette le solde de vos comptes sur 3/6/12 mois à partir des revenus et dépenses récurrents détectés |
 | 💰 **Patrimoine** | Suivi multi-actifs (immobilier, actions, ETF, crypto, liquidités, assurance-vie…) avec cours en direct, lots d'achat, plan d'investissement programmé (DCA) et historique de valeur nette |
-| 🧮 **Simulateur** | Calcul d'intérêts composés pour l'épargne programmée (versement nécessaire ↔ capital final) |
+| 🧮 **Simulateurs** | Épargne (intérêts composés, versement ↔ capital final) et prêt (mensualité ↔ montant empruntable, tableau d'amortissement, hors assurance) |
 | 💬 **Chat financier** | Assistant IA multi-conversations avec mémoire, streaming et appel d'outils sur vos données réelles |
 | 🏦 **Multi-comptes** | Courant, épargne, multi-devises avec taux de conversion saisi manuellement |
 | 📝 **Notes & Tags** | Annotez et taguez vos transactions librement |
