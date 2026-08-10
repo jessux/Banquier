@@ -170,6 +170,9 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('get-recurring-expenses', (_, startDate?: string, endDate?: string) =>
     db.getRecurringExpenses(startDate, endDate)
   )
+  ipcMain.handle('get-recurring-income', (_, startDate?: string, endDate?: string) =>
+    db.getRecurringIncome(startDate, endDate)
+  )
   ipcMain.handle('get-top-merchants', (_, startDate?: string, endDate?: string, limit?: number) =>
     db.getTopMerchants(startDate, endDate, limit)
   )
@@ -592,6 +595,23 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('get-category-monthly-average', (_, category: string, months?: number) =>
     db.getCategoryMonthlyAverage(category, months)
   )
+
+  // --- Objectifs d'épargne ---
+  ipcMain.handle('get-savings-goals', () => db.getSavingsGoalsWithProgress())
+  ipcMain.handle(
+    'create-savings-goal',
+    (_, name: string, targetAmount: number, targetDate: string | null, accountId: number | null) =>
+      db.createSavingsGoal(name, targetAmount, targetDate, accountId)
+  )
+  ipcMain.handle(
+    'update-savings-goal',
+    (_, id: number, name: string, targetAmount: number, targetDate: string | null, accountId: number | null) =>
+      db.updateSavingsGoal(id, name, targetAmount, targetDate, accountId)
+  )
+  ipcMain.handle('update-savings-goal-amount', (_, id: number, amount: number) =>
+    db.updateSavingsGoalManualAmount(id, amount)
+  )
+  ipcMain.handle('delete-savings-goal', (_, id: number) => db.deleteSavingsGoal(id))
 
   ipcMain.handle('delete-account', (_, id: number) => db.deleteAccount(id))
 

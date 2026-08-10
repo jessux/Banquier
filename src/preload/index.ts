@@ -62,6 +62,8 @@ const api = {
     ipcRenderer.invoke('get-dashboard-summary', startDate, endDate, excludeCategories),
   getRecurringExpenses: (startDate?: string, endDate?: string) =>
     ipcRenderer.invoke('get-recurring-expenses', startDate, endDate),
+  getRecurringIncome: (startDate?: string, endDate?: string) =>
+    ipcRenderer.invoke('get-recurring-income', startDate, endDate),
   getTopMerchants: (startDate?: string, endDate?: string, limit?: number) =>
     ipcRenderer.invoke('get-top-merchants', startDate, endDate, limit),
   getUncategorized: (startDate?: string, endDate?: string, limit?: number) =>
@@ -180,6 +182,16 @@ const api = {
     ipcRenderer.invoke('get-category-monthly-average', category, months),
   getCategoryMonthlyHistory: (category: string, months?: number) =>
     ipcRenderer.invoke('get-category-monthly-history', category, months),
+
+  // Objectifs d'épargne
+  getSavingsGoals: () => ipcRenderer.invoke('get-savings-goals'),
+  createSavingsGoal: (name: string, targetAmount: number, targetDate: string | null, accountId: number | null) =>
+    ipcRenderer.invoke('create-savings-goal', name, targetAmount, targetDate, accountId),
+  updateSavingsGoal: (id: number, name: string, targetAmount: number, targetDate: string | null, accountId: number | null) =>
+    ipcRenderer.invoke('update-savings-goal', id, name, targetAmount, targetDate, accountId),
+  updateSavingsGoalAmount: (id: number, amount: number) =>
+    ipcRenderer.invoke('update-savings-goal-amount', id, amount),
+  deleteSavingsGoal: (id: number) => ipcRenderer.invoke('delete-savings-goal', id),
 
   // Profiles
   getProfiles: () => ipcRenderer.invoke('get-profiles') as Promise<ProfilesState>,

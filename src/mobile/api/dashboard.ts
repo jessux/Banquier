@@ -504,7 +504,21 @@ function median(values: number[]): number {
 }
 
 export async function getRecurringExpenses(startDate?: string, endDate?: string): Promise<RecurringSummary> {
-  const conditions = ['amount < 0', 'is_internal = 0']
+  return detectRecurringTransactions('debit', startDate, endDate)
+}
+
+/** Revenus récurrents (salaire, virements réguliers…) — même algorithme que
+ *  getRecurringExpenses, appliqué aux transactions créditrices. */
+export async function getRecurringIncome(startDate?: string, endDate?: string): Promise<RecurringSummary> {
+  return detectRecurringTransactions('credit', startDate, endDate)
+}
+
+async function detectRecurringTransactions(
+  direction: 'debit' | 'credit',
+  startDate?: string,
+  endDate?: string
+): Promise<RecurringSummary> {
+  const conditions = [direction === 'debit' ? 'amount < 0' : 'amount > 0', 'is_internal = 0']
   const params: unknown[] = []
   if (startDate) {
     conditions.push('date >= ?')

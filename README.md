@@ -5,10 +5,14 @@
 ### ⬇️ Télécharger Banquier
 
 - **[➡️ Dernière version (installeur Windows)](https://github.com/jessux/Banquier/releases/latest)** — le plus simple, téléchargez le `.exe` et lancez-le
+- **[🍎 macOS](https://github.com/jessux/Banquier/releases/latest)** — le fichier `.dmg` de la même release (build non signé, voir note ci-dessous)
+- **[🐧 Linux](https://github.com/jessux/Banquier/releases/latest)** — `.AppImage` (portable) ou `.deb` (Debian/Ubuntu) de la même release
 - **[📱 Android](https://github.com/jessux/Banquier/releases/latest)** — le fichier `.apk` de la même release (voir [`docs/mobile.md`](docs/mobile.md) pour les fonctionnalités déjà portées)
 - **[📜 Toutes les versions / historique des releases](https://github.com/jessux/Banquier/releases)** — versions précédentes et notes de version
 
-> Astuce : dans la page d'une release, les fichiers se trouvent dans la section **« Assets »** (cliquez pour la déplier) : `.exe` pour Windows, `.apk` pour Android.
+> Astuce : dans la page d'une release, les fichiers se trouvent dans la section **« Assets »** (cliquez pour la déplier) : `.exe` pour Windows, `.dmg` pour macOS, `.AppImage`/`.deb` pour Linux, `.apk` pour Android.
+
+> **macOS** : le build n'est pas signé (pas de compte développeur Apple). Gatekeeper bloquera l'ouverture directe — clic droit → Ouvrir, ou `xattr -cr /Applications/Banquier.app` après installation.
 
 Banquier est une application de bureau qui importe vos relevés (CSV, PDF), les catégorise automatiquement par IA, et vous donne une vision claire de vos finances. Tout tourne sur votre machine. Vos données ne quittent jamais votre disque.
 
@@ -19,10 +23,11 @@ Banquier est une application de bureau qui importe vos relevés (CSV, PDF), les 
 Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elles revendent vos données, augmentent leurs tarifs, ou ferment. Banquier prend le contre-pied : **open source, zéro abonnement, vos données sous votre contrôle**.
 
 - Vos relevés restent sur votre machine (SQLite dans `AppData`)
-- Le cœur de l'application fonctionne **100 % hors ligne** (import CSV/PDF, catégories, règles, budgets)
-- Deux fonctionnalités optionnelles font appel à des services externes :
+- Le cœur de l'application fonctionne **100 % hors ligne** (import CSV/PDF, catégories, règles, budgets, récurrences, comparaison, simulateur)
+- Trois fonctionnalités optionnelles font appel à des services externes :
   - **Powens (OpenBanking)** — synchronisation automatique depuis votre banque via l'API Powens
-  - **IA (OpenRouter)** — catégorisation automatique et chat financier via un LLM externe
+  - **IA (OpenRouter)** — catégorisation assistée et chat financier via un LLM externe
+  - **Cotations marché (CoinGecko / Yahoo Finance)** — cours en direct pour le module Patrimoine (actions, ETF, cryptomonnaies)
 - Sans ces options, aucune donnée ne quitte votre machine
 
 ---
@@ -31,18 +36,26 @@ Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elle
 
 | Fonctionnalité | Détail |
 |---|---|
-| 🚀 **Onboarding** | Assistant pas-à-pas : connexion Powens, transactions, catégorisation, IA |
-| 📥 **Import** | CSV et PDF depuis n'importe quelle banque française |
-| 🤖 **Catégorisation IA** | OpenRouter classe vos transactions en un clic |
-| 📋 **Règles automatiques** | "AMAZON → Shopping" pour ne jamais recatégoriser deux fois |
-| 🔍 **Filtres avancés** | Recherche, catégorie, compte, date, montant min/max, tags |
-| 📄 **Pagination** | Affichage 75 transactions/page, navigation rapide — fluide même sur 10 000+ entrées |
-| 📊 **Dashboard** | Dépenses, revenus, tendances mois par mois + aperçu des budgets |
-| 🎯 **Budgets** | Plafonds mensuels par catégorie avec alertes de dépassement |
-| 💬 **Chat financier** | Posez des questions en langage naturel sur vos finances |
-| 🏦 **Multi-comptes** | Courant, épargne, multi-devises avec taux de conversion |
+| 🚀 **Onboarding** | Assistant pas-à-pas : connexion Powens ou import manuel, transactions, catégorisation, IA |
+| 📥 **Import** | CSV et PDF depuis n'importe quelle banque française — le parsing est 100 % local, aucune donnée envoyée en ligne |
+| 🤖 **Catégorisation IA** | OpenRouter propose une catégorie par transaction (avec recherche web) ; vous cochez/corrigez les propositions avant qu'elles soient écrites en base — rien n'est appliqué automatiquement |
+| 📋 **Règles automatiques** | Motifs regex → catégorie ("AMAZON → Shopping"), appliqués à chaque import et rejouables à la demande |
+| 🔍 **Filtres avancés** | Recherche, catégorie, compte, date, montant min/max, tags, virements internes |
+| 📄 **Pagination** | Affichage 75 transactions/page, tri serveur — fluide même sur 10 000+ entrées |
+| 📊 **Dashboard** | Dépenses, revenus, tendances mois par mois, répartition par catégorie, top marchands + aperçu des budgets |
+| 🎯 **Budgets** | Plafonds mensuels par catégorie, montant suggéré automatiquement, alertes visuelles de dépassement |
+| 🏆 **Objectifs d'épargne** | Montant cible + échéance optionnelle, progression automatique si lié à un compte, ou saisie manuelle sinon |
+| 🔁 **Récurrences** | Détection automatique des abonnements/prélèvements récurrents, statut actif/probablement résilié, coût mensuel/annuel estimé |
+| ⚖️ **Comparaison** | Compare les dépenses par catégorie entre deux périodes (mois, année ou plage personnalisée) |
+| 📈 **Prévisionnel** | Projette le solde de vos comptes sur 3/6/12 mois à partir des revenus et dépenses récurrents détectés |
+| 💰 **Patrimoine** | Suivi multi-actifs (immobilier, actions, ETF, crypto, liquidités, assurance-vie…) avec cours en direct, lots d'achat, plan d'investissement programmé (DCA) et historique de valeur nette |
+| 🧮 **Simulateurs** | Épargne (intérêts composés, versement ↔ capital final) et prêt (mensualité ↔ montant empruntable, tableau d'amortissement, hors assurance) |
+| 💬 **Chat financier** | Assistant IA multi-conversations avec mémoire, streaming et appel d'outils sur vos données réelles |
+| 🏦 **Multi-comptes** | Courant, épargne, multi-devises avec taux de conversion saisi manuellement |
 | 📝 **Notes & Tags** | Annotez et taguez vos transactions librement |
-| 🔒 **Vie privée** | Données stockées localement (SQLite) — les fonctions IA et OpenBanking sont optionnelles et font appel à des APIs externes |
+| 👤 **Profils** | Plusieurs profils indépendants sur une même installation, chacun avec sa propre base SQLite (ex. perso / pro) |
+| 📱 **Accès mobile web** | Mini-dashboard en lecture seule consultable depuis un téléphone via QR code (serveur local, sans passer par l'app mobile) |
+| 🔒 **Vie privée** | Données stockées localement (SQLite) — IA, Powens et cotations Patrimoine sont les 3 seules fonctions qui contactent des services externes, et restent optionnelles |
 
 ---
 ## Soutenir le projet
@@ -53,7 +66,8 @@ Si Banquier vous est utile, vous pouvez soutenir son développement sur [Ko-fi](
 ## Stack
 
 ```
-Electron 31 · React 18 · TypeScript · SQLite (WASM) · Vite · OpenRouter
+Electron 31 · React 18 · TypeScript · SQLite (WASM) · Vite · Capacitor (Android/iOS)
+LangChain / OpenRouter · Powens · CoinGecko & Yahoo Finance
 ```
 
 ---
@@ -77,11 +91,11 @@ npm run build:win:dir    # dossier non packagé (test rapide)
 
 ### Android
 
-Banquier est aussi disponible en app Android (Phase 1 : cœur hors-ligne — comptes, transactions, import CSV, catégories, règles, budgets, dashboard). Voir [`docs/mobile.md`](docs/mobile.md) pour le détail et la roadmap.
+Banquier est aussi disponible en app Android, avec l'essentiel des fonctionnalités desktop portées : cœur hors-ligne (comptes, transactions, import CSV, catégories, règles, budgets, dashboard), catégorisation IA et chat, sync Powens, Patrimoine, import PDF, récurrences/comparaison/simulateur. Seul le cœur hors-ligne est aujourd'hui validé en usage réel ; le reste fonctionne mais n'a pas encore été testé de bout en bout sur un appareil physique. Voir [`docs/mobile.md`](docs/mobile.md) pour le détail phase par phase et la roadmap.
 
 ### iOS
 
-Le portage iOS est en chantier (scaffolding du projet Xcode fait, pas encore signé ni distribuable — voir [`docs/mobile.md#ios`](docs/mobile.md#ios)). Chaque release publie un build simulateur (`banquier-ios-simulator-*.zip`, à ouvrir dans Xcode sur un Mac) dans l'onglet [Releases](https://github.com/jessux/Banquier/releases) — pas encore de build installable sur iPhone.
+Le portage iOS est un scaffolding (projet Xcode généré, schéma d'URL configuré) : pas encore signé, pas encore testé même en simulateur, et sans aucune des fonctionnalités métier vérifiées sur cette plateforme (voir [`docs/mobile.md#ios`](docs/mobile.md#ios)). Chaque release publie un build simulateur (`banquier-ios-simulator-*.zip`, à ouvrir dans Xcode sur un Mac) dans l'onglet [Releases](https://github.com/jessux/Banquier/releases) — pas encore de build installable sur iPhone.
 
 ---
 
@@ -143,18 +157,31 @@ Les appels OpenRouter et Powens passent tous les deux par le proxy détecté.
 
 ---
 
+## Limites connues
+
+Le projet est fonctionnel mais tout n'a pas le même niveau de maturité (tests, portage mobile, signature macOS…) — détail dans [`docs/limitations.md`](docs/limitations.md).
+
+---
+
 ## Structure du projet
 
 ```
 src/
-├── main/           # Processus Electron
-│   ├── database.ts # SQLite — comptes, transactions, catégories
-│   ├── ipc.ts      # API IPC exposée au renderer
-│   ├── llm.ts      # Streaming, tool calls, catégorisation par lot
-│   └── parsers/    # CSV (PapaParse) · PDF (pdf-parse)
-├── preload/        # Bridge contextIsolation
-├── renderer/       # React — Dashboard, Import, Chat, Transactions…
-└── shared/types.ts # Types partagés main ↔ renderer
+├── main/                 # Processus Electron
+│   ├── database.ts       # SQLite — comptes, transactions, catégories, budgets, patrimoine…
+│   ├── ipc.ts             # API IPC exposée au renderer (~90 handlers)
+│   ├── llm.ts             # Chat IA, catégorisation par lot, appel d'outils, streaming
+│   ├── powens.ts          # OpenBanking — connexion et synchronisation
+│   ├── quotes.ts          # Cotations marché (CoinGecko, Yahoo Finance) pour le Patrimoine
+│   ├── profiles.ts        # Profils multiples (une base SQLite par profil)
+│   ├── mobile-server.ts   # Serveur d'accès mobile en lecture seule (QR code)
+│   ├── proxy.ts           # Détection/config du proxy d'entreprise
+│   ├── updater.ts         # Mise à jour auto + sauvegarde pré-mise à jour
+│   └── parsers/           # CSV (PapaParse) · PDF (pdf-parse)
+├── mobile/               # Portage Capacitor (Android/iOS) — logique métier dédiée
+├── preload/              # Bridge contextIsolation
+├── renderer/             # React — Dashboard, Transactions, Import, Budgets, Patrimoine, Chat…
+└── shared/               # Types partagés + parsing PDF partagé main/mobile
 ```
 
 ---

@@ -310,6 +310,23 @@ export interface BudgetWithSpent extends Budget {
   spent: number
 }
 
+export interface SavingsGoal {
+  id: number
+  name: string
+  target_amount: number
+  target_date: string | null
+  account_id: number | null
+  manual_amount: number
+  created_at: string
+  archived: number
+}
+
+export interface SavingsGoalWithProgress extends SavingsGoal {
+  currentAmount: number
+  balanceKnown: boolean
+  accountName: string | null
+}
+
 // ---
 
 export interface MobileServerInfo {

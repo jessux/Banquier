@@ -12,11 +12,13 @@ import Patrimoine from './pages/Patrimoine'
 import Budget from './pages/Budget'
 import Simulateur from './pages/Simulateur'
 import Comparaison from './pages/Comparaison'
+import Previsionnel from './pages/Previsionnel'
+import Goals from './pages/Goals'
 import OnboardingModal from './components/OnboardingModal'
 import { dismiss as dismissPowensJob, startStartupSync, usePowensJob } from './utils/powensJob'
 import type { Settings as SettingsType } from '../../shared/types'
 
-export type Page = 'dashboard' | 'transactions' | 'recurring' | 'patrimoine' | 'budget' | 'simulateur' | 'comparaison' | 'import' | 'chat' | 'categories' | 'rules' | 'settings'
+export type Page = 'dashboard' | 'transactions' | 'recurring' | 'patrimoine' | 'budget' | 'goals' | 'simulateur' | 'comparaison' | 'previsionnel' | 'import' | 'chat' | 'categories' | 'rules' | 'settings'
 
 interface BudgetAlert {
   overCount: number
@@ -88,8 +90,10 @@ export default function App(): JSX.Element {
       case 'recurring': return <Recurring />
       case 'patrimoine': return <Patrimoine />
       case 'budget': return <Budget />
+      case 'goals': return <Goals />
       case 'simulateur': return <Simulateur />
       case 'comparaison': return <Comparaison />
+      case 'previsionnel': return <Previsionnel />
       case 'import': return <Import />
       case 'chat': return <Chat />
       case 'categories': return <Categories />

@@ -129,6 +129,12 @@ Le choix fait ici : **ne pas configurer `GlobalWorkerOptions.workerSrc` du tout*
 
 Comme pour la Phase 3, ce portage n'a pas été validé de bout en bout sur un appareil ou un émulateur réel — cet environnement de développement n'a ni SDK Android ni device.
 
+## Phase 6bis — Simulateur de prêt, Prévisionnel de trésorerie (disponible, non testée en conditions réelles)
+
+- **Simulateur de prêt** (`Simulateur.tsx`) — comme le mode épargne, entièrement côté client (mensualité ↔ montant empruntable, tableau d'amortissement) : aucun portage nécessaire, la page partagée fonctionne telle quelle.
+- **Prévisionnel de trésorerie** (nouvelle page `Previsionnel.tsx`) — projette le solde des comptes à partir des récurrences actives. A nécessité un vrai portage : `getRecurringExpenses` (Phase 6) ne détectait que les dépenses (`amount < 0`) ; généralisé en `detectRecurringTransactions(direction)` des deux côtés (`src/main/database.ts` et `src/mobile/api/dashboard.ts`) pour ajouter `getRecurringIncome` (revenus récurrents, ex. salaire) sans toucher au comportement existant de `getRecurringExpenses`.
+- **Objectifs d'épargne** (nouvelle page `Goals.tsx`, table `savings_goals`) — CRUD complet porté à l'identique côté mobile (`src/mobile/api/goals.ts`, table ajoutée au schéma `src/mobile/db.ts`), même logique de progression (compte lié converti via `fx_rate`, ou montant saisi à la main).
+
 ## Notifications système
 
 Les alertes de Banquier étaient jusqu'ici de simples toasts HTML : invisibles dès que l'app passe en arrière-plan — c'est-à-dire précisément pendant une synchronisation bancaire, qui peut durer plusieurs minutes.

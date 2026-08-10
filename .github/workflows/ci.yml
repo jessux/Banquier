@@ -24,3 +24,6 @@ jobs:
 
       - name: Build (type check + bundle)
         run: npm run build
+
+      - name: Run tests
+        run: npm test
