@@ -28,6 +28,10 @@ function groupByDay(txs: Transaction[]): { key: string; label: string; items: Tr
   return groups
 }
 
+/** Au-dessus de cette confiance, une proposition est pré-cochée : l'attention de
+ *  l'utilisateur doit aller aux marchands douteux, pas aux évidences. */
+const AUTO_ACCEPT_CONFIDENCE = 0.8
+
 const COMMON_CATEGORIES = [
   'Alimentation', 'Logement', 'Transport', 'Restaurants', 'Loisirs',
   'Santé', 'Shopping', 'Abonnements', 'Épargne', 'Salaire', 'Autre'
@@ -247,9 +251,13 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
         setCategories([...new Set([...paths, ...existing])].sort())
       })
       if (result.proposals.length === 0) {
-        alert('Aucune nouvelle suggestion de catégorie (règles déjà appliquées).')
+        alert('Aucune nouvelle suggestion de catégorie (règles et mémoire déjà appliquées).')
       } else {
-        setProposals(result.proposals.map((p) => ({ ...p, accepted: true })))
+        // Pré-cocher ce dont le modèle est sûr : l'attention de l'utilisateur
+        // doit aller aux marchands douteux, pas aux évidences.
+        setProposals(
+          result.proposals.map((p) => ({ ...p, accepted: p.confidence >= AUTO_ACCEPT_CONFIDENCE }))
+        )
       }
     } catch (e) {
       alert(`Erreur : ${String(e)}`)
@@ -261,7 +269,11 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
 
   const applyProposals = async (): Promise<void> => {
     if (!proposals) return
-    const updates = proposals.filter((p) => p.accepted).map(({ id, category }) => ({ id, category }))
+    // Une proposition vaut pour un marchand : on la déplie sur toutes ses
+    // transactions au moment de l'appliquer.
+    const updates = proposals
+      .filter((p) => p.accepted)
+      .flatMap((p) => p.transactionIds.map((id) => ({ id, category: p.category })))
     setApplyingProposals(true)
     try {
       await window.api.applyCategorization(updates)
@@ -451,12 +463,15 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
         </div>
       )}
 
-      {/* AI categorization proposals — pending user validation */}
+      {/* Propositions IA — une par marchand, à valider. Triées par impact
+          décroissant : si l'utilisateur s'arrête en route, ce qui pèse le plus
+          sur son budget est déjà traité. */}
       {proposals !== null && (
         <div style={{ background: 'var(--bg2)', border: '1px solid var(--accent)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-light)' }}>
-              🌐 {proposals.length} suggestion(s) de catégorie (recherche web) — {proposals.filter((p) => p.accepted).length} sélectionnée(s)
+              🌐 {proposals.length} marchand(s) — {proposals.filter((p) => p.accepted).length} sélectionné(s),
+              {' '}{proposals.filter((p) => p.accepted).reduce((n, p) => n + p.transactionIds.length, 0)} transaction(s)
             </span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-secondary" onClick={() => setProposals((prev) => prev?.map((p) => ({ ...p, accepted: true })) ?? null)}>Tout cocher</button>
@@ -467,25 +482,53 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
               <button className="btn btn-secondary" onClick={() => setProposals(null)}>✕ Annuler</button>
             </div>
           </div>
-          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-            {proposals.map((p, idx) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <input
-                  type="checkbox"
-                  checked={p.accepted}
-                  onChange={(e) => setProposals((prev) => prev?.map((x, i) => (i === idx ? { ...x, accepted: e.target.checked } : x)) ?? null)}
-                  style={{ width: 'auto', flexShrink: 0 }}
-                />
-                <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</span>
-                <span style={{ fontSize: 12, color: 'var(--text3)', whiteSpace: 'nowrap' }}>{formatEur(p.amount)}</span>
-                <CategoryPicker
-                  value={p.category}
-                  onChange={(v) => setProposals((prev) => prev?.map((x, i) => (i === idx ? { ...x, category: v } : x)) ?? null)}
-                  categories={[...new Set([...COMMON_CATEGORIES, ...categories])].sort()}
-                  style={{ width: 180 }}
-                />
-              </div>
-            ))}
+          {proposals.some((p) => p.confidence < AUTO_ACCEPT_CONFIDENCE) && (
+            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+              Les marchands sûrs sont déjà cochés. Seuls les
+              {' '}{proposals.filter((p) => p.confidence < AUTO_ACCEPT_CONFIDENCE).length} marqués
+              {' '}<span style={{ color: 'var(--yellow)' }}>à vérifier</span> demandent votre attention.
+            </div>
+          )}
+          <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+            {proposals.map((p, idx) => {
+              const uncertain = p.confidence < AUTO_ACCEPT_CONFIDENCE
+              return (
+                <div
+                  key={p.merchant}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
+                    borderBottom: '1px solid rgba(255,255,255,0.04)'
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={p.accepted}
+                    onChange={(e) => setProposals((prev) => prev?.map((x, i) => (i === idx ? { ...x, accepted: e.target.checked } : x)) ?? null)}
+                    style={{ width: 'auto', flexShrink: 0 }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.merchant}
+                      {uncertain && (
+                        <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 500, color: 'var(--yellow)', border: '1px solid var(--yellow)', borderRadius: 4, padding: '1px 5px' }}>
+                          à vérifier
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.transactionIds.length} transaction(s) — {p.description}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--text3)', whiteSpace: 'nowrap' }}>{formatEur(p.total)}</span>
+                  <CategoryPicker
+                    value={p.category}
+                    onChange={(v) => setProposals((prev) => prev?.map((x, i) => (i === idx ? { ...x, category: v } : x)) ?? null)}
+                    categories={[...new Set([...COMMON_CATEGORIES, ...categories])].sort()}
+                    style={{ width: 180 }}
+                  />
+                </div>
+              )
+            })}
           </div>
         </div>
       )}

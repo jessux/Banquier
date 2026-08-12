@@ -12,6 +12,10 @@ import {
 import { z } from 'zod'
 import type { ChatMessage, Settings, Transaction, CategoryStats, MonthlyStats, Account } from '../shared/types'
 import { proxyFetch } from './proxy'
+import {
+  parseCategorizationResponse,
+  type CategorySuggestion
+} from '../shared/categorization'
 import type {
   DashboardSummary,
   MerchantStats,
@@ -406,13 +410,20 @@ const DEFAULT_CATEGORIES = [
   'Salaire', 'Revenus', 'Frais bancaires', 'Autre'
 ]
 
+/**
+ * Demande une catégorie au modèle pour chaque entrée fournie.
+ *
+ * Les appelants envoient **un représentant par marchand** et non chaque
+ * transaction (voir CategorizationProposal) : le coût et la latence suivent le
+ * nombre de marchands distincts, pas le nombre de lignes du relevé.
+ */
 export async function categorizeBatch(
   transactions: { id: number; description: string; amount: number }[],
   settings: Settings,
   availableCategories: string[] = DEFAULT_CATEGORIES,
   rules: { pattern: string; category: string }[] = [],
   webSearch = false
-): Promise<{ id: number; category: string }[]> {
+): Promise<CategorySuggestion[]> {
   const catList = availableCategories.length > 0 ? availableCategories : DEFAULT_CATEGORIES
   const fallback = catList.includes('Autre') ? 'Autre' : catList[catList.length - 1]
 
@@ -426,7 +437,8 @@ export async function categorizeBatch(
 
   const prompt = `Catégorise ces transactions bancaires françaises.
 Retourne UNIQUEMENT un tableau JSON valide, dans le même ordre, avec exactement ${transactions.length} éléments.
-Format: ["Catégorie1", "Catégorie2", ...]
+Format: [{"categorie": "Catégorie1", "confiance": 0.95}, {"categorie": "Catégorie2", "confiance": 0.4}]
+"confiance" va de 0 à 1 et doit refléter ta certitude réelle : mets une valeur basse quand le marchand reste ambigu, c'est ce qui déclenchera une vérification humaine.
 ${webSearch ? "Utilise la recherche internet pour identifier l'activité réelle de chaque marchand avant de choisir sa catégorie. Ne devine jamais uniquement sur la base de tes connaissances internes : vérifie via une recherche web dès que le nom du marchand n'est pas évident.\n" : ''}
 Catégories autorisées: ${catList.join(', ')}
 ${rulesSection}
@@ -436,33 +448,6 @@ ${lines}`
   const response = await callOpenRouterOnce([{ role: 'user', content: prompt }], settings, webSearch)
 
   return parseCategorizationResponse(response, transactions, catList, fallback)
-}
-
-/** Extrait/valide le tableau JSON de catégories renvoyé par le LLM. Séparée de
- *  categorizeBatch pour être testable sans appel réseau. */
-export function parseCategorizationResponse(
-  response: string,
-  transactions: { id: number; description: string; amount: number }[],
-  catList: string[],
-  fallback: string
-): { id: number; category: string }[] {
-  const match = response.match(/\[[\s\S]*?\]/)
-  if (!match) return []
-
-  try {
-    const categories = JSON.parse(match[0]) as string[]
-    // Le mapping catégorie↔transaction se fait par position dans le tableau :
-    // un décalage de longueur (ligne fusionnée/omise par le modèle) ferait
-    // silencieusement assigner la mauvaise catégorie à toutes les transactions
-    // suivantes. On rejette le lot plutôt que de risquer un mauvais classement.
-    if (!Array.isArray(categories) || categories.length !== transactions.length) return []
-    return transactions.map((t, i) => ({
-      id: t.id,
-      category: catList.includes(categories[i]) ? categories[i] : fallback
-    }))
-  } catch {
-    return []
-  }
 }
 
 export function buildChatMessages(

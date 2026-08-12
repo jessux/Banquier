@@ -3,6 +3,7 @@ import * as transactionsApi from './api/transactions'
 import * as categoriesApi from './api/categories'
 import * as rulesApi from './api/rules'
 import * as merchantMemoryApi from './api/merchantMemory'
+import { groupByMerchant } from '../shared/categorization'
 import * as budgetsApi from './api/budgets'
 import * as goalsApi from './api/goals'
 import * as importsApi from './api/imports'
@@ -163,40 +164,47 @@ export function createMobileApi(): Window['api'] {
       const settings = await preferences.getSettings()
       const rules = await rulesApi.getCategoryRules()
 
-      // First pass: apply pattern rules (deterministic, always takes priority)
+      // Première passe déterministe et locale : règles puis mémoire marchand.
       const allTxForRules = await transactionsApi.getTransactions({})
       const ruleTargets = onlyUncategorized ? allTxForRules.filter((t) => !t.category) : allTxForRules
       if (ruleTargets.length > 0) await merchantMemoryApi.autoCategorize(ruleTargets.map((t) => t.id))
 
-      // Second pass: AI proposals for remaining uncategorized transactions
+      // Seconde passe : propositions IA, une par marchand (voir src/main/ipc.ts).
       const afterRules = await transactionsApi.getTransactions({})
-      const toProcess = afterRules.filter((t) => !t.category)
-      if (toProcess.length === 0) return { proposals: [] }
+      const groups = groupByMerchant(afterRules.filter((t) => !t.category))
+      if (groups.length === 0) return { proposals: [] }
 
       const BATCH_SIZE = 30
       const proposals: CategorizationProposal[] = []
-      const batches = Math.ceil(toProcess.length / BATCH_SIZE)
-      onProgress(0, toProcess.length)
+      const batches = Math.ceil(groups.length / BATCH_SIZE)
+      onProgress(0, groups.length)
 
       for (let i = 0; i < batches; i++) {
-        const batch = toProcess.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+        const batch = groups.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
         try {
           const catPaths = await categoriesApi.getCategoryPaths()
           const results = await categorizeBatch(
-            batch.map((t) => ({ id: t.id, description: t.description, amount: t.amount })),
+            batch.map((g, idx) => ({ id: idx, description: g.description, amount: g.amount })),
             settings,
             catPaths.length > 0 ? catPaths : undefined,
             rules
           )
-          const byId = new Map(batch.map((t) => [t.id, t]))
           for (const r of results) {
-            const t = byId.get(r.id)
-            if (t) proposals.push({ id: t.id, description: t.description, amount: t.amount, category: r.category })
+            const group = batch[r.id]
+            if (!group) continue
+            proposals.push({
+              merchant: group.merchant,
+              category: r.category,
+              confidence: r.confidence,
+              transactionIds: group.transactionIds,
+              description: group.description,
+              total: group.total
+            })
           }
         } catch (err) {
           console.error(`[categorize-ai] batch ${i + 1}/${batches} failed:`, err)
         }
-        onProgress(Math.min((i + 1) * BATCH_SIZE, toProcess.length), toProcess.length)
+        onProgress(Math.min((i + 1) * BATCH_SIZE, groups.length), groups.length)
       }
 
       return { proposals }

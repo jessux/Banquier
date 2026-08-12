@@ -399,11 +399,26 @@ export interface UncategorizedSummary {
 }
 
 /** Suggestion de catégorie IA en attente de validation par l'utilisateur. */
+/**
+ * Proposition de catégorie pour un **marchand**, pas pour une transaction.
+ *
+ * Le LLM ne voit qu'un représentant par marchand : un relevé de 300 lignes
+ * inconnues ne contient souvent qu'une quinzaine de marchands distincts. La
+ * proposition s'applique ensuite à toutes les transactions du groupe — ce qui
+ * divise d'autant le coût de l'appel et le nombre de décisions à prendre.
+ */
 export interface CategorizationProposal {
-  id: number
-  description: string
-  amount: number
+  /** Clé marchand (voir shared/merchant.ts). */
+  merchant: string
   category: string
+  /** Confiance déclarée par le modèle, de 0 à 1. */
+  confidence: number
+  /** Transactions auxquelles la proposition s'appliquera. */
+  transactionIds: number[]
+  /** Libellé d'une transaction du groupe, pour reconnaître le marchand. */
+  description: string
+  /** Somme signée des montants concernés — sert aussi à trier par impact. */
+  total: number
 }
 
 export interface NetBalance {

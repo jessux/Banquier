@@ -10,6 +10,10 @@ import {
   type MessageContent
 } from '@langchain/core/messages'
 import { z } from 'zod'
+import {
+  parseCategorizationResponse,
+  type CategorySuggestion
+} from '../shared/categorization'
 import type {
   ChatMessage,
   Settings,
@@ -371,12 +375,14 @@ const DEFAULT_CATEGORIES = [
   'Salaire', 'Revenus', 'Frais bancaires', 'Autre'
 ]
 
+/** Miroir de categorizeBatch() dans src/main/llm.ts : un représentant par
+ *  marchand, réponse chiffrée en confiance, même parseur partagé. */
 export async function categorizeBatch(
   transactions: { id: number; description: string; amount: number }[],
   settings: Settings,
   availableCategories: string[] = DEFAULT_CATEGORIES,
   rules: { pattern: string; category: string }[] = []
-): Promise<{ id: number; category: string }[]> {
+): Promise<CategorySuggestion[]> {
   const catList = availableCategories.length > 0 ? availableCategories : DEFAULT_CATEGORIES
   const fallback = catList.includes('Autre') ? 'Autre' : catList[catList.length - 1]
 
@@ -390,7 +396,8 @@ export async function categorizeBatch(
 
   const prompt = `Catégorise ces transactions bancaires françaises.
 Retourne UNIQUEMENT un tableau JSON valide, dans le même ordre, avec exactement ${transactions.length} éléments.
-Format: ["Catégorie1", "Catégorie2", ...]
+Format: [{"categorie": "Catégorie1", "confiance": 0.95}, {"categorie": "Catégorie2", "confiance": 0.4}]
+"confiance" va de 0 à 1 et doit refléter ta certitude réelle : mets une valeur basse quand le marchand reste ambigu, c'est ce qui déclenchera une vérification humaine.
 
 Catégories autorisées: ${catList.join(', ')}
 ${rulesSection}
@@ -399,18 +406,7 @@ ${lines}`
 
   const response = await callOpenRouterOnce([{ role: 'user', content: prompt }], settings)
 
-  const match = response.match(/\[[\s\S]*?\]/)
-  if (!match) return []
-
-  try {
-    const categories = JSON.parse(match[0]) as string[]
-    return transactions.map((t, i) => ({
-      id: t.id,
-      category: catList.includes(categories[i]) ? categories[i] : fallback
-    }))
-  } catch {
-    return []
-  }
+  return parseCategorizationResponse(response, transactions, catList, fallback)
 }
 
 export function buildChatMessages(history: ChatMessage[], systemPrompt: string): BaseMessage[] {

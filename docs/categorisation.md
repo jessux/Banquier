@@ -99,21 +99,25 @@ Décisions au passage :
 - Une règle ne nourrit pas la mémoire : elle est déjà rejouée à chaque import,
   l'y dupliquer créerait deux sources de vérité pour un même marchand.
 
-### Phase 2 — Dédup LLM par marchand
-- ☐ Regrouper les non-catégorisées par `merchant_key` avant l'appel
-- ☐ Un représentant par groupe, résultat étendu à tout le groupe
-- ☐ Score de confiance demandé au modèle
-- ☐ Écriture du résultat en mémoire marchand (pas seulement sur les tx du lot)
+### Phase 2 — Dédup LLM par marchand ☑
+- ☑ `groupByMerchant()` dans `src/shared/categorization.ts` — regroupement avant l'appel
+- ☑ Un représentant par groupe (la plus grosse transaction), résultat étendu à tout le groupe
+- ☑ Score de confiance demandé au modèle, avec repli quand il n'en renvoie pas
+- ☑ Écriture du résultat en mémoire marchand — acquis via `batchUpdateCategories` (phase 1)
+- ☑ Parseur de réponse remonté dans `shared/` : le mobile avait sa propre copie, **sans le garde-fou de longueur** — il pouvait donc décaler silencieusement les catégories
+
+`CategorizationProposal` porte désormais un marchand et non une transaction :
+un relevé de 300 lignes inconnues tient en une quinzaine de propositions.
 
 ### Phase 3 — Dictionnaire FR embarqué
 - ☐ `src/shared/merchantDictionary.ts` (~300 enseignes + motifs génériques)
 - ☐ Aligné sur `DEFAULT_CATEGORY_TREE`, priorité inférieure à la mémoire perso
 - ☐ Tests
 
-### Phase 4 — Revue groupée par marchand
-- ☐ Cartes « MARCHAND — n tx — total € — catégorie », triées par impact décroissant
-- ☐ Auto-acceptation au-dessus du seuil de confiance
-- ☐ Navigation clavier
+### Phase 4 — Revue groupée par marchand ☑ *(livrée avec la phase 2)*
+- ☑ Lignes « MARCHAND — n tx — total € — catégorie », triées par impact décroissant
+- ☑ Auto-acceptation au-dessus du seuil de confiance (0,8), les autres marqués « à vérifier »
+- ☐ Navigation clavier *(reste à faire — la souris suffit tant que la liste tient en quelques lignes)*
 
 ### Phase 5 — Traçabilité et mode automatique
 - ☐ Colonnes `category_source` (`user`/`rule`/`memory`/`dict`/`fuzzy`/`ai`) et `category_confidence`

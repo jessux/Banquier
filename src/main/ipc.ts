@@ -14,6 +14,7 @@ import {
   categorizeBatch
 } from './llm'
 import { retrieveRelevantMemories } from './memory'
+import { groupByMerchant } from '../shared/categorization'
 import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
 import { checkForUpdatesManual, type UpdateCheckResult } from './updater'
 import { is } from '@electron-toolkit/utils'
@@ -201,42 +202,54 @@ export function registerIpcHandlers(): void {
     const ruleTargets = onlyUncategorized ? allTxForRules.filter((t) => !t.category) : allTxForRules
     if (ruleTargets.length > 0) db.autoCategorize(ruleTargets.map((t) => t.id))
 
-    // Seconde passe : propositions IA pour ce qu'il reste.
+    // Seconde passe : propositions IA pour ce qu'il reste, regroupées par
+    // marchand. Un relevé de 300 lignes inconnues ne contient souvent qu'une
+    // quinzaine de marchands distincts — c'est autant d'appels économisés et de
+    // décisions en moins pour l'utilisateur.
     const afterRules = db.getTransactions({})
-    const toProcess = afterRules.filter((t) => !t.category)
+    const groups = groupByMerchant(afterRules.filter((t) => !t.category))
 
-    if (toProcess.length === 0) return { proposals: [] }
+    if (groups.length === 0) return { proposals: [] }
 
     const BATCH_SIZE = 30
     const proposals: CategorizationProposal[] = []
-    const batches = Math.ceil(toProcess.length / BATCH_SIZE)
+    const batches = Math.ceil(groups.length / BATCH_SIZE)
 
-    event.sender.send('categorize-progress', { done: 0, total: toProcess.length })
+    event.sender.send('categorize-progress', { done: 0, total: groups.length })
 
     for (let i = 0; i < batches; i++) {
-      const batch = toProcess.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+      const batch = groups.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
 
       try {
         const catPaths = db.getCategoryPaths()
+        // L'index dans le lot sert d'identifiant : le modèle répond par
+        // position, et un groupe n'a pas d'id propre.
         const results = await categorizeBatch(
-          batch.map((t) => ({ id: t.id, description: t.description, amount: t.amount })),
+          batch.map((g, idx) => ({ id: idx, description: g.description, amount: g.amount })),
           settings,
           catPaths.length > 0 ? catPaths : undefined,
           rules,
           true
         )
-        const byId = new Map(batch.map((t) => [t.id, t]))
         for (const r of results) {
-          const t = byId.get(r.id)
-          if (t) proposals.push({ id: t.id, description: t.description, amount: t.amount, category: r.category })
+          const group = batch[r.id]
+          if (!group) continue
+          proposals.push({
+            merchant: group.merchant,
+            category: r.category,
+            confidence: r.confidence,
+            transactionIds: group.transactionIds,
+            description: group.description,
+            total: group.total
+          })
         }
       } catch (err) {
         console.error(`[categorize-ai] batch ${i + 1}/${batches} failed:`, err)
       }
 
       event.sender.send('categorize-progress', {
-        done: Math.min((i + 1) * BATCH_SIZE, toProcess.length),
-        total: toProcess.length
+        done: Math.min((i + 1) * BATCH_SIZE, groups.length),
+        total: groups.length
       })
     }
 
