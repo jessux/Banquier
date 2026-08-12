@@ -38,7 +38,7 @@ que pour l'écran « Top marchands » — l'actif central du problème, inexploi
 
 ---
 
-## Architecture cible : cascade à confiance décroissante
+## Architecture : cascade à confiance décroissante
 
 Le LLM devient le dernier recours, pas le moteur.
 
@@ -47,21 +47,26 @@ import
   ↓
 [0] clé marchand (normalisation du libellé)
   ↓
-[1] règles utilisateur (regex explicites)      ─ déterministe
+[1] règles utilisateur                         ─ déterministe, peut réécrire
   ↓
-[2] mémoire marchand (tes décisions passées)   ─ local, instantané, gratuit
+[2] mémoire marchand (vos décisions passées)   ─ local, instantané, gratuit
   ↓
-[3] dictionnaire FR embarqué (~300 enseignes)  ─ statique, versionné
+[3] rattrapage flou (marchand voisin)          ─ local
   ↓
-[4] repli flou BM25 sur l'historique classé    ─ local
+[4] dictionnaire FR embarqué (~290 enseignes)  ─ statique, versionné
   ↓
 [5] LLM — sur les MARCHANDS UNIQUES restants   ─ 1 appel au lieu de 10
   ↓
 [6] revue groupée par marchand, triée par impact €
 ```
 
-Chaque couche qui tranche écrit dans la **mémoire marchand** : la même question
-ne se repose jamais.
+Deux écarts avec le plan d'origine, détaillés plus bas dans les phases
+concernées : le rattrapage flou passe **avant** le dictionnaire (une décision de
+l'utilisateur, même approchée, prime sur une liste livrée), et il ne repose pas
+sur BM25.
+
+Vos décisions — corrections manuelles et propositions IA validées — alimentent
+la **mémoire marchand** : la même question ne se repose jamais.
 
 ---
 
