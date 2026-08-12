@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.33.0](https://github.com/jessux/Banquier/compare/v1.32.0...v1.33.0) (2026-08-12)
+
+
+### Nouvelles fonctionnalités
+
+* **regles:** packs de categories et de regles communautaires ([f8fbc25](https://github.com/jessux/Banquier/commit/f8fbc2516dabcf0858e60dfed856d46ff018c85b))
+* **regles:** packs de categories et de regles communautaires ([44058b5](https://github.com/jessux/Banquier/commit/44058b5c32c9c97f1d516777c088027bc72f3b30))
+
+
+### Corrections de bugs
+
+* **transactions:** n'exclut plus les factures internet des depenses ([b8224a6](https://github.com/jessux/Banquier/commit/b8224a60da82dbb2583f73a6449b4f5c253f6577))
+
+
+### Documentation
+
+* update README and add development guide for developers ([69480fe](https://github.com/jessux/Banquier/commit/69480fec80203873f2d03a5689078e7e8f2cd35e))
+
 ## [1.32.0](https://github.com/jessux/Banquier/compare/v1.31.1...v1.32.0) (2026-08-10)
 
 
