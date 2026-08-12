@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import fs from 'fs'
+import { Database } from 'node-sqlite3-wasm'
 import os from 'os'
 import path from 'path'
 import * as db from './database'
@@ -230,5 +231,53 @@ describe('objectifs d’épargne', () => {
 
     db.deleteSavingsGoal(goal.id)
     expect(db.getSavingsGoalsWithProgress()).toHaveLength(0)
+  })
+})
+
+describe('retrait des packs de regles (rollback 1.33.0)', () => {
+  /** Reproduit une base telle que la 1.33.0 l'avait migrée, puis rouvre. */
+  function reopenWithPacksSchema(): void {
+    db.closeDatabase()
+    const file = path.join(tmpDir, 'legacy.db')
+    const legacy = new Database(file)
+    legacy.exec(`
+      CREATE TABLE category_rules (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        pattern  TEXT NOT NULL,
+        category TEXT NOT NULL,
+        source   TEXT NOT NULL DEFAULT 'user',
+        priority INTEGER NOT NULL DEFAULT 0,
+        internal INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(pattern, source)
+      );
+      CREATE TABLE rule_packs (id TEXT PRIMARY KEY, version TEXT NOT NULL, name TEXT NOT NULL, installed_at TEXT NOT NULL);
+      CREATE TABLE shared_rules (pattern TEXT PRIMARY KEY, shared_at TEXT NOT NULL);
+      INSERT INTO category_rules (pattern, category, source, priority) VALUES
+        ('AMAZON', 'Loisirs', 'user', 0),
+        ('AMAZON', 'Shopping', 'pack:fr-base', 100000),
+        ('CARREFOUR', 'Alimentation', 'pack:fr-base', 100001);
+    `)
+    legacy.close()
+    db.initDatabase(file)
+  }
+
+  it('restaure UNIQUE(pattern) pour que la creation de regles refonctionne', () => {
+    reopenWithPacksSchema()
+    // Échouait avec « ON CONFLICT clause does not match any PRIMARY KEY
+    // or UNIQUE constraint » tant que UNIQUE(pattern, source) subsistait.
+    expect(() => db.upsertCategoryRule('FNAC', 'Shopping')).not.toThrow()
+  })
+
+  it('conserve les regles, la version utilisateur primant sur celle du pack', () => {
+    reopenWithPacksSchema()
+    const rules = db.getCategoryRulesWithId()
+    expect(rules.map((r) => r.pattern).sort()).toEqual(['AMAZON', 'CARREFOUR'])
+    expect(rules.find((r) => r.pattern === 'AMAZON')?.category).toBe('Loisirs')
+  })
+
+  it('supprime les tables devenues inutiles', () => {
+    reopenWithPacksSchema()
+    db.upsertCategoryRule('LIDL', 'Alimentation')
+    expect(db.getCategoryRules().some((r) => r.pattern === 'LIDL')).toBe(true)
   })
 })

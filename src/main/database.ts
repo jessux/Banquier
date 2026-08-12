@@ -73,6 +73,49 @@ function migrate(): void {
   for (const sql of migrations) {
     try { db.exec(sql) } catch { /* column already exists */ }
   }
+  rollbackRulePacksSchema()
+}
+
+/**
+ * Défait la migration introduite par les packs de règles (1.33.0), retirés
+ * depuis.
+ *
+ * Cette version avait remplacé UNIQUE(pattern) par UNIQUE(pattern, source) sur
+ * category_rules. Sans retour en arrière, upsertCategoryRule() échoue sur
+ * « ON CONFLICT clause does not match any PRIMARY KEY or UNIQUE constraint »
+ * dès qu'on crée ou modifie une règle.
+ *
+ * Les règles installées par un pack sont conservées : ce sont des lignes
+ * ordinaires, utiles, et les supprimer changerait silencieusement la
+ * catégorisation. En cas de doublon de pattern, la règle de l'utilisateur
+ * l'emporte.
+ */
+function rollbackRulePacksSchema(): void {
+  const columns = db.all('PRAGMA table_info(category_rules)') as { name: string }[]
+  if (!columns.some((c) => c.name === 'source')) return
+
+  db.exec('BEGIN')
+  try {
+    db.exec(`
+      CREATE TABLE category_rules_restored (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        pattern  TEXT NOT NULL UNIQUE,
+        category TEXT NOT NULL
+      );
+      INSERT INTO category_rules_restored (pattern, category)
+        SELECT pattern, category FROM category_rules WHERE source = 'user';
+      INSERT OR IGNORE INTO category_rules_restored (pattern, category)
+        SELECT pattern, category FROM category_rules WHERE source <> 'user' ORDER BY priority, id;
+      DROP TABLE category_rules;
+      ALTER TABLE category_rules_restored RENAME TO category_rules;
+      DROP TABLE IF EXISTS rule_packs;
+      DROP TABLE IF EXISTS shared_rules;
+    `)
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
 }
 
 function createTables(): void {

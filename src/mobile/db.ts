@@ -244,6 +244,32 @@ async function seedCategories(): Promise<void> {
   }
 }
 
+/**
+ * Défait la migration introduite par les packs de règles (1.33.0), retirés
+ * depuis. Miroir de rollbackRulePacksSchema() dans src/main/database.ts — voir
+ * ce fichier pour le détail.
+ */
+async function rollbackRulePacksSchema(): Promise<void> {
+  const columns = await all<{ name: string }>('PRAGMA table_info(category_rules)')
+  if (!columns.some((c) => c.name === 'source')) return
+
+  await exec(`
+    CREATE TABLE category_rules_restored (
+      id       INTEGER PRIMARY KEY AUTOINCREMENT,
+      pattern  TEXT NOT NULL UNIQUE,
+      category TEXT NOT NULL
+    );
+    INSERT INTO category_rules_restored (pattern, category)
+      SELECT pattern, category FROM category_rules WHERE source = 'user';
+    INSERT OR IGNORE INTO category_rules_restored (pattern, category)
+      SELECT pattern, category FROM category_rules WHERE source <> 'user' ORDER BY priority, id;
+    DROP TABLE category_rules;
+    ALTER TABLE category_rules_restored RENAME TO category_rules;
+    DROP TABLE IF EXISTS rule_packs;
+    DROP TABLE IF EXISTS shared_rules;
+  `)
+}
+
 export async function initDatabase(): Promise<void> {
   const isConn = (await sqlite.isConnection(DB_NAME, false)).result
   db = isConn
@@ -251,5 +277,6 @@ export async function initDatabase(): Promise<void> {
     : await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false)
   await db.open()
   await exec(SCHEMA_SQL)
+  await rollbackRulePacksSchema()
   await seedCategories()
 }
