@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.34.0](https://github.com/jessux/Banquier/compare/v1.33.0...v1.34.0) (2026-08-12)
+
+
+### Nouvelles fonctionnalités
+
+* **categorisation:** cle marchand stable pour regrouper les transactions ([98b20ef](https://github.com/jessux/Banquier/commit/98b20efacf5639600def4f53279f7214f0204d9d))
+* **categorisation:** dictionnaire d'enseignes francaises embarque ([79ec52c](https://github.com/jessux/Banquier/commit/79ec52ce384b7e2fc0913dae38512c98c2cdc969))
+* **categorisation:** interroge le LLM par marchand et non par transaction ([c3badbf](https://github.com/jessux/Banquier/commit/c3badbfbbb5cd0e6d5d89b7cec0f2b4938fcd6f3))
+* **categorisation:** memorise les decisions par marchand et les rejoue ([171477d](https://github.com/jessux/Banquier/commit/171477d5044c1e8864ea218f44677e9db8398a71))
+* **categorisation:** mode automatique optionnel et reliquat visible ([a9714c9](https://github.com/jessux/Banquier/commit/a9714c9ffc761203afbf8a52cf6459d0c57ae8d6))
+* **categorisation:** rattrape les marchands proches de ceux deja decides ([c02a4a5](https://github.com/jessux/Banquier/commit/c02a4a5fc0fedf6a1f0256246246685d76adb9f9))
+* **categorisation:** reduit a neant la penibilite de la categorisation ([7f84dd3](https://github.com/jessux/Banquier/commit/7f84dd3f5011b39e5400a3ceffdd53e05a6585ff))
+* **categorisation:** revue des propositions au clavier ([8d0411a](https://github.com/jessux/Banquier/commit/8d0411ad82cf6c48d8862c1b99bda0d5bd7827db))
+* **categorisation:** trace la provenance des categories et la donne a piloter ([5ad6b4d](https://github.com/jessux/Banquier/commit/5ad6b4d8fa799ef381bf1017a66b30681c3a36a9))
+* **categorisation:** virements internes detectes et regles sans regex ([82fe17c](https://github.com/jessux/Banquier/commit/82fe17c6846af4c63428858b9daf9caaa9a927d3))
+
+
+### Corrections de bugs
+
+* **db:** defait la migration de schema laissee par les packs de regles ([e27390c](https://github.com/jessux/Banquier/commit/e27390ca7c8bc19869a82c861f3cea5d02376b6c))
+* **regles:** retire les packs de regles et la file de partage ([93198ee](https://github.com/jessux/Banquier/commit/93198eee3299ff69cfd63251aa9b5097ec1538c3))
+* **regles:** retire les packs de regles et la file de partage ([54b9b37](https://github.com/jessux/Banquier/commit/54b9b37544c6b7a556133b0fc85c3e27edc54543))
+
+
+### Documentation
+
+* **categorisation:** ajoute le fichier de suivi du chantier ([321aa3b](https://github.com/jessux/Banquier/commit/321aa3bda7f7bae1c4e1d877f53e5ccb1df0c070))
+* **categorisation:** corrige le schema de cascade ([019aebb](https://github.com/jessux/Banquier/commit/019aebbe6a6310bb393748372aae2b7a95c2a9f8))
+* **categorisation:** met a jour le README et cloture le suivi ([3ac3534](https://github.com/jessux/Banquier/commit/3ac3534bcafde4198c69590d099ebeb28691ac21))
+
 ## [1.33.0](https://github.com/jessux/Banquier/compare/v1.32.0...v1.33.0) (2026-08-12)
 
 
