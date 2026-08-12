@@ -1,5 +1,7 @@
 import { all, get, run, transaction } from '../db'
 import { applyRulesToTransactions } from './rules'
+import { getCategoryPaths } from './categories'
+import { lookupMerchantDictionary } from '../../shared/merchantDictionary'
 
 /**
  * Mémoire de catégorisation par marchand — miroir de la section « Mémoire
@@ -68,10 +70,54 @@ export async function applyMerchantMemory(transactionIds: number[]): Promise<num
   return updated
 }
 
+/** Miroir de applyMerchantDictionary() dans src/main/database.ts. */
+export async function applyMerchantDictionary(transactionIds: number[]): Promise<number> {
+  if (transactionIds.length === 0) return 0
+
+  const known = new Set(await getCategoryPaths())
+  const CHUNK = 200
+  let updated = 0
+
+  await transaction(async () => {
+    for (let offset = 0; offset < transactionIds.length; offset += CHUNK) {
+      const chunk = transactionIds.slice(offset, offset + CHUNK)
+      const placeholders = chunk.map(() => '?').join(',')
+      const rows = await all<{ id: number; merchant_key: string; amount: number }>(
+        `SELECT id, merchant_key, amount FROM transactions
+         WHERE id IN (${placeholders}) AND category IS NULL AND merchant_key IS NOT NULL`,
+        chunk
+      )
+
+      for (const row of rows) {
+        const proposed = lookupMerchantDictionary(row.merchant_key, row.amount)
+        if (!proposed) continue
+        const category = resolveKnownCategory(proposed, known)
+        if (!category) continue
+        await run('UPDATE transactions SET category = ? WHERE id = ?', [category, row.id])
+        updated++
+      }
+    }
+  })
+
+  return updated
+}
+
+/** Miroir de resolveKnownCategory() dans src/main/database.ts. */
+function resolveKnownCategory(category: string, known: Set<string>): string | null {
+  if (known.has(category)) return category
+  const sep = category.indexOf(' > ')
+  if (sep !== -1) {
+    const parent = category.slice(0, sep)
+    if (known.has(parent)) return parent
+  }
+  return null
+}
+
 /** Miroir de autoCategorize() dans src/main/database.ts. */
 export async function autoCategorize(transactionIds: number[]): Promise<number> {
   if (transactionIds.length === 0) return 0
   const byRules = await applyRulesToTransactions(transactionIds)
   const byMemory = await applyMerchantMemory(transactionIds)
-  return byRules + byMemory
+  const byDictionary = await applyMerchantDictionary(transactionIds)
+  return byRules + byMemory + byDictionary
 }

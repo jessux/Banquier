@@ -436,3 +436,52 @@ describe('mémoire marchand', () => {
     expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Alimentation')
   })
 })
+
+describe('dictionnaire marchand', () => {
+  it('catégorise les enseignes connues dès le premier import, mémoire vide', () => {
+    const ids = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB CARREFOUR MARKET 05/01 PARIS', amount: -42, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-01-06', description: 'PRLV NETFLIX.COM', amount: -13.49, category: null, is_internal: 0 }
+    ])
+    expect(db.autoCategorize(ids)).toBe(2)
+
+    const byId = new Map(db.getTransactions({}).map((t) => [t.id, t.category]))
+    expect(byId.get(ids[0])).toBe('Alimentation > Épicerie')
+    expect(byId.get(ids[1])).toBe('Abonnements > Streaming')
+  })
+
+  it('retombe sur la catégorie parente si la sous-catégorie a été supprimée', () => {
+    const epicerie = db.getCategoryTree().find((c) => c.name === 'Épicerie')!
+    db.deleteCategory(epicerie.id)
+
+    const [id] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB CARREFOUR MARKET 05/01', amount: -42, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize([id])
+    expect(db.getTransactions({})[0].category).toBe('Alimentation')
+  })
+
+  it("n'invente pas de catégorie absente de l'arborescence de l'utilisateur", () => {
+    const alimentation = db.getCategoryTree().find((c) => c.name === 'Alimentation' && c.parent_id === null)!
+    db.deleteCategory(alimentation.id) // supprime aussi ses enfants
+
+    const [id] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB CARREFOUR MARKET 05/01', amount: -42, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize([id])
+    expect(db.getTransactions({})[0].category).toBeNull()
+  })
+
+  it('la mémoire de l\'utilisateur prime sur le dictionnaire', () => {
+    const [first] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB CARREFOUR MARKET 05/01', amount: -42, category: null, is_internal: 0 }
+    ])
+    db.updateTransactionCategory(first, 'Shopping')
+
+    const [next] = insertTx([
+      { account_id: null, date: '2025-02-05', description: 'CB CARREFOUR MARKET 05/02', amount: -30, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize([next])
+    expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Shopping')
+  })
+})

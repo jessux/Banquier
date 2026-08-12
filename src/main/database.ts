@@ -33,6 +33,7 @@ import type {
   DcaPlanInput
 } from '../shared/types'
 import { normalizeMerchant } from '../shared/merchant'
+import { lookupMerchantDictionary } from '../shared/merchantDictionary'
 
 let db: Database
 let activeDbPath = ''
@@ -1868,7 +1869,72 @@ export function getUncategorizedTransactionIds(accountIds: number[]): number[] {
  */
 export function autoCategorize(transactionIds: number[]): number {
   if (transactionIds.length === 0) return 0
-  return applyRulesToTransactions(transactionIds) + applyMerchantMemory(transactionIds)
+  return (
+    applyRulesToTransactions(transactionIds) +
+    applyMerchantMemory(transactionIds) +
+    applyMerchantDictionary(transactionIds)
+  )
+}
+
+/**
+ * Applique le dictionnaire d'enseignes embarqué aux transactions encore sans
+ * catégorie. Il couvre le premier import, quand la mémoire est vide.
+ *
+ * Le résultat n'est **pas** écrit en mémoire marchand : le dictionnaire est
+ * déterministe et rejoué à chaque import, l'y recopier créerait une seconde
+ * source de vérité qu'une correction ultérieure du dictionnaire ne pourrait
+ * plus rattraper.
+ */
+export function applyMerchantDictionary(transactionIds: number[]): number {
+  if (transactionIds.length === 0) return 0
+
+  const known = new Set(getCategoryPaths())
+  const CHUNK = 200
+  let updated = 0
+
+  db.exec('BEGIN')
+  try {
+    for (let offset = 0; offset < transactionIds.length; offset += CHUNK) {
+      const chunk = transactionIds.slice(offset, offset + CHUNK)
+      const placeholders = chunk.map(() => '?').join(',')
+      const rows = db.all(
+        `SELECT id, merchant_key, amount FROM transactions
+         WHERE id IN (${placeholders}) AND category IS NULL AND merchant_key IS NOT NULL`,
+        chunk
+      ) as { id: number; merchant_key: string; amount: number }[]
+
+      for (const row of rows) {
+        const proposed = lookupMerchantDictionary(row.merchant_key, row.amount)
+        if (!proposed) continue
+        const category = resolveKnownCategory(proposed, known)
+        if (!category) continue
+        db.run('UPDATE transactions SET category = ? WHERE id = ?', [category, row.id])
+        updated++
+      }
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
+
+  return updated
+}
+
+/**
+ * Ramène une catégorie du dictionnaire à celles qui existent réellement chez
+ * l'utilisateur : il a pu supprimer ou renommer une sous-catégorie par défaut.
+ * On retombe alors sur la catégorie parente plutôt que d'inventer une entrée
+ * fantôme qui n'apparaîtrait dans aucun filtre ni budget.
+ */
+function resolveKnownCategory(category: string, known: Set<string>): string | null {
+  if (known.has(category)) return category
+  const sep = category.indexOf(' > ')
+  if (sep !== -1) {
+    const parent = category.slice(0, sep)
+    if (known.has(parent)) return parent
+  }
+  return null
 }
 
 export function applyRulesToTransactions(transactionIds: number[]): number {

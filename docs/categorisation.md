@@ -109,10 +109,17 @@ Décisions au passage :
 `CategorizationProposal` porte désormais un marchand et non une transaction :
 un relevé de 300 lignes inconnues tient en une quinzaine de propositions.
 
-### Phase 3 — Dictionnaire FR embarqué
-- ☐ `src/shared/merchantDictionary.ts` (~300 enseignes + motifs génériques)
-- ☐ Aligné sur `DEFAULT_CATEGORY_TREE`, priorité inférieure à la mémoire perso
-- ☐ Tests
+### Phase 3 — Dictionnaire FR embarqué ☑
+- ☑ `src/shared/merchantDictionary.ts` — ~290 enseignes françaises
+- ☑ Aligné sur `DEFAULT_CATEGORY_TREE`, priorité inférieure aux règles et à la mémoire
+- ☑ Motifs longs d'abord (UBER EATS avant UBER, ORANGE BLEUE avant ORANGE) et bornes de mots (CORA ≠ CORAIL)
+- ☑ Entrées orientées débit/crédit : au débit une mutuelle est une dépense, au crédit un remboursement
+- ☑ Repli sur la catégorie parente si l'utilisateur a supprimé la sous-catégorie ; aucune catégorie fantôme n'est créée
+- ☑ Tests (13 cas) + parité mobile
+
+Le résultat du dictionnaire n'est **pas** recopié en mémoire marchand : il est
+déjà rejoué à chaque import, et l'y dupliquer empêcherait une correction
+ultérieure du dictionnaire de prendre effet.
 
 ### Phase 4 — Revue groupée par marchand ☑ *(livrée avec la phase 2)*
 - ☑ Lignes « MARCHAND — n tx — total € — catégorie », triées par impact décroissant
