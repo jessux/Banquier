@@ -59,6 +59,8 @@ export interface ImportResult {
   duplicates: number
   errors: number
   importId: number
+  /** Catégorisées sans intervention à l'import (règles, mémoire, dictionnaire). */
+  categorized: number
 }
 
 export interface MonthlyStats {
@@ -115,6 +117,10 @@ export interface Settings {
   proxyUrl?: string
   /** Thème de l'interface. Par défaut : sombre. */
   theme?: 'dark' | 'light'
+  /** Lance la catégorisation IA après chaque import et applique d'office les
+   *  propositions sûres. Désactivé par défaut : la fonctionnalité appelle un
+   *  service externe et écrit sans validation ligne à ligne. */
+  autoCategorizeAi?: boolean
   /** Notifications système (Android). Par défaut : activées si la permission est accordée. */
   notificationsEnabled?: boolean
   /** Heure (0-23) du rappel quotidien de synchronisation. null/undefined = pas de rappel. */
@@ -137,7 +143,7 @@ export interface PowensSyncResult {
   imported: number
   duplicates: number
   accounts: number
-  /** Transactions automatiquement catégorisées par les règles lors de l'import. */
+  /** Transactions catégorisées sans intervention lors de l'import. */
   categorized: number
   /** Date la plus ancienne disponible côté Powens/banque (YYYY-MM-DD), null si inconnue. */
   firstDate?: string | null

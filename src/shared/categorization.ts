@@ -1,6 +1,12 @@
 import type { Transaction } from './types'
 import { normalizeMerchant } from './merchant'
 
+/**
+ * Au-dessus de cette confiance, une proposition IA est tenue pour sûre : elle
+ * est pré-cochée dans la revue, et appliquée d'office en mode automatique.
+ */
+export const AUTO_ACCEPT_CONFIDENCE = 0.8
+
 /** Un marchand et les transactions non catégorisées qui lui appartiennent. */
 export interface MerchantGroup {
   merchant: string

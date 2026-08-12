@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Transaction, Account, CategorizationProposal } from '../../../shared/types'
 import CategoryPicker from '../components/CategoryPicker'
+import { AUTO_ACCEPT_CONFIDENCE } from '../../../shared/categorization'
 import { categoryBadgeStyle, categoryCircleColor, categoryIcon } from '../utils/categoryColor'
 
 const PAGE_SIZE = 75
@@ -27,10 +28,6 @@ function groupByDay(txs: Transaction[]): { key: string; label: string; items: Tr
   }
   return groups
 }
-
-/** Au-dessus de cette confiance, une proposition est pré-cochée : l'attention de
- *  l'utilisateur doit aller aux marchands douteux, pas aux évidences. */
-const AUTO_ACCEPT_CONFIDENCE = 0.8
 
 const COMMON_CATEGORIES = [
   'Alimentation', 'Logement', 'Transport', 'Restaurants', 'Loisirs',

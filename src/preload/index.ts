@@ -87,6 +87,14 @@ const api = {
     promise.finally(() => ipcRenderer.removeAllListeners('categorize-progress'))
     return promise as Promise<{ proposals: CategorizationProposal[] }>
   },
+  categorizeAiAuto: (onProgress: (done: number, total: number) => void) => {
+    const listener = (_e: unknown, p: { done: number; total: number }): void =>
+      onProgress(p.done, p.total)
+    ipcRenderer.on('categorize-progress', listener)
+    return ipcRenderer
+      .invoke('categorize-ai-auto')
+      .finally(() => ipcRenderer.removeListener('categorize-progress', listener))
+  },
   applyCategorization: (updates: { id: number; category: string }[]) =>
     ipcRenderer.invoke('apply-categorization', updates) as Promise<number>,
 

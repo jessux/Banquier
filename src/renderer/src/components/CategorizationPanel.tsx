@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import type {
   CategorizationStats,
   CategorySource,
-  MerchantMemoryEntry
+  MerchantMemoryEntry,
+  Settings
 } from '../../../shared/types'
 
 /** Libellés des sources automatiques annulables en bloc. */
@@ -30,10 +31,12 @@ export default function CategorizationPanel(): JSX.Element {
   const [busy, setBusy] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [confirmClear, setConfirmClear] = useState(false)
+  const [settings, setSettings] = useState<Settings | null>(null)
 
   const load = (): void => {
     window.api.getCategorizationStats().then(setStats)
     window.api.getMerchantMemory().then(setMemory)
+    window.api.getSettings().then(setSettings)
   }
 
   useEffect(load, [])
@@ -110,6 +113,28 @@ export default function CategorizationPanel(): JSX.Element {
             </div>
           )}
         </div>
+      )}
+
+      {settings && (
+        <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', marginBottom: 20, cursor: 'pointer' }}>
+          <input
+            type="checkbox"
+            checked={settings.autoCategorizeAi ?? false}
+            style={{ width: 'auto', marginTop: 3 }}
+            onChange={async (e) => {
+              const next = { ...settings, autoCategorizeAi: e.target.checked }
+              setSettings(next)
+              await window.api.saveSettings(next)
+            }}
+          />
+          <span>
+            <strong style={{ fontSize: 14 }}>Catégorisation IA automatique à l’import</strong>
+            <span className="text-muted text-sm" style={{ display: 'block' }}>
+              Applique d’office les propositions sûres, laisse les marchands douteux à vérifier.
+              Nécessite une clé OpenRouter et envoie les libellés concernés au service.
+            </span>
+          </span>
+        </label>
       )}
 
       <div style={{ marginBottom: 20 }}>

@@ -126,14 +126,15 @@ ultérieure du dictionnaire de prendre effet.
 - ☑ Auto-acceptation au-dessus du seuil de confiance (0,8), les autres marqués « à vérifier »
 - ☐ Navigation clavier *(reste à faire — la souris suffit tant que la liste tient en quelques lignes)*
 
-### Phase 5 — Traçabilité et pilotage ◐
+### Phase 5 — Traçabilité et pilotage ☑
 - ☑ Colonne `category_source` (`user`/`rule`/`memory`/`fuzzy`/`dict`/`ai`) renseignée sur tous les chemins d'écriture
 - ☑ Métrique « % catégorisées sans intervention » dans les réglages
 - ☑ Gestion de la mémoire marchand : liste, filtre, oubli ciblé, oubli total
 - ☑ Annulation en bloc par source, sans jamais toucher aux choix manuels
 - ☑ Tests (3 cas) + parité mobile
-- ☐ Réglage « catégorisation IA automatique à l'import » *(phase 5b)*
-- ☐ Badge « n à vérifier » dans la sidebar *(phase 5b)*
+- ☑ Réglage « catégorisation IA automatique à l'import », désactivé par défaut
+- ☑ Badge du nombre de transactions sans catégorie dans la sidebar
+- ☑ Écran d'import : compte des transactions catégorisées sans intervention
 
 **Écart assumé** : pas de colonne `category_confidence`. Les propositions IA
 étant validées une par une avant d'être écrites, la confiance a déjà joué son

@@ -125,6 +125,10 @@ declare global {
         onlyUncategorized: boolean,
         onProgress: (done: number, total: number) => void
       ) => Promise<{ proposals: CategorizationProposal[] }>
+      /** Mode automatique : applique les propositions sûres, renvoie le reste à valider. */
+      categorizeAiAuto: (
+        onProgress: (done: number, total: number) => void
+      ) => Promise<{ applied: number; pending: CategorizationProposal[] }>
       applyCategorization: (updates: { id: number; category: string }[]) => Promise<number>
 
       // Chat threads

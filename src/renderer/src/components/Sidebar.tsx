@@ -38,11 +38,24 @@ export default function Sidebar({ activePage, onNavigate }: Props): JSX.Element 
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameName, setRenameName] = useState('')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [uncategorized, setUncategorized] = useState(0)
   const menuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     window.api.getProfiles().then(setState)
   }, [])
+
+  // Le nombre de transactions restées sans catégorie est le seul reliquat de
+  // travail manuel : on le montre là où l'utilisateur passe, plutôt que de le
+  // laisser se découvrir en ouvrant la page.
+  useEffect(() => {
+    const refresh = (): void => {
+      window.api.getCategorizationStats().then((s) => setUncategorized(s.uncategorized))
+    }
+    refresh()
+    // Le compte bouge après un import ou une validation, qui se produisent sur
+    // d'autres pages : on le rafraîchit à chaque navigation.
+  }, [activePage])
 
   useEffect(() => {
     if (!showMenu) return
@@ -130,6 +143,18 @@ export default function Sidebar({ activePage, onNavigate }: Props): JSX.Element 
           >
             <span className="nav-icon">{item.icon}</span>
             {item.label}
+            {item.id === 'transactions' && uncategorized > 0 && (
+              <span
+                title={`${uncategorized} transaction(s) sans catégorie`}
+                style={{
+                  marginLeft: 'auto', fontSize: 11, fontWeight: 600,
+                  background: 'var(--accent)', color: '#fff',
+                  borderRadius: 10, padding: '1px 7px'
+                }}
+              >
+                {uncategorized}
+              </span>
+            )}
           </button>
         ))}
       </div>

@@ -3,7 +3,7 @@ import * as transactionsApi from './api/transactions'
 import * as categoriesApi from './api/categories'
 import * as rulesApi from './api/rules'
 import * as merchantMemoryApi from './api/merchantMemory'
-import { groupByMerchant } from '../shared/categorization'
+import { AUTO_ACCEPT_CONFIDENCE, groupByMerchant } from '../shared/categorization'
 import * as budgetsApi from './api/budgets'
 import * as goalsApi from './api/goals'
 import * as importsApi from './api/imports'
@@ -59,6 +59,59 @@ async function safeConnectionIds(creds: PowensCreds, token: string): Promise<Set
  *  exposes. Phase 1 covers the offline core (accounts, transactions, CSV import,
  *  categories, rules, budgets, dashboard, settings) — everything else is a clearly
  *  labelled stub until later phases land. See docs/mobile.md for the roadmap. */
+/** Miroir de buildProposals() dans src/main/ipc.ts — voir ce fichier pour le
+ *  raisonnement (cascade locale d'abord, puis LLM par marchand). */
+async function buildProposals(
+  onProgress: (done: number, total: number) => void,
+  onlyUncategorized: boolean
+): Promise<CategorizationProposal[]> {
+  const settings = await preferences.getSettings()
+  const rules = await rulesApi.getCategoryRules()
+
+  const allTxForRules = await transactionsApi.getTransactions({})
+  const ruleTargets = onlyUncategorized ? allTxForRules.filter((t) => !t.category) : allTxForRules
+  if (ruleTargets.length > 0) await merchantMemoryApi.autoCategorize(ruleTargets.map((t) => t.id))
+
+  const afterRules = await transactionsApi.getTransactions({})
+  const groups = groupByMerchant(afterRules.filter((t) => !t.category))
+  if (groups.length === 0) return []
+
+  const BATCH_SIZE = 30
+  const proposals: CategorizationProposal[] = []
+  const batches = Math.ceil(groups.length / BATCH_SIZE)
+  onProgress(0, groups.length)
+
+  for (let i = 0; i < batches; i++) {
+    const batch = groups.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+    try {
+      const catPaths = await categoriesApi.getCategoryPaths()
+      const results = await categorizeBatch(
+        batch.map((g, idx) => ({ id: idx, description: g.description, amount: g.amount })),
+        settings,
+        catPaths.length > 0 ? catPaths : undefined,
+        rules
+      )
+      for (const r of results) {
+        const group = batch[r.id]
+        if (!group) continue
+        proposals.push({
+          merchant: group.merchant,
+          category: r.category,
+          confidence: r.confidence,
+          transactionIds: group.transactionIds,
+          description: group.description,
+          total: group.total
+        })
+      }
+    } catch (err) {
+      console.error(`[categorize-ai] batch ${i + 1}/${batches} failed:`, err)
+    }
+    onProgress(Math.min((i + 1) * BATCH_SIZE, groups.length), groups.length)
+  }
+
+  return proposals
+}
+
 export function createMobileApi(): Window['api'] {
   return {
     // Accounts
@@ -116,13 +169,13 @@ export function createMobileApi(): Window['api'] {
         parsed,
         importRecord.id
       )
-      if (insertedIds.length > 0) await merchantMemoryApi.autoCategorize(insertedIds)
-      return { imported, duplicates, errors: 0, importId: importRecord.id }
+      const categorized = insertedIds.length > 0 ? await merchantMemoryApi.autoCategorize(insertedIds) : 0
+      return { imported, duplicates, errors: 0, importId: importRecord.id, categorized }
     },
     importPdf: async (handle, accountId) => {
       const transactions = await pdf.extractPdfTransactions(handle)
       if (transactions.length === 0) {
-        return { imported: 0, duplicates: 0, errors: 1, importId: -1 }
+        return { imported: 0, duplicates: 0, errors: 1, importId: -1, categorized: 0 }
       }
 
       const txWithAccount = transactions.map((t) => ({ ...t, account_id: accountId }))
@@ -135,8 +188,8 @@ export function createMobileApi(): Window['api'] {
         txWithImport,
         importRecord.id
       )
-      if (insertedIds.length > 0) await merchantMemoryApi.autoCategorize(insertedIds)
-      return { imported, duplicates, errors: 0, importId: importRecord.id }
+      const categorized = insertedIds.length > 0 ? await merchantMemoryApi.autoCategorize(insertedIds) : 0
+      return { imported, duplicates, errors: 0, importId: importRecord.id, categorized }
     },
     getImports: importsApi.getImports,
 
@@ -164,55 +217,26 @@ export function createMobileApi(): Window['api'] {
     getCategoryMonthlyHistory: dashboardApi.getCategoryMonthlyHistory,
 
     // AI Categorization — ne fait que proposer, comme sur desktop (src/main/ipc.ts) :
-    // l'utilisateur valide les suggestions via applyCategorization.
-    categorizeAi: async (onlyUncategorized, onProgress) => {
+    // l'utilisateur valide les suggestions via applyCategorization. Seul le mode
+    // automatique écrit sans validation, au-dessus du seuil de confiance.
+    categorizeAi: async (onlyUncategorized, onProgress) => ({
+      proposals: await buildProposals(onProgress, onlyUncategorized)
+    }),
+    categorizeAiAuto: async (onProgress) => {
       const settings = await preferences.getSettings()
-      const rules = await rulesApi.getCategoryRules()
+      if (!settings.openrouterApiKey) return { applied: 0, pending: [] }
 
-      // Première passe déterministe et locale : règles puis mémoire marchand.
-      const allTxForRules = await transactionsApi.getTransactions({})
-      const ruleTargets = onlyUncategorized ? allTxForRules.filter((t) => !t.category) : allTxForRules
-      if (ruleTargets.length > 0) await merchantMemoryApi.autoCategorize(ruleTargets.map((t) => t.id))
+      const proposals = await buildProposals(onProgress, true)
+      const sure = proposals.filter((p) => p.confidence >= AUTO_ACCEPT_CONFIDENCE)
+      const updates = sure.flatMap((p) =>
+        p.transactionIds.map((id) => ({ id, category: p.category }))
+      )
+      await transactionsApi.batchUpdateCategories(updates)
 
-      // Seconde passe : propositions IA, une par marchand (voir src/main/ipc.ts).
-      const afterRules = await transactionsApi.getTransactions({})
-      const groups = groupByMerchant(afterRules.filter((t) => !t.category))
-      if (groups.length === 0) return { proposals: [] }
-
-      const BATCH_SIZE = 30
-      const proposals: CategorizationProposal[] = []
-      const batches = Math.ceil(groups.length / BATCH_SIZE)
-      onProgress(0, groups.length)
-
-      for (let i = 0; i < batches; i++) {
-        const batch = groups.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
-        try {
-          const catPaths = await categoriesApi.getCategoryPaths()
-          const results = await categorizeBatch(
-            batch.map((g, idx) => ({ id: idx, description: g.description, amount: g.amount })),
-            settings,
-            catPaths.length > 0 ? catPaths : undefined,
-            rules
-          )
-          for (const r of results) {
-            const group = batch[r.id]
-            if (!group) continue
-            proposals.push({
-              merchant: group.merchant,
-              category: r.category,
-              confidence: r.confidence,
-              transactionIds: group.transactionIds,
-              description: group.description,
-              total: group.total
-            })
-          }
-        } catch (err) {
-          console.error(`[categorize-ai] batch ${i + 1}/${batches} failed:`, err)
-        }
-        onProgress(Math.min((i + 1) * BATCH_SIZE, groups.length), groups.length)
+      return {
+        applied: updates.length,
+        pending: proposals.filter((p) => p.confidence < AUTO_ACCEPT_CONFIDENCE)
       }
-
-      return { proposals }
     },
     applyCategorization: async (updates) => {
       await transactionsApi.batchUpdateCategories(updates)
