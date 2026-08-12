@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Transaction, Account, CategorizationProposal } from '../../../shared/types'
+import { looksLikeInternalCategory } from '../../../shared/rulePacks'
 import CategoryPicker from '../components/CategoryPicker'
 import { categoryBadgeStyle, categoryCircleColor, categoryIcon } from '../utils/categoryColor'
 
@@ -193,7 +194,7 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
 
   const commitEdit = (id: number, cat: string): void => {
     setEditing(null)
-    const isIntern = cat.toLowerCase().includes('intern')
+    const isIntern = looksLikeInternalCategory(cat)
     setTransactions((prev) => prev.map((tx) =>
       tx.id === id ? { ...tx, category: cat, is_internal: isIntern ? 1 : tx.is_internal } : tx
     ))
