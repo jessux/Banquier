@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.34.1](https://github.com/jessux/Banquier/compare/v1.34.0...v1.34.1) (2026-08-12)
+
+
+### Corrections de bugs
+
+* **mobile:** corrige l'ecran noir au premier lancement apres mise a jour ([30b0c4d](https://github.com/jessux/Banquier/commit/30b0c4d37271bd5eb47d450fec12542ee765caea))
+* **mobile:** corrige l'ecran noir au premier lancement apres mise a jour ([b538005](https://github.com/jessux/Banquier/commit/b538005109aea4d334441b3a557cc238963ceca0))
+
 ## [1.34.0](https://github.com/jessux/Banquier/compare/v1.33.0...v1.34.0) (2026-08-12)
 
 
