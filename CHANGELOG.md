@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.35.0](https://github.com/jessux/Banquier/compare/v1.34.4...v1.35.0) (2026-08-12)
+
+
+### Nouvelles fonctionnalités
+
+* **categorisation:** étoffe le dictionnaire d'enseignes françaises ([93ad470](https://github.com/jessux/Banquier/commit/93ad470c6eff020735f2efe0e414c747ef2aa0d4))
+* **categorisation:** étoffe le dictionnaire d'enseignes françaises ([4fb0b97](https://github.com/jessux/Banquier/commit/4fb0b979b6fe82887a5fed2ac38556cd09c2149b))
+* **categorisation:** recherche web ciblée par marchand en second passage ([47169ce](https://github.com/jessux/Banquier/commit/47169ce87dfbc8c7994c3802f6610ef6f0d7ed0d))
+
+
+### Corrections de bugs
+
+* **mobile:** erreur à la première connexion Powens alors que la banque est rattachée ([43b5dc7](https://github.com/jessux/Banquier/commit/43b5dc74666290afa6ecd7dd09fafc686d7247f8))
+* **mobile:** erreur à la première connexion Powens alors que la banque est rattachée ([88cff24](https://github.com/jessux/Banquier/commit/88cff245d39c4777502e05059fa99ad0e67be478))
+
 ## [1.34.4](https://github.com/jessux/Banquier/compare/v1.34.3...v1.34.4) (2026-08-12)
 
 
