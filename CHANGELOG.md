@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.4](https://github.com/jessux/Banquier/compare/v1.34.3...v1.34.4) (2026-08-12)
+
+
+### Corrections de bugs
+
+* **ci:** retente npm ci et le téléchargement Gradle sur échec réseau ([26faf0f](https://github.com/jessux/Banquier/commit/26faf0f9f3e84e9bedbadd7ebf80b6373087175d))
+
 ## [1.34.3](https://github.com/jessux/Banquier/compare/v1.34.2...v1.34.3) (2026-08-12)
 
 
