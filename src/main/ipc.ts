@@ -14,6 +14,7 @@ import {
   categorizeBatch
 } from './llm'
 import { retrieveRelevantMemories } from './memory'
+import { getRulePackCatalog, installRulePackById } from './rulePacks'
 import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
 import { checkForUpdatesManual, type UpdateCheckResult } from './updater'
 import { is } from '@electron-toolkit/utils'
@@ -117,6 +118,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('upsert-category-rule', (_, pattern: string, category: string) =>
     db.upsertCategoryRule(pattern, category)
   )
+
+  // --- Rule packs ---
+  ipcMain.handle('get-rule-pack-catalog', () => getRulePackCatalog())
+  ipcMain.handle('install-rule-pack', (_, packId: string) => installRulePackById(packId))
+  ipcMain.handle('uninstall-rule-pack', (_, packId: string) => db.uninstallRulePack(packId))
+  ipcMain.handle('get-share-partition', () => db.getSharePartition())
+  ipcMain.handle('mark-rules-shared', (_, patterns: string[]) => db.markRulesShared(patterns))
 
   // --- CSV Import ---
   ipcMain.handle('preview-csv', (_, filePath: string) => previewCsv(filePath))

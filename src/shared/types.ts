@@ -86,6 +86,12 @@ export interface CategoryRule {
   id: number
   pattern: string
   category: string
+  /** 'user' pour une règle saisie à la main, 'pack:<id>' pour une règle de pack. */
+  source: string
+  /** Ordre d'évaluation croissant. 0 = règles utilisateur, prioritaires. */
+  priority: number
+  /** 1 si la règle marque la transaction comme mouvement interne. */
+  internal: number
 }
 
 export interface Profile {

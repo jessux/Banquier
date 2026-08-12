@@ -2,6 +2,7 @@ import * as accounts from './api/accounts'
 import * as transactionsApi from './api/transactions'
 import * as categoriesApi from './api/categories'
 import * as rulesApi from './api/rules'
+import * as rulePacksApi from './api/rulePacks'
 import * as budgetsApi from './api/budgets'
 import * as goalsApi from './api/goals'
 import * as importsApi from './api/imports'
@@ -20,6 +21,14 @@ import { POWENS_CREDS, initAuth, getTempCode, getConnections, type PowensCreds }
 import { openConnectWebview } from './powens-webview'
 import { importPowens, onProgress as onPowensProgress, emitProgress } from './powens-sync'
 import { getCurrentPriceEur, isMarketType, searchSymbols } from './quotes'
+import {
+  buildCatalog,
+  DEFAULT_REGISTRY_URL,
+  fetchRemoteIndex,
+  fetchRemotePack,
+  type FetchJson
+} from '../shared/rulePackRegistry'
+import { getBuiltinPack, type RulePackIndexEntry } from '../shared/rulePacks'
 import type {
   Asset,
   AssetInput,
@@ -31,6 +40,51 @@ import type {
 import pkg from '../../package.json'
 
 const NOT_YET = ' n’est pas encore disponible dans Banquier Android (arrive dans une prochaine mise à jour).'
+
+// --- Packs de règles ---
+// Miroir de src/main/rulePacks.ts, avec le fetch natif au lieu de proxyFetch.
+
+const PACK_REQUEST_TIMEOUT_MS = 15_000
+
+const fetchPackJson: FetchJson = async (url) => {
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json' },
+    signal: AbortSignal.timeout(PACK_REQUEST_TIMEOUT_MS)
+  })
+  if (!response.ok) throw new Error(`HTTP ${response.status} sur ${url}`)
+  return response.json()
+}
+
+/** Dernier catalogue distant connu, pour ne pas re-télécharger à l'installation. */
+let cachedRemotePacks: RulePackIndexEntry[] = []
+
+async function getRulePackCatalog(): Promise<{
+  entries: ReturnType<typeof buildCatalog>
+  remoteError: string | null
+}> {
+  const installed = await rulePacksApi.getInstalledPacks()
+  let remoteError: string | null = null
+  try {
+    const index = await fetchRemoteIndex(fetchPackJson, DEFAULT_REGISTRY_URL)
+    cachedRemotePacks = index.packs
+  } catch (e) {
+    // Hors ligne : les packs intégrés restent installables.
+    remoteError = (e as Error).message
+  }
+  return { entries: buildCatalog(cachedRemotePacks, installed), remoteError }
+}
+
+async function installRulePack(packId: string): Promise<{ rules: number; categories: number }> {
+  const remote = cachedRemotePacks.find((p) => p.id === packId)
+  const builtin = getBuiltinPack(packId)
+
+  if (remote && (!builtin || remote.version !== builtin.version)) {
+    const pack = await fetchRemotePack(fetchPackJson, remote, DEFAULT_REGISTRY_URL)
+    return rulePacksApi.installRulePack(pack)
+  }
+  if (builtin) return rulePacksApi.installRulePack(builtin)
+  throw new Error(`Pack « ${packId} » introuvable dans le catalogue`)
+}
 
 function notImplemented(feature: string): () => Promise<never> {
   return () => Promise.reject(new Error(feature + NOT_YET))
@@ -93,6 +147,11 @@ export function createMobileApi(): Window['api'] {
     deleteCategoryRule: rulesApi.deleteCategoryRule,
     updateCategoryRule: rulesApi.updateCategoryRule,
     upsertCategoryRule: rulesApi.upsertCategoryRule,
+    getRulePackCatalog,
+    installRulePack,
+    uninstallRulePack: rulePacksApi.uninstallRulePack,
+    getSharePartition: rulePacksApi.getSharePartition,
+    markRulesShared: rulePacksApi.markRulesShared,
     countPattern: transactionsApi.countTransactionsByPattern,
     applyCategoryPattern: async (category: string, pattern: string) => {
       const updated = await transactionsApi.updateCategoryByPattern(category, pattern)

@@ -4,6 +4,7 @@ import os from 'os'
 import path from 'path'
 import * as db from './database'
 import type { Transaction } from '../shared/types'
+import { FR_BASE_PACK } from '../shared/rulePacks'
 
 let tmpDir: string
 
@@ -114,7 +115,7 @@ describe('applyRulesToTransactions', () => {
     expect(tx.category).toBe('Shopping')
   })
 
-  it('marque is_internal quand la catégorie contient "intern"', () => {
+  it('marque is_internal quand la catégorie est un mouvement interne', () => {
     db.upsertCategoryRule('VIR EPARGNE', 'Virement interne')
     const ids = insertTx([
       { account_id: null, date: '2025-01-01', description: 'VIR EPARGNE LIVRET A', amount: -200, category: null, is_internal: 0 }
@@ -125,13 +126,91 @@ describe('applyRulesToTransactions', () => {
     expect(tx.is_internal).toBe(1)
   })
 
+  it('ne marque pas is_internal sur « Internet / Téléphone »', () => {
+    // Régression : le moteur testait `category.includes('intern')`, ce qui
+    // sortait les factures internet des totaux de dépenses.
+    db.upsertCategoryRule('BOUYGUES TEL', 'Logement > Internet / Téléphone')
+    const ids = insertTx([
+      { account_id: null, date: '2025-01-01', description: 'PRLV BOUYGUES TELECOM', amount: -30, category: null, is_internal: 0 }
+    ])
+    db.applyRulesToTransactions(ids)
+
+    const [tx] = db.getTransactions({})
+    expect(tx.category).toBe('Logement > Internet / Téléphone')
+    expect(tx.is_internal).toBe(0)
+  })
+
   it("ne touche pas aux transactions qui ne correspondent à aucune règle", () => {
     db.upsertCategoryRule('AMAZON', 'Shopping')
     const ids = insertTx([
-      { account_id: null, date: '2025-01-01', description: 'CB FNAC PARIS', amount: -25, category: null, is_internal: 0 }
+      { account_id: null, date: '2025-01-01', description: 'XYZQ 4712', amount: -25, category: null, is_internal: 0 }
     ])
     const updated = db.applyRulesToTransactions(ids)
     expect(updated).toBe(0)
+  })
+
+  it('donne la priorité à la règle utilisateur sur celle du pack', () => {
+    // fr-base est installé d'office sur une base vierge et classe AMAZON en
+    // « Shopping ». Une règle utilisateur doit gagner malgré un id plus grand.
+    db.upsertCategoryRule('AMAZON', 'Loisirs > Jeux / Hobbies')
+    const ids = insertTx([
+      { account_id: null, date: '2025-01-01', description: 'CB AMAZON EU SARL', amount: -25, category: null, is_internal: 0 }
+    ])
+    db.applyRulesToTransactions(ids)
+
+    const [tx] = db.getTransactions({})
+    expect(tx.category).toBe('Loisirs > Jeux / Hobbies')
+  })
+})
+
+describe('rule packs', () => {
+  it('installe fr-base sur une base vierge', () => {
+    const installed = db.getInstalledPacks()
+    expect(installed.map((p) => p.id)).toContain('fr-base')
+    expect(installed[0].rule_count).toBeGreaterThan(0)
+  })
+
+  it('catégorise un import dès la première synchro', () => {
+    const ids = insertTx([
+      { account_id: null, date: '2025-01-01', description: 'CB CARREFOUR MARKET', amount: -42, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-01-02', description: 'PRLV SEPA EDF', amount: -80, category: null, is_internal: 0 }
+    ])
+    expect(db.applyRulesToTransactions(ids)).toBe(2)
+
+    const categories = db.getTransactions({}).map((t) => t.category).sort()
+    expect(categories).toEqual(['Alimentation > Épicerie', 'Logement > Électricité / Gaz'])
+  })
+
+  it('réinstalle un pack sans toucher aux règles utilisateur', () => {
+    db.upsertCategoryRule('AMAZON', 'Loisirs > Jeux / Hobbies')
+    const before = db.getCategoryRulesWithId().filter((r) => r.source === 'user')
+
+    db.installRulePack(FR_BASE_PACK)
+
+    const after = db.getCategoryRulesWithId().filter((r) => r.source === 'user')
+    expect(after).toEqual(before)
+  })
+
+  it('accepte un pattern déjà utilisé par une règle utilisateur', () => {
+    // UNIQUE(pattern, source) : le même pattern peut coexister dans les deux
+    // sources sans faire échouer l'installation.
+    db.upsertCategoryRule('CARREFOUR', 'Autre')
+    expect(() => db.installRulePack(FR_BASE_PACK)).not.toThrow()
+
+    const carrefour = db.getCategoryRulesWithId().filter((r) => r.pattern === 'CARREFOUR')
+    expect(carrefour).toHaveLength(1)
+    expect(carrefour[0].source).toBe('user')
+  })
+
+  it('désinstalle les règles du pack en conservant les catégories', () => {
+    const categoriesBefore = db.getCategoryPaths().length
+    const removed = db.uninstallRulePack('fr-base')
+
+    expect(removed).toBeGreaterThan(0)
+    expect(db.getInstalledPacks()).toHaveLength(0)
+    expect(db.getCategoryRulesWithId().filter((r) => r.source === 'pack:fr-base')).toHaveLength(0)
+    // Des transactions sont probablement rattachées aux catégories : on les garde.
+    expect(db.getCategoryPaths().length).toBe(categoriesBefore)
   })
 })
 
