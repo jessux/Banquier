@@ -1,5 +1,4 @@
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite'
-import { looksLikeInternalCategory, USER_RULE_PRIORITY } from '../shared/rulePacks'
 
 const DB_NAME = 'banquier'
 
@@ -121,25 +120,8 @@ const SCHEMA_SQL = `
 
   CREATE TABLE IF NOT EXISTS category_rules (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
-    pattern  TEXT NOT NULL,
-    category TEXT NOT NULL,
-    source   TEXT NOT NULL DEFAULT 'user',
-    priority INTEGER NOT NULL DEFAULT 0,
-    internal INTEGER NOT NULL DEFAULT 0,
-    UNIQUE(pattern, source)
-  );
-
-  CREATE TABLE IF NOT EXISTS rule_packs (
-    id           TEXT PRIMARY KEY,
-    version      TEXT NOT NULL,
-    name         TEXT NOT NULL,
-    installed_at TEXT NOT NULL,
-    categories   TEXT
-  );
-
-  CREATE TABLE IF NOT EXISTS shared_rules (
-    pattern   TEXT PRIMARY KEY,
-    shared_at TEXT NOT NULL
+    pattern  TEXT NOT NULL UNIQUE,
+    category TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS excluded_powens_accounts (
@@ -225,66 +207,49 @@ const SCHEMA_SQL = `
   );
 `
 
-/**
- * Passe category_rules au schéma « packs ». Miroir de migrateCategoryRules()
- * dans src/main/database.ts — voir ce fichier pour le détail du raisonnement.
- */
-async function migrateCategoryRules(): Promise<void> {
-  const columns = await all<{ name: string }>('PRAGMA table_info(category_rules)')
-  if (columns.length === 0 || columns.some((c) => c.name === 'source')) return
+const DEFAULT_CATEGORY_TREE: { name: string; children?: string[] }[] = [
+  { name: 'Alimentation', children: ['Épicerie', 'Boulangerie / Traiteur', 'Marchés'] },
+  { name: 'Restaurants', children: ['Fast-food', 'Cafés', 'Livraison repas'] },
+  { name: 'Transport', children: ['Carburant', 'Transports en commun', 'Taxi / VTC', 'Stationnement'] },
+  { name: 'Logement', children: ['Loyer', 'Électricité / Gaz', 'Internet / Téléphone', 'Entretien'] },
+  { name: 'Shopping', children: ['Vêtements', 'Électronique', 'Maison / Déco'] },
+  { name: 'Santé', children: ['Médecin / Dentiste', 'Pharmacie', 'Mutuelle'] },
+  { name: 'Loisirs', children: ['Cinéma / Spectacles', 'Sport', 'Jeux / Hobbies'] },
+  { name: 'Abonnements', children: ['Streaming', 'Presse / Livres', 'Logiciels'] },
+  { name: 'Voyages', children: ['Transports voyage', 'Hébergement', 'Activités touristiques'] },
+  { name: 'Épargne', children: ['Virement épargne', 'Investissements'] },
+  { name: 'Salaire' },
+  { name: 'Revenus', children: ['Freelance / Auto-entrepreneur', 'Aides / CAF', 'Remboursements'] },
+  { name: 'Frais bancaires' },
+  { name: 'Autre' }
+]
 
-  await exec(`
-    CREATE TABLE category_rules_migrated (
-      id       INTEGER PRIMARY KEY AUTOINCREMENT,
-      pattern  TEXT NOT NULL,
-      category TEXT NOT NULL,
-      source   TEXT NOT NULL DEFAULT 'user',
-      priority INTEGER NOT NULL DEFAULT 0,
-      internal INTEGER NOT NULL DEFAULT 0,
-      UNIQUE(pattern, source)
-    );
-    INSERT INTO category_rules_migrated (id, pattern, category, source, priority, internal)
-      SELECT id, pattern, category, 'user', ${USER_RULE_PRIORITY}, 0 FROM category_rules;
-    DROP TABLE category_rules;
-    ALTER TABLE category_rules_migrated RENAME TO category_rules;
-  `)
-
-  const rules = await all<{ id: number; category: string }>('SELECT id, category FROM category_rules')
-  for (const rule of rules) {
-    if (looksLikeInternalCategory(rule.category)) {
-      await run('UPDATE category_rules SET internal = 1 WHERE id = ?', [rule.id])
-    }
-  }
-
-  // Répare les transactions sorties à tort des dépenses par l'ancien test
-  // `category.includes('intern')`, qui capturait « Internet / Téléphone ».
-  const affected = await all<{ id: number; category: string }>(
-    "SELECT id, category FROM transactions WHERE is_internal = 1 AND category IS NOT NULL AND LOWER(category) LIKE '%intern%'"
-  )
-  for (const tx of affected) {
-    if (!looksLikeInternalCategory(tx.category)) {
-      await run('UPDATE transactions SET is_internal = 0 WHERE id = ?', [tx.id])
+async function seedCategories(): Promise<void> {
+  const row = await get<{ n: number }>('SELECT COUNT(*) AS n FROM categories')
+  if ((row?.n ?? 0) > 0) return
+  for (const cat of DEFAULT_CATEGORY_TREE) {
+    try {
+      const result = await run('INSERT INTO categories (name, parent_id) VALUES (?, NULL)', [cat.name])
+      const parentId = result.lastInsertRowid
+      for (const child of cat.children ?? []) {
+        try {
+          await run('INSERT INTO categories (name, parent_id) VALUES (?, ?)', [child, parentId])
+        } catch {
+          /* skip */
+        }
+      }
+    } catch {
+      /* skip */
     }
   }
 }
 
-/**
- * Ouvre la base et applique le schéma. L'amorçage des catégories est délégué à
- * seedDefaults() (api/rulePacks) : le faire ici créerait un cycle d'import,
- * puisque l'installeur de packs dépend lui-même de ce module.
- *
- * @returns `fresh` à true si la base était vierge, ce qui autorise l'appelant à
- *          installer le pack par défaut.
- */
-export async function initDatabase(): Promise<{ fresh: boolean }> {
+export async function initDatabase(): Promise<void> {
   const isConn = (await sqlite.isConnection(DB_NAME, false)).result
   db = isConn
     ? await sqlite.retrieveConnection(DB_NAME, false)
     : await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false)
   await db.open()
   await exec(SCHEMA_SQL)
-  await migrateCategoryRules()
-
-  const row = await get<{ n: number }>('SELECT COUNT(*) AS n FROM categories')
-  return { fresh: (row?.n ?? 0) === 0 }
+  await seedCategories()
 }

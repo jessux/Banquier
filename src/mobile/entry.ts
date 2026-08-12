@@ -1,5 +1,4 @@
 import { initDatabase } from './db'
-import { seedDefaults } from './api/rulePacks'
 import { restoreSchedule } from './notifications'
 import { createMobileApi } from './window-api'
 
@@ -7,8 +6,7 @@ import { createMobileApi } from './window-api'
  *  Capacitor). Imported conditionally from src/renderer/src/main.tsx before the
  *  React app mounts. */
 export async function installMobileApi(): Promise<void> {
-  const { fresh } = await initDatabase()
-  await seedDefaults(fresh)
+  await initDatabase()
   window.api = createMobileApi()
   // Android efface les notifications planifiées après un redémarrage du téléphone
   // ou une mise à jour de l'app : on reprogramme le rappel quotidien à chaque
