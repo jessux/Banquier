@@ -485,3 +485,36 @@ describe('dictionnaire marchand', () => {
     expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Shopping')
   })
 })
+
+describe('rattrapage flou de la mémoire', () => {
+  it('rapproche un magasin voisin de la même enseigne', () => {
+    const [first] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB CARREFOUR MARKET 05/01 PARIS', amount: -42, category: null, is_internal: 0 }
+    ])
+    db.updateTransactionCategory(first, 'Shopping')
+
+    const [next] = insertTx([
+      { account_id: null, date: '2025-02-05', description: 'CB CARREFOUR MARKET 05/02 LYON', amount: -30, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize([next])
+    // Le choix de l'utilisateur doit primer sur le dictionnaire, qui aurait
+    // proposé Alimentation pour cette enseigne.
+    expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Shopping')
+  })
+
+  it('ne rapproche pas deux commerces qui ne partagent que le métier', () => {
+    const [first] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB BOULANGERIE DUPONT 05/01', amount: -4, category: null, is_internal: 0 }
+    ])
+    db.updateTransactionCategory(first, 'Loisirs')
+
+    const [next] = insertTx([
+      { account_id: null, date: '2025-02-05', description: 'CB BOULANGERIE MARTIN 05/02', amount: -5, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize([next])
+    // Pas de rapprochement possible : c'est le dictionnaire qui tranche.
+    expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe(
+      'Alimentation > Boulangerie / Traiteur'
+    )
+  })
+})

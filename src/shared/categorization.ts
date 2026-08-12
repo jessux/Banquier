@@ -121,3 +121,64 @@ function readSuggestion(raw: unknown): { category: string; confidence: number } 
   return { category: '', confidence: DEFAULT_CONFIDENCE }
 }
 
+
+/** Décision mémorisée, telle que la couche de rattrapage flou la consulte. */
+export interface RememberedMerchant {
+  merchant_key: string
+  category: string
+  count: number
+}
+
+/** Nombre de mots communs exigé pour rapprocher deux clés marchand. */
+const MIN_SHARED_TOKENS = 2
+
+/**
+ * Rattrape les quasi-correspondances que l'égalité stricte de clé marchand
+ * laisse passer : `CARREFOUR MARKET PARIS` et `CARREFOUR MARKET LYON` sont deux
+ * clés distinctes mais un seul et même choix de catégorie.
+ *
+ * Le critère est le nombre de mots communs, et non un score de similarité :
+ * sur des clés de un à trois mots, un seuil sur un score continu serait
+ * arbitraire et impossible à expliquer à l'utilisateur, là où « au moins deux
+ * mots en commun » se raisonne directement. Exiger deux mots écarte le piège
+ * principal — `BOULANGERIE MARTIN` et `BOULANGERIE DUPONT` ne partagent que le
+ * métier, pas le commerçant.
+ *
+ * En cas de candidats à égalité qui ne s'accordent pas sur la catégorie, on ne
+ * tranche pas : mieux vaut laisser la transaction sans catégorie que de la
+ * classer à pile ou face.
+ */
+export function findFuzzyCategory(
+  merchantKey: string,
+  memory: RememberedMerchant[]
+): string | null {
+  const target = new Set(merchantKey.split(' ').filter(Boolean))
+  if (target.size === 0) return null
+
+  const candidates: { category: string; shared: number; count: number }[] = []
+
+  for (const entry of memory) {
+    if (entry.merchant_key === merchantKey) continue // déjà traité en exact
+
+    let shared = 0
+    for (const token of new Set(entry.merchant_key.split(' '))) {
+      if (target.has(token)) shared++
+    }
+    if (shared >= MIN_SHARED_TOKENS) {
+      candidates.push({ category: entry.category, shared, count: entry.count })
+    }
+  }
+
+  if (candidates.length === 0) return null
+
+  // Le meilleur candidat est le plus proche (mots communs), puis le plus établi.
+  candidates.sort((a, b) => b.shared - a.shared || b.count - a.count)
+  const best = candidates[0]
+
+  // Si d'autres candidats sont aussi bien placés sans s'accorder sur la
+  // catégorie, on ne tranche pas.
+  const tied = candidates.filter((c) => c.shared === best.shared && c.count === best.count)
+  if (tied.some((c) => c.category !== best.category)) return null
+
+  return best.category
+}

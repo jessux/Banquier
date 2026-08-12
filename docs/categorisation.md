@@ -132,9 +132,17 @@ ultérieure du dictionnaire de prendre effet.
 - ☐ Badge « n à vérifier » dans la sidebar
 - ☐ Métrique « % sans intervention » dans les réglages
 
-### Phase 6 — Repli flou local
-- ☐ BM25 (réutilise `src/main/memory.ts`) sur l'historique catégorisé
-- ☐ Seuil haut → appliqué, seuil bas → proposé
+### Phase 6 — Repli flou local ☑
+- ☑ `findFuzzyCategory()` — rapproche les clés marchand voisines de la mémoire
+- ☑ Placé **avant** le dictionnaire : une décision de l'utilisateur, même approchée, prime sur la liste embarquée
+- ☑ Refus de trancher entre candidats à égalité qui divergent
+- ☑ Tests (9 cas) + parité mobile
+
+**Écart assumé avec le plan initial** : pas de BM25. Il est fait pour des
+documents longs ; une clé marchand fait un à trois mots, où un seuil sur un
+score continu serait arbitraire et inexplicable. Le critère retenu — « au moins
+deux mots en commun » — se raisonne directement et écarte le piège principal
+(`BOULANGERIE MARTIN` vs `BOULANGERIE DUPONT` ne partagent que le métier).
 
 ### Phase 7 — Gains annexes
 - ☐ Détection des virements internes (montants opposés à ±3 j entre comptes propres)

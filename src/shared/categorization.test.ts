@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { groupByMerchant, parseCategorizationResponse } from './categorization'
+import { findFuzzyCategory, groupByMerchant, parseCategorizationResponse } from './categorization'
 import type { Transaction } from './types'
 
 const catList = ['Alimentation', 'Transport', 'Autre']
@@ -117,5 +117,59 @@ describe('groupByMerchant', () => {
     ])
     expect(groups).toHaveLength(1)
     expect(groups[0].transactionIds).toEqual([1, 2])
+  })
+})
+
+describe('findFuzzyCategory', () => {
+  const memory = [
+    { merchant_key: 'CARREFOUR MARKET PARIS', category: 'Alimentation', count: 4 },
+    { merchant_key: 'BOULANGERIE DUPONT', category: 'Alimentation > Boulangerie / Traiteur', count: 3 }
+  ]
+
+  it('rapproche deux magasins d\'une même enseigne', () => {
+    expect(findFuzzyCategory('CARREFOUR MARKET LYON', memory)).toBe('Alimentation')
+  })
+
+  it('rapproche une clé plus longue de sa version courte', () => {
+    expect(findFuzzyCategory('BOULANGERIE DUPONT LYON', memory)).toBe(
+      'Alimentation > Boulangerie / Traiteur'
+    )
+  })
+
+  it('ne confond pas deux commerces qui ne partagent que le métier', () => {
+    // Un seul mot commun : « BOULANGERIE » désigne le métier, pas le commerçant.
+    expect(findFuzzyCategory('BOULANGERIE MARTIN', memory)).toBeNull()
+  })
+
+  it('ignore une correspondance exacte, déjà traitée en amont', () => {
+    expect(findFuzzyCategory('CARREFOUR MARKET PARIS', memory)).toBeNull()
+  })
+
+  it('ne tranche pas entre deux candidats aussi bien placés qui divergent', () => {
+    const ambiguous = [
+      { merchant_key: 'CENTRE COMMERCIAL NORD', category: 'Shopping', count: 2 },
+      { merchant_key: 'CENTRE COMMERCIAL SUD', category: 'Loisirs', count: 2 }
+    ]
+    expect(findFuzzyCategory('CENTRE COMMERCIAL EST', ambiguous)).toBeNull()
+  })
+
+  const rivals = [
+    { merchant_key: 'CENTRE COMMERCIAL', category: 'Shopping', count: 9 },
+    { merchant_key: 'CENTRE COMMERCIAL NORD', category: 'Loisirs', count: 1 }
+  ]
+
+  it('privilégie la clé la plus proche, même moins établie', () => {
+    // Trois mots communs battent deux, quel que soit le nombre de décisions.
+    expect(findFuzzyCategory('CENTRE COMMERCIAL NORD OUEST', rivals)).toBe('Loisirs')
+  })
+
+  it('départage deux clés aussi proches par le nombre de décisions', () => {
+    // Deux mots communs de chaque côté : la décision la plus répétée l'emporte.
+    expect(findFuzzyCategory('CENTRE COMMERCIAL OUEST', rivals)).toBe('Shopping')
+  })
+
+  it('ne renvoie rien sur une mémoire vide ou une clé vide', () => {
+    expect(findFuzzyCategory('CARREFOUR MARKET LYON', [])).toBeNull()
+    expect(findFuzzyCategory('', memory)).toBeNull()
   })
 })

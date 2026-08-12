@@ -34,6 +34,7 @@ import type {
 } from '../shared/types'
 import { normalizeMerchant } from '../shared/merchant'
 import { lookupMerchantDictionary } from '../shared/merchantDictionary'
+import { findFuzzyCategory, type RememberedMerchant } from '../shared/categorization'
 
 let db: Database
 let activeDbPath = ''
@@ -1872,8 +1873,56 @@ export function autoCategorize(transactionIds: number[]): number {
   return (
     applyRulesToTransactions(transactionIds) +
     applyMerchantMemory(transactionIds) +
+    applyFuzzyMerchantMemory(transactionIds) +
     applyMerchantDictionary(transactionIds)
   )
+}
+
+/**
+ * Rattrape les marchands proches de ceux déjà décidés (voir findFuzzyCategory).
+ *
+ * Passe **avant** le dictionnaire embarqué : un choix de l'utilisateur, même
+ * rapproché de façon approximative, vaut mieux qu'une liste générique livrée
+ * avec l'application. Sinon un utilisateur qui classe volontairement
+ * « CARREFOUR MARKET PARIS » en Shopping verrait le magasin de la ville d'à
+ * côté repartir en Alimentation.
+ */
+export function applyFuzzyMerchantMemory(transactionIds: number[]): number {
+  if (transactionIds.length === 0) return 0
+
+  const memory = db.all(
+    'SELECT merchant_key, category, count FROM merchant_categories'
+  ) as RememberedMerchant[]
+  if (memory.length === 0) return 0
+
+  const CHUNK = 200
+  let updated = 0
+
+  db.exec('BEGIN')
+  try {
+    for (let offset = 0; offset < transactionIds.length; offset += CHUNK) {
+      const chunk = transactionIds.slice(offset, offset + CHUNK)
+      const placeholders = chunk.map(() => '?').join(',')
+      const rows = db.all(
+        `SELECT id, merchant_key FROM transactions
+         WHERE id IN (${placeholders}) AND category IS NULL AND merchant_key IS NOT NULL`,
+        chunk
+      ) as { id: number; merchant_key: string }[]
+
+      for (const row of rows) {
+        const category = findFuzzyCategory(row.merchant_key, memory)
+        if (!category) continue
+        db.run('UPDATE transactions SET category = ? WHERE id = ?', [category, row.id])
+        updated++
+      }
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
+
+  return updated
 }
 
 /**
