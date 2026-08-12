@@ -65,6 +65,26 @@ ne se repose jamais.
 
 ---
 
+## État : chantier terminé
+
+Les huit phases sont livrées, chacune dans son commit, application fonctionnelle
+entre chaque. 104 tests, build et typecheck mobile verts.
+
+**Ce que fait la cascade aujourd'hui, à chaque import, sans rien demander :**
+
+| Couche | Origine | Prime sur |
+|---|---|---|
+| Règles | vos motifs explicites | tout, et peut réécrire |
+| Mémoire marchand | vos décisions passées, à l'identique | le reste |
+| Rattrapage flou | vos décisions passées, marchand voisin | le dictionnaire |
+| Dictionnaire | ~290 enseignes françaises livrées | — |
+| LLM | dernier recours, un appel par marchand | rien : il propose |
+
+Le LLM n'écrit jamais sans validation, sauf si le mode automatique est activé —
+et alors seulement au-dessus du seuil de confiance.
+
+---
+
 ## Avancement
 
 Légende : ☐ à faire · ◐ en cours · ☑ fait
@@ -191,10 +211,21 @@ silencieusement une vraie dépense des statistiques.
 
 ```bash
 git checkout claude/categorization-friction-reduction-tce8bm
-git log --oneline -5     # dernière phase livrée
+git log --oneline -10    # une phase par commit
 npm test                 # doit être vert avant de repartir
+npm run build            # et le build aussi
 ```
 
-Puis reprendre à la première case non cochée ci-dessus. Les phases sont
-indépendantes et livrées une par une : l'application reste fonctionnelle entre
-chaque.
+Toutes les cases du plan initial sont cochées. Ce qui reste ouvert, si le sujet
+est repris plus tard :
+
+- **Enrichir le dictionnaire.** ~290 enseignes couvrent le gros du commerce
+  français, pas la longue traîne (commerces locaux, enseignes régionales). Toute
+  addition est une ligne dans `src/shared/merchantDictionary.ts` + un test.
+- **Mesurer sur des données réelles.** Le taux d'automatisation est affiché mais
+  n'a pas encore été observé sur un vrai historique : c'est lui qui dira si la
+  cible > 95 % tient, et quelle couche fuit si elle ne tient pas.
+- **Ambiguïté TOTALENERGIES.** Classé en carburant (paiements en station, les
+  plus fréquents), alors qu'un prélèvement mensuel est de l'électricité. La
+  mémoire corrige au premier ajustement, mais une entrée orientée débit/crédit
+  ne suffirait pas à trancher — les deux sont des débits.
