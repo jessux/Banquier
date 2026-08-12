@@ -14,7 +14,7 @@ import {
   categorizeBatch
 } from './llm'
 import { retrieveRelevantMemories } from './memory'
-import { AUTO_ACCEPT_CONFIDENCE, groupByMerchant } from '../shared/categorization'
+import { AUTO_ACCEPT_CONFIDENCE, WEB_SEARCH_CONFIDENCE_THRESHOLD, groupByMerchant } from '../shared/categorization'
 import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
 import { checkForUpdatesManual, type UpdateCheckResult } from './updater'
 import { is } from '@electron-toolkit/utils'
@@ -201,11 +201,19 @@ export function registerIpcHandlers(): void {
   )
 
   // --- AI Categorization ---
-  // La catégorisation par IA ne fait que proposer : elle s'appuie sur la recherche
-  // web (jamais sur ses seules connaissances internes) et renvoie des suggestions
+  // La catégorisation par IA ne fait que proposer : elle renvoie des suggestions
   // que l'utilisateur valide via `apply-categorization`. Les règles utilisateur
   // et la mémoire marchand, elles, restent déterministes et s'appliquent
   // directement.
+  //
+  // Deux passages au LLM, hybrides :
+  //  1. Un batch de marchands à la fois, sur les seules connaissances internes
+  //     du modèle — rapide et peu coûteux, une requête web partagée par 30
+  //     marchands hétérogènes n'ayant de toute façon pas de sujet assez précis
+  //     pour être utile.
+  //  2. Pour les propositions qui en ressortent trop incertaines (voir
+  //     WEB_SEARCH_CONFIDENCE_THRESHOLD), un second appel marchand par
+  //     marchand, avec une recherche web ciblée cette fois.
   //
   // Seul le mode automatique (réglage autoCategorizeAi, désactivé par défaut)
   // écrit sans validation ligne à ligne, et uniquement au-dessus du seuil de
@@ -236,6 +244,8 @@ export function registerIpcHandlers(): void {
     const BATCH_SIZE = 30
     const proposals: CategorizationProposal[] = []
     const batches = Math.ceil(groups.length / BATCH_SIZE)
+    const catPaths = db.getCategoryPaths()
+    const catList = catPaths.length > 0 ? catPaths : undefined
 
     onProgress(0, groups.length)
 
@@ -243,15 +253,13 @@ export function registerIpcHandlers(): void {
       const batch = groups.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
 
       try {
-        const catPaths = db.getCategoryPaths()
         // L'index dans le lot sert d'identifiant : le modèle répond par
         // position, et un groupe n'a pas d'id propre.
         const results = await categorizeBatch(
           batch.map((g, idx) => ({ id: idx, description: g.description, amount: g.amount })),
           settings,
-          catPaths.length > 0 ? catPaths : undefined,
-          rules,
-          true
+          catList,
+          rules
         )
         for (const r of results) {
           const group = batch[r.id]
@@ -270,6 +278,43 @@ export function registerIpcHandlers(): void {
       }
 
       onProgress(Math.min((i + 1) * BATCH_SIZE, groups.length), groups.length)
+    }
+
+    // Second passage, marchand par marchand avec recherche web ciblée, pour
+    // ce que le premier passage n'a pas su trancher.
+    const toRefine = proposals
+      .map((p, index) => ({ p, index }))
+      .filter(({ p }) => p.confidence < WEB_SEARCH_CONFIDENCE_THRESHOLD)
+
+    if (toRefine.length > 0) {
+      const REFINE_CONCURRENCY = 4
+      let refined = 0
+      onProgress(groups.length, groups.length + toRefine.length)
+
+      for (let i = 0; i < toRefine.length; i += REFINE_CONCURRENCY) {
+        const chunk = toRefine.slice(i, i + REFINE_CONCURRENCY)
+        await Promise.all(
+          chunk.map(async ({ p, index }) => {
+            try {
+              const [result] = await categorizeBatch(
+                [{ id: 0, description: p.description, amount: p.total }],
+                settings,
+                catList,
+                rules,
+                true
+              )
+              // Une confiance qui reste faible même après recherche web est une
+              // vraie ambiguïté du marchand : on la laisse telle quelle plutôt
+              // que d'en tirer un faux sentiment de certitude.
+              if (result) proposals[index] = { ...p, category: result.category, confidence: result.confidence }
+            } catch (err) {
+              console.error(`[categorize-ai] recherche web pour "${p.merchant}" échouée:`, err)
+            }
+          })
+        )
+        refined += chunk.length
+        onProgress(groups.length + refined, groups.length + toRefine.length)
+      }
     }
 
     return proposals

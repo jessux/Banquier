@@ -416,6 +416,13 @@ const DEFAULT_CATEGORIES = [
  * Les appelants envoient **un représentant par marchand** et non chaque
  * transaction (voir CategorizationProposal) : le coût et la latence suivent le
  * nombre de marchands distincts, pas le nombre de lignes du relevé.
+ *
+ * `webSearch` active le plugin de recherche web natif d'OpenRouter. Il est
+ * dérivé du dernier message envoyé au modèle : utile pour cibler un marchand
+ * unique (voir buildProposals, second passage), il n'a guère de sujet précis
+ * à chercher quand la requête contient un lot hétérogène de 30 marchands — le
+ * premier passage, sur un batch, s'appuie donc sur les seules connaissances
+ * internes du modèle.
  */
 export async function categorizeBatch(
   transactions: { id: number; description: string; amount: number }[],
