@@ -33,11 +33,13 @@ const OPENROUTER_BASE = 'https://openrouter.ai/api/v1'
 /** Same LangChain/OpenRouter wiring as src/main/llm.ts, minus the Electron-only
  *  corporate-proxy fetch — the WebView's fetch (routed natively via the
  *  CapacitorHttp bridge, see capacitor.config.ts) is used directly instead. */
-function createChatModel(settings: Settings): ChatOpenAI {
+function createChatModel(settings: Settings, webSearch = false): ChatOpenAI {
   return new ChatOpenAI({
     model: settings.openrouterModel || 'openrouter/free',
     apiKey: settings.openrouterApiKey,
     __includeRawResponse: true,
+    // Plugin de recherche web natif OpenRouter (Exa) : voir src/main/llm.ts.
+    modelKwargs: webSearch ? { plugins: [{ id: 'web', max_results: 3 }] } : undefined,
     configuration: {
       baseURL: OPENROUTER_BASE,
       defaultHeaders: {
@@ -70,13 +72,14 @@ function chunkReasoning(chunk: AIMessageChunk): string {
 
 export async function callOpenRouterOnce(
   messages: { role: string; content: string }[],
-  settings: Settings
+  settings: Settings,
+  webSearch = false
 ): Promise<string> {
   if (!settings.openrouterApiKey) {
     throw new Error('Clé API OpenRouter non configurée')
   }
 
-  const model = createChatModel(settings)
+  const model = createChatModel(settings, webSearch)
   const response = await model.invoke(
     messages.map((m) => {
       if (m.role === 'system') return new SystemMessage(m.content)
@@ -376,12 +379,14 @@ const DEFAULT_CATEGORIES = [
 ]
 
 /** Miroir de categorizeBatch() dans src/main/llm.ts : un représentant par
- *  marchand, réponse chiffrée en confiance, même parseur partagé. */
+ *  marchand, réponse chiffrée en confiance, même parseur partagé, même
+ *  recherche web optionnelle pour le second passage marchand par marchand. */
 export async function categorizeBatch(
   transactions: { id: number; description: string; amount: number }[],
   settings: Settings,
   availableCategories: string[] = DEFAULT_CATEGORIES,
-  rules: { pattern: string; category: string }[] = []
+  rules: { pattern: string; category: string }[] = [],
+  webSearch = false
 ): Promise<CategorySuggestion[]> {
   const catList = availableCategories.length > 0 ? availableCategories : DEFAULT_CATEGORIES
   const fallback = catList.includes('Autre') ? 'Autre' : catList[catList.length - 1]
@@ -398,13 +403,13 @@ export async function categorizeBatch(
 Retourne UNIQUEMENT un tableau JSON valide, dans le même ordre, avec exactement ${transactions.length} éléments.
 Format: [{"categorie": "Catégorie1", "confiance": 0.95}, {"categorie": "Catégorie2", "confiance": 0.4}]
 "confiance" va de 0 à 1 et doit refléter ta certitude réelle : mets une valeur basse quand le marchand reste ambigu, c'est ce qui déclenchera une vérification humaine.
-
+${webSearch ? "Utilise la recherche internet pour identifier l'activité réelle de chaque marchand avant de choisir sa catégorie. Ne devine jamais uniquement sur la base de tes connaissances internes : vérifie via une recherche web dès que le nom du marchand n'est pas évident.\n" : ''}
 Catégories autorisées: ${catList.join(', ')}
 ${rulesSection}
 Transactions:
 ${lines}`
 
-  const response = await callOpenRouterOnce([{ role: 'user', content: prompt }], settings)
+  const response = await callOpenRouterOnce([{ role: 'user', content: prompt }], settings, webSearch)
 
   return parseCategorizationResponse(response, transactions, catList, fallback)
 }

@@ -7,6 +7,17 @@ import { normalizeMerchant } from './merchant'
  */
 export const AUTO_ACCEPT_CONFIDENCE = 0.8
 
+/**
+ * Sous ce seuil, une proposition issue du batch initial (sans recherche web
+ * dédiée, une requête sur tout le lot à la fois n'ayant pas de sujet assez
+ * précis) est jugée trop incertaine : le marchand repasse au LLM seul, avec
+ * une recherche web ciblée cette fois (voir buildProposals). Volontairement
+ * plus bas que AUTO_ACCEPT_CONFIDENCE — entre les deux, la proposition
+ * initiale est déjà correcte et n'a pas besoin de ce second passage, plus
+ * lent et plus coûteux.
+ */
+export const WEB_SEARCH_CONFIDENCE_THRESHOLD = 0.6
+
 /** Un marchand et les transactions non catégorisées qui lui appartiennent. */
 export interface MerchantGroup {
   merchant: string

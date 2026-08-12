@@ -3,7 +3,7 @@ import * as transactionsApi from './api/transactions'
 import * as categoriesApi from './api/categories'
 import * as rulesApi from './api/rules'
 import * as merchantMemoryApi from './api/merchantMemory'
-import { AUTO_ACCEPT_CONFIDENCE, groupByMerchant } from '../shared/categorization'
+import { AUTO_ACCEPT_CONFIDENCE, WEB_SEARCH_CONFIDENCE_THRESHOLD, groupByMerchant } from '../shared/categorization'
 import * as budgetsApi from './api/budgets'
 import * as goalsApi from './api/goals'
 import * as importsApi from './api/imports'
@@ -79,16 +79,17 @@ async function buildProposals(
   const BATCH_SIZE = 30
   const proposals: CategorizationProposal[] = []
   const batches = Math.ceil(groups.length / BATCH_SIZE)
+  const catPaths = await categoriesApi.getCategoryPaths()
+  const catList = catPaths.length > 0 ? catPaths : undefined
   onProgress(0, groups.length)
 
   for (let i = 0; i < batches; i++) {
     const batch = groups.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     try {
-      const catPaths = await categoriesApi.getCategoryPaths()
       const results = await categorizeBatch(
         batch.map((g, idx) => ({ id: idx, description: g.description, amount: g.amount })),
         settings,
-        catPaths.length > 0 ? catPaths : undefined,
+        catList,
         rules
       )
       for (const r of results) {
@@ -107,6 +108,40 @@ async function buildProposals(
       console.error(`[categorize-ai] batch ${i + 1}/${batches} failed:`, err)
     }
     onProgress(Math.min((i + 1) * BATCH_SIZE, groups.length), groups.length)
+  }
+
+  // Second passage, marchand par marchand avec recherche web ciblée — voir
+  // src/main/ipc.ts pour le raisonnement complet.
+  const toRefine = proposals
+    .map((p, index) => ({ p, index }))
+    .filter(({ p }) => p.confidence < WEB_SEARCH_CONFIDENCE_THRESHOLD)
+
+  if (toRefine.length > 0) {
+    const REFINE_CONCURRENCY = 4
+    let refined = 0
+    onProgress(groups.length, groups.length + toRefine.length)
+
+    for (let i = 0; i < toRefine.length; i += REFINE_CONCURRENCY) {
+      const chunk = toRefine.slice(i, i + REFINE_CONCURRENCY)
+      await Promise.all(
+        chunk.map(async ({ p, index }) => {
+          try {
+            const [result] = await categorizeBatch(
+              [{ id: 0, description: p.description, amount: p.total }],
+              settings,
+              catList,
+              rules,
+              true
+            )
+            if (result) proposals[index] = { ...p, category: result.category, confidence: result.confidence }
+          } catch (err) {
+            console.error(`[categorize-ai] recherche web pour "${p.merchant}" échouée:`, err)
+          }
+        })
+      )
+      refined += chunk.length
+      onProgress(groups.length + refined, groups.length + toRefine.length)
+    }
   }
 
   return proposals
