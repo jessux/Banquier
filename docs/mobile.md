@@ -62,15 +62,20 @@ Cette valeur doit rester synchronisée avec `MOBILE_REDIRECT_URI` (`src/mobile/p
 
 ### Robustesse du parcours de connexion
 
-Le parcours bancaire sort de l'app (Custom Tab, puis souvent l'app de la banque en App2App), ce qui expose trois façons de perdre une connexion pourtant réussie. Chacune est traitée explicitement :
+Le parcours bancaire sort de l'app (Custom Tab, puis souvent l'app de la banque en App2App), ce qui expose quatre façons de perdre une connexion pourtant réussie. Chacune est traitée explicitement :
 
 | Situation | Traitement |
 |---|---|
 | `browserFinished` (fermeture du Custom Tab) arrive avant `appUrlOpen` (deep link) | Délai de grâce de 2 s avant de conclure quoi que ce soit (`DEEPLINK_GRACE_MS`) |
 | Le deep link n'arrive jamais (retour au navigateur au lieu de l'app) | Le webview renvoie `dismissed` au lieu de lever « Connexion annulée » ; `powensConnect` attend qu'une nouvelle connexion apparaisse côté Powens (jusqu'à ~1 min), **sans jamais transformer une expiration de cette attente en erreur** — voir ci-dessous |
+| Le deep link arrive **avec un paramètre `error`** alors que la banque est rattachée | Même attente que ci-dessus : l'erreur n'est levée que si aucune nouvelle connexion n'apparaît. Sinon l'import continue et le message part en `warning` |
 | Android détruit l'activité pendant le Custom Tab (mémoire, « Ne pas conserver les activités ») | Le drapeau `powensConnectPending` est posé avant l'ouverture ; au redémarrage, `powensStartupSync` le voit et relance un import large au lieu d'un simple incrément |
 
 **Pourquoi ne plus jamais lever « Connexion annulée » depuis `powensConnect`.** Une première version attendait qu'une nouvelle connexion apparaisse pendant une fenêtre bornée (d'abord un essai unique, puis 8 essais sur ~20 s), et levait une erreur si rien n'apparaissait dans ce délai. En pratique, Powens peut mettre nettement plus longtemps à enregistrer la connexion côté serveur après la fin de l'authentification bancaire (SCA, App2App…) — le symptôme observé était un compte qui n'apparaissait qu'après avoir **quitté et rouvert l'app**, ce qui relance `powensStartupSync`. Ce dernier fonctionnait précisément parce qu'il n'a jamais eu ce genre de délai couperet : il attend (voir `waitForConnections` ci-dessous) et renvoie un avertissement, jamais une erreur bloquante, si rien n'arrive. `powensConnect` reproduit maintenant ce comportement : la vérification post-`dismissed` attend jusqu'à ~1 min qu'une connexion apparaisse, mais **quoi qu'il arrive** laisse ensuite `importPowens()` trancher — lui seul décide, via `waitForConnections`, s'il y a vraiment un souci à signaler.
+
+**Le paramètre `error` de la redirection n'est pas un échec en soi.** C'était la dernière place où le parcours de connexion transformait un signal ambigu en échec dur, et elle reproduisait exactement le même symptôme que ci-dessus (erreur à la première connexion, puis tout va bien après avoir quitté et relancé l'app). Powens renseigne `error` dans la redirection pour tout ce qui n'est pas un succès net — authentification forte à revalider, information supplémentaire demandée, action requise sur le site de la banque, session du webview expirée avant l'écran final — alors que la connexion, elle, existe déjà côté serveur. `powensConnect` attend donc d'abord qu'une nouvelle connexion apparaisse (`waitForNewConnection`, ~1 min) et ne rejette **que** si aucune n'est arrivée : c'est alors un vrai refus. Sinon l'import se poursuit normalement et le message du webview est remonté en `warning` (bandeau jaune non bloquant), l'état réel de la connexion restant celui que `waitForConnections` lit sur `/users/me/connections`.
+
+**`powensConnectPending` n'est levé qu'après un import réellement abouti.** Il l'était auparavant dans un `finally`, donc même quand l'import échouait (réseau coupé, app tuée en plein import) : le démarrage suivant repartait alors sur un simple incrément au lieu de l'import large d'un an attendu après un rattachement.
 
 ### Attente de la banque, et pourquoi elle était trop longue
 
