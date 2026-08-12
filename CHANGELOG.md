@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.34.3](https://github.com/jessux/Banquier/compare/v1.34.2...v1.34.3) (2026-08-12)
+
+
+### Corrections de bugs
+
+* **android:** désactive Auto Backup pour éviter CapacitorSQLitePlugin: null ([80c7584](https://github.com/jessux/Banquier/commit/80c7584b87efc7e5e831917e8df5b43c65510f35))
+* **ios:** corrige les chemins Windows dans Package.swift (SPM) ([df88cbe](https://github.com/jessux/Banquier/commit/df88cbec81b30b6053e381334a1106134e3b5856))
+* **ios:** corrige les chemins Windows dans Package.swift (SPM) ([c4dde37](https://github.com/jessux/Banquier/commit/c4dde371a52224e36250f67d75699c861a44845a))
+* **mobile:** corrige CapacitorSQLitePlugin: null sur iOS et Android ([bf86c85](https://github.com/jessux/Banquier/commit/bf86c85a7c4d773154107fe8608925d818cab702))
+
 ## [1.34.2](https://github.com/jessux/Banquier/compare/v1.34.1...v1.34.2) (2026-08-12)
 
 
