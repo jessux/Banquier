@@ -1,4 +1,5 @@
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite'
+import { normalizeMerchant } from '../shared/merchant'
 
 const DB_NAME = 'banquier'
 
@@ -104,12 +105,16 @@ const SCHEMA_SQL = `
     import_id   INTEGER REFERENCES imports(id),
     is_internal INTEGER NOT NULL DEFAULT 0,
     note        TEXT,
-    tags        TEXT
+    tags        TEXT,
+    -- Libellé réduit au marchand (voir shared/merchant.ts) : clé de
+    -- regroupement pour la mémoire de catégorisation et la dédup LLM.
+    merchant_key TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
   CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
   CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
+  CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key);
 
   CREATE TABLE IF NOT EXISTS categories (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -270,6 +275,35 @@ async function rollbackRulePacksSchema(): Promise<void> {
   `)
 }
 
+/** Miroir de migrate() dans src/main/database.ts. */
+async function migrate(): Promise<void> {
+  const migrations = [
+    'ALTER TABLE transactions ADD COLUMN merchant_key TEXT',
+    'CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key)'
+  ]
+  for (const sql of migrations) {
+    try { await exec(sql) } catch { /* colonne déjà présente */ }
+  }
+  await backfillMerchantKeys()
+}
+
+/** Miroir de backfillMerchantKeys() dans src/main/database.ts. */
+async function backfillMerchantKeys(): Promise<void> {
+  const rows = await all<{ id: number; description: string }>(
+    'SELECT id, description FROM transactions WHERE merchant_key IS NULL'
+  )
+  if (rows.length === 0) return
+
+  await transaction(async () => {
+    for (const row of rows) {
+      await run('UPDATE transactions SET merchant_key = ? WHERE id = ?', [
+        normalizeMerchant(row.description),
+        row.id
+      ])
+    }
+  })
+}
+
 export async function initDatabase(): Promise<void> {
   const isConn = (await sqlite.isConnection(DB_NAME, false)).result
   db = isConn
@@ -278,5 +312,6 @@ export async function initDatabase(): Promise<void> {
   await db.open()
   await exec(SCHEMA_SQL)
   await rollbackRulePacksSchema()
+  await migrate()
   await seedCategories()
 }

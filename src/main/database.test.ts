@@ -281,3 +281,39 @@ describe('retrait des packs de regles (rollback 1.33.0)', () => {
     expect(db.getCategoryRules().some((r) => r.pattern === 'LIDL')).toBe(true)
   })
 })
+
+describe('merchant_key', () => {
+  it("est calculée à l'insertion", () => {
+    insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB CARREFOUR MARKET 12/03 PARIS 4589', amount: -42, category: null, is_internal: 0 }
+    ])
+    const [tx] = db.getTransactions({})
+    expect(tx.merchant_key).toBe('CARREFOUR MARKET PARIS')
+  })
+
+  it('regroupe le même marchand malgré des libellés différents', () => {
+    insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB CARREFOUR MARKET 12/03 PARIS 4589', amount: -42, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-02-08', description: 'PAIEMENT CARREFOUR MARKET 08/02 PARIS 7712', amount: -31, category: null, is_internal: 0 }
+    ])
+    const keys = db.getTransactions({}).map((t) => t.merchant_key)
+    expect(keys).toHaveLength(2)
+    expect(new Set(keys).size).toBe(1)
+  })
+
+  it('est renseignée rétroactivement pour les transactions importées avant la colonne', () => {
+    // Simule une base d'avant la migration : colonne présente mais vide.
+    insertTx([
+      { account_id: null, date: '2025-01-05', description: 'PRLV NETFLIX.COM PARIS', amount: -13.49, category: null, is_internal: 0 }
+    ])
+    const dbPath = db.getActiveDbPath()
+    db.closeDatabase()
+    const raw = new Database(dbPath)
+    raw.exec('UPDATE transactions SET merchant_key = NULL')
+    raw.close()
+
+    db.initDatabase(dbPath)
+    const [tx] = db.getTransactions({})
+    expect(tx.merchant_key).toBe('NETFLIX COM PARIS')
+  })
+})

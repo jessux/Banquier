@@ -69,11 +69,16 @@ ne se repose jamais.
 
 Légende : ☐ à faire · ◐ en cours · ☑ fait
 
-### Phase 0 — Fondation : clé marchand
-- ☐ `src/shared/merchant.ts` — `normalizeMerchant()` sorti de `database.ts` et durci (villes, dates CB, réf. mandat SEPA, n° terminal)
-- ☐ Colonne `transactions.merchant_key` + index + backfill par migration
-- ☐ Calcul à l'insertion (CSV, PDF, Powens)
-- ☐ Tests unitaires sur la normalisation
+### Phase 0 — Fondation : clé marchand ☑ *(commit `feat(categorisation): cle marchand`)*
+- ☑ `src/shared/merchant.ts` — `normalizeMerchant()` sorti de `database.ts` et durci (accents, jetons chiffrés, formes juridiques, initiales isolées)
+- ☑ Colonne `transactions.merchant_key` + index + backfill par migration
+- ☑ Calcul à l'insertion (un seul point d'entrée : `insertTransactions`, donc CSV/PDF/Powens couverts)
+- ☑ Tests unitaires sur la normalisation + tests base (insertion, regroupement, backfill)
+- ☑ Parité mobile (`src/mobile/db.ts`, `api/transactions.ts`, `api/dashboard.ts`)
+
+Effet de bord voulu : « Top marchands » et la détection de récurrences
+utilisent désormais la même normalisation que le reste — les trois
+regroupaient auparavant avec deux implémentations dupliquées.
 
 ### Phase 1 — Mémoire marchand *(le gain principal)*
 - ☐ Table `merchant_categories(merchant_key, category, count, last_used)`

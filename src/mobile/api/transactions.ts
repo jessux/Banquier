@@ -1,5 +1,6 @@
 import { all, get, run, transaction } from '../db'
 import type { Transaction, TransactionFilters } from '../../shared/types'
+import { normalizeMerchant } from '../../shared/merchant'
 
 function buildTransactionWhere(filters: TransactionFilters): { conditions: string[]; params: unknown[] } {
   const conditions: string[] = []
@@ -91,8 +92,11 @@ export async function insertTransactions(
         duplicates++
       } else {
         const result = await run(
-          'INSERT INTO transactions (account_id, date, description, amount, category, import_id) VALUES (?, ?, ?, ?, ?, ?)',
-          [row.account_id ?? null, row.date, row.description, row.amount, row.category ?? null, importId]
+          'INSERT INTO transactions (account_id, date, description, amount, category, import_id, merchant_key) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            row.account_id ?? null, row.date, row.description, row.amount,
+            row.category ?? null, importId, normalizeMerchant(row.description)
+          ]
         )
         insertedIds.push(result.lastInsertRowid)
         imported++

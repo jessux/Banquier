@@ -25,6 +25,9 @@ export interface Transaction {
   is_internal: number
   note: string | null
   tags: string | null
+  /** Libellé réduit au marchand, dérivé de `description` (voir shared/merchant.ts).
+   *  Calculé à l'insertion : absent des objets construits par les parsers. */
+  merchant_key?: string | null
 }
 
 export interface Import {

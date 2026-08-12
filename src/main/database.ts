@@ -32,6 +32,7 @@ import type {
   DcaPlan,
   DcaPlanInput
 } from '../shared/types'
+import { normalizeMerchant } from '../shared/merchant'
 
 let db: Database
 let activeDbPath = ''
@@ -69,11 +70,41 @@ function migrate(): void {
     'ALTER TABLE transactions ADD COLUMN tags TEXT',
     'ALTER TABLE chat_messages ADD COLUMN reasoning TEXT',
     'ALTER TABLE accounts ADD COLUMN balance REAL',
+    'ALTER TABLE transactions ADD COLUMN merchant_key TEXT',
+    'CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key)',
   ]
   for (const sql of migrations) {
     try { db.exec(sql) } catch { /* column already exists */ }
   }
   rollbackRulePacksSchema()
+  backfillMerchantKeys()
+}
+
+/**
+ * Renseigne `merchant_key` pour les transactions qui n'en ont pas encore :
+ * celles importées avant l'introduction de la colonne. Idempotent et borné par
+ * le nombre de lignes concernées — il ne reste plus rien à faire une fois la
+ * base à jour, donc le coût au démarrage retombe à une seule requête.
+ */
+function backfillMerchantKeys(): void {
+  const rows = db.all(
+    'SELECT id, description FROM transactions WHERE merchant_key IS NULL'
+  ) as { id: number; description: string }[]
+  if (rows.length === 0) return
+
+  db.exec('BEGIN')
+  try {
+    for (const row of rows) {
+      db.run('UPDATE transactions SET merchant_key = ? WHERE id = ?', [
+        normalizeMerchant(row.description),
+        row.id
+      ])
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
 }
 
 /**
@@ -148,12 +179,16 @@ function createTables(): void {
       description TEXT NOT NULL,
       amount      REAL NOT NULL,
       category    TEXT,
-      import_id   INTEGER REFERENCES imports(id)
+      import_id   INTEGER REFERENCES imports(id),
+      -- Libellé réduit au marchand (voir shared/merchant.ts) : clé de
+      -- regroupement pour la mémoire de catégorisation et la dédup LLM.
+      merchant_key TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
     CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
     CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key);
 
     CREATE TABLE IF NOT EXISTS categories (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -398,8 +433,11 @@ export function insertTransactions(
         duplicates++
       } else {
         const result = db.run(
-          'INSERT INTO transactions (account_id, date, description, amount, category, import_id) VALUES (?, ?, ?, ?, ?, ?)',
-          [row.account_id ?? null, row.date, row.description, row.amount, row.category ?? null, importId]
+          'INSERT INTO transactions (account_id, date, description, amount, category, import_id, merchant_key) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            row.account_id ?? null, row.date, row.description, row.amount,
+            row.category ?? null, importId, normalizeMerchant(row.description)
+          ]
         )
         insertedIds.push(result.lastInsertRowid as number)
         imported++
@@ -1259,23 +1297,6 @@ export function exportTransactionsToCsv(): string {
 }
 
 // --- Analyse avancée (outils IA) ---
-
-const MERCHANT_NOISE =
-  /\b(CB|CARTE|PAIEMENT|PAIMT|ACHAT|RETRAIT|DU|LE|FACTURE|FACT|PRLV|PRELEVEMENT|PRELVT|VIR|VIREMENT|SEPA|REF|MANDAT|ID|EUR)\b/g
-
-function normalizeMerchant(desc: string): string {
-  const cleaned = desc
-    .toUpperCase()
-    .replace(/[0-9]+([./-][0-9]+)*/g, ' ') // dates, montants, références numériques
-    .replace(MERCHANT_NOISE, ' ')
-    .replace(/[^A-ZÀ-Ü ]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .slice(0, 4)
-    .join(' ')
-  return cleaned || desc.trim().slice(0, 30).toUpperCase()
-}
 
 export function getTopMerchants(startDate?: string, endDate?: string, limit = 15): MerchantStats[] {
   const conditions = ['amount < 0', 'is_internal = 0']
