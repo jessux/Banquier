@@ -53,8 +53,20 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
+      # npm ci échoue de temps en temps sur une 503 transitoire du registre npm
+      # (déjà vu planter la jambe linux d'une release alors que win/mac
+      # passaient) — on retente 3 fois avant d'abandonner. `shell: bash`
+      # explicite : le matrix inclut windows-latest, dont le shell par défaut
+      # (pwsh) ne comprend pas cette syntaxe.
       - name: Install dependencies
-        run: npm ci
+        shell: bash
+        run: |
+          for i in 1 2 3; do
+            npm ci && exit 0
+            echo "npm ci a échoué (tentative $i/3), nouvel essai dans 15s..." >&2
+            sleep 15
+          done
+          exit 1
 
       - name: Build app
         run: npm run build

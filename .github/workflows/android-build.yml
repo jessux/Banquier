@@ -77,8 +77,19 @@ jobs:
 
       - uses: android-actions/setup-android@v3
 
+      # npm ci et le téléchargement de la distribution Gradle par gradlew sont
+      # tous deux sujets à des coupures réseau transitoires côté runner GitHub
+      # (503 du registre npm, connexion tronquée vers services.gradle.org) —
+      # déjà vu planter deux releases de suite alors que le code était sain.
+      # On retente donc 3 fois avec un court délai avant d'abandonner pour de bon.
       - name: Install dependencies
-        run: npm ci
+        run: |
+          for i in 1 2 3; do
+            npm ci && exit 0
+            echo "npm ci a échoué (tentative $i/3), nouvel essai dans 15s..." >&2
+            sleep 15
+          done
+          exit 1
 
       - name: Type check mobile module
         run: npm run typecheck:mobile
@@ -88,7 +99,13 @@ jobs:
 
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          for i in 1 2 3; do
+            ./gradlew assembleDebug --no-daemon && exit 0
+            echo "Gradle a échoué (tentative $i/3), nouvel essai dans 15s..." >&2
+            sleep 15
+          done
+          exit 1
 
       # `app-debug.apk` ne dit rien à quelqu'un qui télécharge depuis une release
       # — on le renomme d'après le tag (ou le n° de build) avant publication.
