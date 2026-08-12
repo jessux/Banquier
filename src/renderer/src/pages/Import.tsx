@@ -33,6 +33,7 @@ export default function Import(): JSX.Element {
   const [result, setResult] = useState<ImportResult | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [autoCat, setAutoCat] = useState<{ running: boolean; applied: number; pending: number } | null>(null)
   const [dragOver, setDragOver] = useState(false)
   const dropRef = useRef<HTMLDivElement>(null)
   const [imports, setImports] = useState<ImportRecord[]>([])
@@ -158,6 +159,7 @@ export default function Import(): JSX.Element {
       setResult(res)
       setStep('result')
       loadImports()
+      runAutoCategorization()
     } catch (e) {
       setError(String(e))
     } finally {
@@ -165,7 +167,25 @@ export default function Import(): JSX.Element {
     }
   }
 
+  /** Mode automatique (réglage autoCategorizeAi) : enchaîne la passe IA sur ce
+   *  que la cascade locale n'a pas su trancher, sans bloquer l'écran de résultat. */
+  const runAutoCategorization = async (): Promise<void> => {
+    const settings = await window.api.getSettings()
+    if (!settings.autoCategorizeAi) return
+
+    setAutoCat({ running: true, applied: 0, pending: 0 })
+    try {
+      const { applied, pending } = await window.api.categorizeAiAuto(() => {})
+      setAutoCat({ running: false, applied, pending: pending.length })
+    } catch {
+      // Le mode automatique est un confort : son échec ne doit pas transformer
+      // un import réussi en erreur.
+      setAutoCat(null)
+    }
+  }
+
   const reset = (): void => {
+    setAutoCat(null)
     setStep('drop')
     setFilePath(null)
     setFileType(null)
@@ -347,6 +367,24 @@ export default function Import(): JSX.Element {
                 <span>Doublons ignorés</span>
                 <span className="badge badge-warning">{result.duplicates}</span>
               </div>
+              <div className="flex justify-between">
+                <span>Catégorisées sans intervention</span>
+                <span className="badge badge-success">{result.categorized}</span>
+              </div>
+              {autoCat && (
+                <div className="flex justify-between">
+                  <span>{autoCat.running ? 'Catégorisation IA en cours…' : 'Catégorisées par l’IA'}</span>
+                  {autoCat.running
+                    ? <span className="spinner" />
+                    : <span className="badge badge-success">{autoCat.applied}</span>}
+                </div>
+              )}
+              {autoCat && !autoCat.running && autoCat.pending > 0 && (
+                <div className="flex justify-between">
+                  <span>Marchands à vérifier</span>
+                  <span className="badge badge-warning">{autoCat.pending}</span>
+                </div>
+              )}
               {result.errors > 0 && (
                 <div className="flex justify-between">
                   <span>Erreurs</span>

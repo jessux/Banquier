@@ -1,4 +1,5 @@
 import { all, get } from '../db'
+import { normalizeMerchant } from '../../shared/merchant'
 import type {
   CategoryStats,
   CategoryStatsGrouped,
@@ -278,23 +279,6 @@ export async function getDashboardSummary(
     trendHighlightStart,
     trendHighlightEnd
   }
-}
-
-const MERCHANT_NOISE =
-  /\b(CB|CARTE|PAIEMENT|PAIMT|ACHAT|RETRAIT|DU|LE|FACTURE|FACT|PRLV|PRELEVEMENT|PRELVT|VIR|VIREMENT|SEPA|REF|MANDAT|ID|EUR)\b/g
-
-function normalizeMerchant(desc: string): string {
-  const cleaned = desc
-    .toUpperCase()
-    .replace(/[0-9]+([./-][0-9]+)*/g, ' ')
-    .replace(MERCHANT_NOISE, ' ')
-    .replace(/[^A-ZÀ-Ü ]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .slice(0, 4)
-    .join(' ')
-  return cleaned || desc.trim().slice(0, 30).toUpperCase()
 }
 
 export async function getTopMerchants(startDate?: string, endDate?: string, limit = 15): Promise<MerchantStats[]> {

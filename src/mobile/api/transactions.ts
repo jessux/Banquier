@@ -1,5 +1,7 @@
 import { all, get, run, transaction } from '../db'
 import type { Transaction, TransactionFilters } from '../../shared/types'
+import { normalizeMerchant } from '../../shared/merchant'
+import { rememberMerchantCategory } from './merchantMemory'
 
 function buildTransactionWhere(filters: TransactionFilters): { conditions: string[]; params: unknown[] } {
   const conditions: string[] = []
@@ -91,8 +93,11 @@ export async function insertTransactions(
         duplicates++
       } else {
         const result = await run(
-          'INSERT INTO transactions (account_id, date, description, amount, category, import_id) VALUES (?, ?, ?, ?, ?, ?)',
-          [row.account_id ?? null, row.date, row.description, row.amount, row.category ?? null, importId]
+          'INSERT INTO transactions (account_id, date, description, amount, category, import_id, merchant_key) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            row.account_id ?? null, row.date, row.description, row.amount,
+            row.category ?? null, importId, normalizeMerchant(row.description)
+          ]
         )
         insertedIds.push(result.lastInsertRowid)
         imported++
@@ -111,17 +116,25 @@ export async function setTransactionTags(id: number, tags: string | null): Promi
   await run('UPDATE transactions SET tags = ? WHERE id = ?', [tags || null, id])
 }
 
+/** Miroir de updateTransactionCategory() dans src/main/database.ts : la mémoire
+ *  agit sur le futur, applyToSimilar sur le passé. */
 export async function updateTransactionCategory(
   id: number,
   category: string,
   applyToSimilar = false
 ): Promise<void> {
-  await run('UPDATE transactions SET category = ? WHERE id = ?', [category, id])
-  if (applyToSimilar) {
-    const tx = await get<{ description: string }>('SELECT description FROM transactions WHERE id = ?', [id])
-    if (tx?.description) {
-      await run('UPDATE transactions SET category = ? WHERE description = ?', [category, tx.description])
-    }
+  const tx = await get<{ merchant_key: string | null }>(
+    'SELECT merchant_key FROM transactions WHERE id = ?',
+    [id]
+  )
+
+  await run("UPDATE transactions SET category = ?, category_source = 'user' WHERE id = ?", [category, id])
+  await rememberMerchantCategory(tx?.merchant_key, category)
+
+  if (applyToSimilar && tx?.merchant_key) {
+    await run("UPDATE transactions SET category = ?, category_source = 'user' WHERE merchant_key = ?", [
+      category, tx.merchant_key
+    ])
   }
 }
 
@@ -138,12 +151,15 @@ export async function countTransactionsByPattern(pattern: string): Promise<numbe
 export async function updateCategoryByPattern(category: string, pattern: string): Promise<number> {
   try {
     const regex = new RegExp(pattern, 'i')
-    const rows = await all<{ id: number; description: string }>('SELECT id, description FROM transactions')
+    const rows = await all<{ id: number; description: string; merchant_key: string | null }>(
+      'SELECT id, description, merchant_key FROM transactions'
+    )
     const matched = rows.filter((r) => regex.test(r.description))
     if (matched.length === 0) return 0
     await transaction(async () => {
       for (const t of matched) {
-        await run('UPDATE transactions SET category = ? WHERE id = ?', [category, t.id])
+        await run("UPDATE transactions SET category = ?, category_source = 'rule' WHERE id = ?", [category, t.id])
+        await rememberMerchantCategory(t.merchant_key, category)
       }
     })
     return matched.length
@@ -156,7 +172,12 @@ export async function batchUpdateCategories(updates: { id: number; category: str
   if (updates.length === 0) return
   await transaction(async () => {
     for (const u of updates) {
-      await run('UPDATE transactions SET category = ? WHERE id = ?', [u.category, u.id])
+      const tx = await get<{ merchant_key: string | null }>(
+        'SELECT merchant_key FROM transactions WHERE id = ?',
+        [u.id]
+      )
+      await run("UPDATE transactions SET category = ?, category_source = 'ai' WHERE id = ?", [u.category, u.id])
+      await rememberMerchantCategory(tx?.merchant_key, u.category)
     }
   })
 }
@@ -181,6 +202,55 @@ export async function findDuplicateTransactions(): Promise<Transaction[][]> {
     )
   }
   return result
+}
+
+/** Miroir de INTERNAL_TRANSFER_MAX_DAYS dans src/main/database.ts. */
+const INTERNAL_TRANSFER_MAX_DAYS = 3
+
+/** Miroir de findInternalTransferCandidates() dans src/main/database.ts. */
+export async function findInternalTransferCandidates(): Promise<
+  { debit: Transaction; credit: Transaction }[]
+> {
+  const rows = await all<Transaction>(
+    `SELECT * FROM transactions
+     WHERE is_internal = 0 AND account_id IS NOT NULL
+     ORDER BY date`
+  )
+
+  const credits = rows.filter((t) => t.amount > 0)
+  const pairs: { debit: Transaction; credit: Transaction }[] = []
+  const used = new Set<number>()
+
+  for (const debit of rows) {
+    if (debit.amount >= 0 || used.has(debit.id)) continue
+
+    const match = credits.find(
+      (credit) =>
+        !used.has(credit.id) &&
+        credit.account_id !== debit.account_id &&
+        Math.abs(credit.amount + debit.amount) < 0.005 &&
+        Math.abs(Date.parse(credit.date) - Date.parse(debit.date)) <=
+          INTERNAL_TRANSFER_MAX_DAYS * 86_400_000
+    )
+    if (!match) continue
+
+    used.add(debit.id)
+    used.add(match.id)
+    pairs.push({ debit, credit: match })
+  }
+
+  return pairs
+}
+
+/** Miroir de markTransactionsInternal() dans src/main/database.ts. */
+export async function markTransactionsInternal(ids: number[]): Promise<number> {
+  if (ids.length === 0) return 0
+  const placeholders = ids.map(() => '?').join(',')
+  const result = await run(
+    `UPDATE transactions SET is_internal = 1 WHERE id IN (${placeholders})`,
+    ids
+  )
+  return result.changes
 }
 
 export async function deleteTransaction(id: number): Promise<void> {

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CategoryRule } from '../../../shared/types'
 import CategoryPicker from '../components/CategoryPicker'
+import { literalToRulePattern } from '../../../shared/categorization'
 
 const COMMON_CATEGORIES = [
   'Alimentation', 'Logement', 'Transport', 'Restaurants', 'Loisirs',
@@ -18,6 +19,10 @@ interface NewRule {
   category: string
 }
 
+/** Mode de saisie du motif. « contient » couvre la quasi-totalité des besoins ;
+ *  la regex reste disponible pour les cas qui la demandent vraiment. */
+type PatternMode = 'contains' | 'regex'
+
 export default function Rules(): JSX.Element {
   const [rules, setRules] = useState<CategoryRule[]>([])
   const [categories, setCategories] = useState<string[]>([])
@@ -25,6 +30,7 @@ export default function Rules(): JSX.Element {
   const [editing, setEditing] = useState<EditingRule | null>(null)
   const [adding, setAdding] = useState(false)
   const [newRule, setNewRule] = useState<NewRule>({ pattern: '', category: '' })
+  const [patternMode, setPatternMode] = useState<PatternMode>('contains')
   const [toast, setToast] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
   const [search, setSearch] = useState('')
@@ -75,7 +81,10 @@ export default function Rules(): JSX.Element {
 
   const addRule = async (): Promise<void> => {
     if (!newRule.pattern.trim() || !newRule.category.trim()) return
-    await window.api.upsertCategoryRule(newRule.pattern.trim(), newRule.category.trim())
+    const pattern = patternMode === 'contains'
+      ? literalToRulePattern(newRule.pattern)
+      : newRule.pattern.trim()
+    await window.api.upsertCategoryRule(pattern, newRule.category.trim())
     setAdding(false)
     setNewRule({ pattern: '', category: '' })
     await load()
@@ -184,13 +193,23 @@ export default function Rules(): JSX.Element {
         }}>
           <span style={{ fontSize: 13, color: 'var(--text2)', whiteSpace: 'nowrap' }}>Nouvelle règle :</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 260 }}>
-            <span style={{ fontSize: 12, color: 'var(--text3)', whiteSpace: 'nowrap' }}>Regex :</span>
+            <select
+              value={patternMode}
+              onChange={(e) => setPatternMode(e.target.value as PatternMode)}
+              style={{
+                padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)',
+                background: 'var(--bg2)', color: 'var(--text)', fontSize: 12, cursor: 'pointer'
+              }}
+            >
+              <option value="contains">Le libellé contient</option>
+              <option value="regex">Expression régulière</option>
+            </select>
             <input
               ref={newPatternRef}
               value={newRule.pattern}
               onChange={(e) => setNewRule((p) => ({ ...p, pattern: e.target.value }))}
-              style={{ flex: 1, fontFamily: 'monospace', fontSize: 12 }}
-              placeholder="ex: SNCF.*"
+              style={{ flex: 1, fontFamily: patternMode === 'regex' ? 'monospace' : undefined, fontSize: 12 }}
+              placeholder={patternMode === 'regex' ? 'ex: SNCF.*' : 'ex: SNCF'}
               onKeyDown={(e) => { if (e.key === 'Enter') addRule(); if (e.key === 'Escape') setAdding(false) }}
             />
           </div>

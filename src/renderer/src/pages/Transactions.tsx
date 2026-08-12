@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Transaction, Account, CategorizationProposal } from '../../../shared/types'
 import CategoryPicker from '../components/CategoryPicker'
+import { AUTO_ACCEPT_CONFIDENCE } from '../../../shared/categorization'
 import { categoryBadgeStyle, categoryCircleColor, categoryIcon } from '../utils/categoryColor'
 
 const PAGE_SIZE = 75
@@ -83,11 +84,14 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
   const [catProgress, setCatProgress] = useState<{ done: number; total: number } | null>(null)
   const [proposals, setProposals] = useState<(CategorizationProposal & { accepted: boolean })[] | null>(null)
   const [applyingProposals, setApplyingProposals] = useState(false)
+  const [hilitedProposal, setHilitedProposal] = useState(0)
   const [editing, setEditing] = useState<EditingCell | null>(null)
   const [newCategory, setNewCategory] = useState('')
   const [regexPanel, setRegexPanel] = useState<RegexPanel | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [duplicates, setDuplicates] = useState<DuplicateGroup[] | null>(null)
+  const [transfers, setTransfers] = useState<{ debit: Transaction; credit: Transaction }[] | null>(null)
+  const [checkingTransfers, setCheckingTransfers] = useState(false)
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
   const [editingNote, setEditingNote] = useState<{ id: number; note: string; tags: string } | null>(null)
   const editRef = useRef<HTMLInputElement>(null)
@@ -247,9 +251,14 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
         setCategories([...new Set([...paths, ...existing])].sort())
       })
       if (result.proposals.length === 0) {
-        alert('Aucune nouvelle suggestion de catégorie (règles déjà appliquées).')
+        alert('Aucune nouvelle suggestion de catégorie (règles et mémoire déjà appliquées).')
       } else {
-        setProposals(result.proposals.map((p) => ({ ...p, accepted: true })))
+        // Pré-cocher ce dont le modèle est sûr : l'attention de l'utilisateur
+        // doit aller aux marchands douteux, pas aux évidences.
+        setProposals(
+          result.proposals.map((p) => ({ ...p, accepted: p.confidence >= AUTO_ACCEPT_CONFIDENCE }))
+        )
+        setHilitedProposal(0)
       }
     } catch (e) {
       alert(`Erreur : ${String(e)}`)
@@ -259,9 +268,56 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
     }
   }
 
+  // Revue au clavier : la liste peut compter plusieurs dizaines de marchands,
+  // et la parcourir à la souris case après case est exactement la pénibilité
+  // qu'on cherche à supprimer.
+  useEffect(() => {
+    if (proposals === null) return
+
+    const handler = (e: KeyboardEvent): void => {
+      // Le sélecteur de catégorie a ses propres flèches et son propre Entrée.
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setHilitedProposal((i) => Math.min(i + 1, proposals.length - 1))
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setHilitedProposal((i) => Math.max(i - 1, 0))
+      } else if (e.key === ' ') {
+        e.preventDefault()
+        setProposals((prev) =>
+          prev?.map((p, i) => (i === hilitedProposal ? { ...p, accepted: !p.accepted } : p)) ?? null
+        )
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        applyProposals()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        setProposals(null)
+      }
+    }
+
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [proposals, hilitedProposal])
+
+  // Garde la ligne survolée au clavier dans le champ de vision.
+  useEffect(() => {
+    if (proposals === null) return
+    document
+      .querySelector(`[data-proposal="${hilitedProposal}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [hilitedProposal, proposals])
+
   const applyProposals = async (): Promise<void> => {
     if (!proposals) return
-    const updates = proposals.filter((p) => p.accepted).map(({ id, category }) => ({ id, category }))
+    // Une proposition vaut pour un marchand : on la déplie sur toutes ses
+    // transactions au moment de l'appliquer.
+    const updates = proposals
+      .filter((p) => p.accepted)
+      .flatMap((p) => p.transactionIds.map((id) => ({ id, category: p.category })))
     setApplyingProposals(true)
     try {
       await window.api.applyCategorization(updates)
@@ -271,6 +327,27 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
     } finally {
       setApplyingProposals(false)
     }
+  }
+
+  /** Les virements entre comptes gonflent dépenses et revenus. On les propose,
+   *  sans les marquer d'office : un faux positif sortirait sinon silencieusement
+   *  une vraie dépense des statistiques. */
+  const checkInternalTransfers = async (): Promise<void> => {
+    setCheckingTransfers(true)
+    try {
+      setTransfers(await window.api.findInternalTransfers())
+    } finally {
+      setCheckingTransfers(false)
+    }
+  }
+
+  const confirmTransfers = async (): Promise<void> => {
+    if (!transfers || transfers.length === 0) return
+    const ids = transfers.flatMap((p) => [p.debit.id, p.credit.id])
+    const count = await window.api.markTransactionsInternal(ids)
+    setTransfers(null)
+    load()
+    showToast(`${count} transaction(s) marquées comme virements internes`)
   }
 
   const checkDuplicates = async (): Promise<void> => {
@@ -360,6 +437,14 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
           </button>
           <button className="btn btn-secondary" onClick={checkDuplicates} disabled={checkingDuplicates}>
             {checkingDuplicates ? <span className="spinner" /> : '🔍'} Vérifier doublons
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={checkInternalTransfers}
+            disabled={checkingTransfers}
+            title="Repère les virements entre vos propres comptes, qui gonflent dépenses et revenus"
+          >
+            {checkingTransfers ? <span className="spinner" /> : '🔄'} Virements internes
           </button>
           <span className="text-muted">{totalCount} résultat{totalCount > 1 ? 's' : ''}</span>
         </div>
@@ -451,12 +536,15 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
         </div>
       )}
 
-      {/* AI categorization proposals — pending user validation */}
+      {/* Propositions IA — une par marchand, à valider. Triées par impact
+          décroissant : si l'utilisateur s'arrête en route, ce qui pèse le plus
+          sur son budget est déjà traité. */}
       {proposals !== null && (
         <div style={{ background: 'var(--bg2)', border: '1px solid var(--accent)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, flexWrap: 'wrap', gap: 8 }}>
             <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-light)' }}>
-              🌐 {proposals.length} suggestion(s) de catégorie (recherche web) — {proposals.filter((p) => p.accepted).length} sélectionnée(s)
+              🌐 {proposals.length} marchand(s) — {proposals.filter((p) => p.accepted).length} sélectionné(s),
+              {' '}{proposals.filter((p) => p.accepted).reduce((n, p) => n + p.transactionIds.length, 0)} transaction(s)
             </span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button className="btn btn-secondary" onClick={() => setProposals((prev) => prev?.map((p) => ({ ...p, accepted: true })) ?? null)}>Tout cocher</button>
@@ -467,23 +555,98 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
               <button className="btn btn-secondary" onClick={() => setProposals(null)}>✕ Annuler</button>
             </div>
           </div>
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+            {proposals.some((p) => p.confidence < AUTO_ACCEPT_CONFIDENCE) && (
+              <>
+                Les marchands sûrs sont déjà cochés. Seuls les
+                {' '}{proposals.filter((p) => p.confidence < AUTO_ACCEPT_CONFIDENCE).length} marqués
+                {' '}<span style={{ color: 'var(--yellow)' }}>à vérifier</span> demandent votre attention.
+                {' · '}
+              </>
+            )}
+            <span style={{ whiteSpace: 'nowrap' }}>↑↓ naviguer · Espace cocher · Entrée appliquer · Échap annuler</span>
+          </div>
+          <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+            {proposals.map((p, idx) => {
+              const uncertain = p.confidence < AUTO_ACCEPT_CONFIDENCE
+              return (
+                <div
+                  key={p.merchant}
+                  data-proposal={idx}
+                  onMouseEnter={() => setHilitedProposal(idx)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px',
+                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    background: idx === hilitedProposal ? 'rgba(99,102,241,0.10)' : undefined,
+                    borderRadius: idx === hilitedProposal ? 6 : undefined
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={p.accepted}
+                    onChange={(e) => setProposals((prev) => prev?.map((x, i) => (i === idx ? { ...x, accepted: e.target.checked } : x)) ?? null)}
+                    style={{ width: 'auto', flexShrink: 0 }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.merchant}
+                      {uncertain && (
+                        <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 500, color: 'var(--yellow)', border: '1px solid var(--yellow)', borderRadius: 4, padding: '1px 5px' }}>
+                          à vérifier
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--text3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {p.transactionIds.length} transaction(s) — {p.description}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 12, color: 'var(--text3)', whiteSpace: 'nowrap' }}>{formatEur(p.total)}</span>
+                  <CategoryPicker
+                    value={p.category}
+                    onChange={(v) => setProposals((prev) => prev?.map((x, i) => (i === idx ? { ...x, category: v } : x)) ?? null)}
+                    categories={[...new Set([...COMMON_CATEGORIES, ...categories])].sort()}
+                    style={{ width: 180 }}
+                  />
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Virements internes détectés — à confirmer */}
+      {transfers !== null && (
+        <div style={{ background: 'var(--bg2)', border: '1px solid var(--accent)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-light)' }}>
+              {transfers.length === 0
+                ? 'Aucun virement interne détecté'
+                : `${transfers.length} virement(s) interne(s) probable(s)`}
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {transfers.length > 0 && (
+                <button className="btn btn-primary" onClick={confirmTransfers}>
+                  ✓ Marquer comme internes
+                </button>
+              )}
+              <button className="btn btn-secondary" onClick={() => setTransfers(null)}>✕ Fermer</button>
+            </div>
+          </div>
           <div style={{ maxHeight: 360, overflowY: 'auto' }}>
-            {proposals.map((p, idx) => (
-              <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                <input
-                  type="checkbox"
-                  checked={p.accepted}
-                  onChange={(e) => setProposals((prev) => prev?.map((x, i) => (i === idx ? { ...x, accepted: e.target.checked } : x)) ?? null)}
-                  style={{ width: 'auto', flexShrink: 0 }}
-                />
-                <span style={{ flex: 1, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</span>
-                <span style={{ fontSize: 12, color: 'var(--text3)', whiteSpace: 'nowrap' }}>{formatEur(p.amount)}</span>
-                <CategoryPicker
-                  value={p.category}
-                  onChange={(v) => setProposals((prev) => prev?.map((x, i) => (i === idx ? { ...x, category: v } : x)) ?? null)}
-                  categories={[...new Set([...COMMON_CATEGORIES, ...categories])].sort()}
-                  style={{ width: 180 }}
-                />
+            {transfers.map((pair) => (
+              <div key={pair.debit.id} style={{ padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13 }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {pair.debit.description}
+                  </span>
+                  <span style={{ color: 'var(--red)', whiteSpace: 'nowrap' }}>{formatEur(pair.debit.amount)}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text3)' }}>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    ↳ {pair.credit.description}
+                  </span>
+                  <span style={{ color: 'var(--green)', whiteSpace: 'nowrap' }}>{formatEur(pair.credit.amount)}</span>
+                </div>
               </div>
             ))}
           </div>

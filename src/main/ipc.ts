@@ -14,6 +14,7 @@ import {
   categorizeBatch
 } from './llm'
 import { retrieveRelevantMemories } from './memory'
+import { AUTO_ACCEPT_CONFIDENCE, groupByMerchant } from '../shared/categorization'
 import { startMobileServer, stopMobileServer, isMobileServerRunning } from './mobile-server'
 import { checkForUpdatesManual, type UpdateCheckResult } from './updater'
 import { is } from '@electron-toolkit/utils'
@@ -44,7 +45,8 @@ import type {
   DcaPlan,
   PowensStatus,
   PowensSyncResult,
-  CategorizationProposal
+  CategorizationProposal,
+  CategorySource
 } from '../shared/types'
 
 
@@ -109,7 +111,22 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('delete-transaction', (_, id: number) => db.deleteTransaction(id))
   ipcMain.handle('clear-all-transactions', () => db.clearAllTransactions())
   ipcMain.handle('find-duplicates', () => db.findDuplicateTransactions())
+  ipcMain.handle('find-internal-transfers', () => db.findInternalTransferCandidates())
+  ipcMain.handle('mark-transactions-internal', (_, ids: number[]) =>
+    db.markTransactionsInternal(ids)
+  )
   ipcMain.handle('get-category-rules-all', () => db.getCategoryRulesWithId())
+
+  // --- Mémoire marchand & pilotage de la catégorisation ---
+  ipcMain.handle('get-categorization-stats', () => db.getCategorizationStats())
+  ipcMain.handle('get-merchant-memory', () => db.getMerchantMemory())
+  ipcMain.handle('forget-merchant-category', (_, merchantKey: string) =>
+    db.forgetMerchantCategory(merchantKey)
+  )
+  ipcMain.handle('clear-merchant-memory', () => db.clearMerchantMemory())
+  ipcMain.handle('clear-categories-by-source', (_, source: CategorySource) =>
+    db.clearCategoriesBySource(source)
+  )
   ipcMain.handle('delete-category-rule', (_, id: number) => db.deleteCategoryRule(id))
   ipcMain.handle('update-category-rule', (_, id: number, pattern: string, category: string) =>
     db.updateCategoryRule(id, pattern, category)
@@ -129,8 +146,8 @@ export function registerIpcHandlers(): void {
       const importRecord = db.createImport(filename, transactions.length)
       const txWithImport = transactions.map((t) => ({ ...t, import_id: importRecord.id }))
       const { imported, duplicates, insertedIds } = db.insertTransactions(txWithImport, importRecord.id)
-      if (insertedIds.length > 0) db.applyRulesToTransactions(insertedIds)
-      return { imported, duplicates, errors: 0, importId: importRecord.id }
+      const categorized = insertedIds.length > 0 ? db.autoCategorize(insertedIds) : 0
+      return { imported, duplicates, errors: 0, importId: importRecord.id, categorized }
     }
   )
 
@@ -141,7 +158,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('import-pdf', async (_, filePath: string, accountId: number | null) => {
     const transactions = await extractPdfTransactions(filePath)
     if (transactions.length === 0) {
-      return { imported: 0, duplicates: 0, errors: 1, importId: -1 }
+      return { imported: 0, duplicates: 0, errors: 1, importId: -1, categorized: 0 }
     }
 
     const txWithAccount = transactions.map((t) => ({ ...t, account_id: accountId }))
@@ -149,8 +166,8 @@ export function registerIpcHandlers(): void {
     const importRecord = db.createImport(filename, txWithAccount.length)
     const txWithImport = txWithAccount.map((t) => ({ ...t, import_id: importRecord.id }))
     const { imported, duplicates, insertedIds } = db.insertTransactions(txWithImport, importRecord.id)
-    if (insertedIds.length > 0) db.applyRulesToTransactions(insertedIds)
-    return { imported, duplicates, errors: 0, importId: importRecord.id }
+    const categorized = insertedIds.length > 0 ? db.autoCategorize(insertedIds) : 0
+    return { imported, duplicates, errors: 0, importId: importRecord.id, categorized }
   })
 
   // --- Imports ---
@@ -186,57 +203,108 @@ export function registerIpcHandlers(): void {
   // --- AI Categorization ---
   // La catégorisation par IA ne fait que proposer : elle s'appuie sur la recherche
   // web (jamais sur ses seules connaissances internes) et renvoie des suggestions
-  // que l'utilisateur valide via `apply-categorization`. Les règles utilisateur,
-  // elles, restent déterministes et s'appliquent directement.
-  ipcMain.handle('categorize-ai', async (event, onlyUncategorized: boolean) => {
+  // que l'utilisateur valide via `apply-categorization`. Les règles utilisateur
+  // et la mémoire marchand, elles, restent déterministes et s'appliquent
+  // directement.
+  //
+  // Seul le mode automatique (réglage autoCategorizeAi, désactivé par défaut)
+  // écrit sans validation ligne à ligne, et uniquement au-dessus du seuil de
+  // confiance — ce qui reste en dessous redescend en revue.
+  async function buildProposals(
+    onProgress: (done: number, total: number) => void,
+    onlyUncategorized: boolean
+  ): Promise<CategorizationProposal[]> {
     const settings = store.get('settings')
     const rules = db.getCategoryRules()
 
-    // First pass: apply pattern rules (deterministic, always takes priority)
+    // Première passe déterministe et locale : règles, mémoire, rattrapage,
+    // dictionnaire. Elle ne sert pas qu'à gagner du temps — tout ce qu'elle
+    // tranche est autant de transactions qui ne partent pas au LLM et que
+    // l'utilisateur n'aura pas à valider.
     const allTxForRules = db.getTransactions({})
     const ruleTargets = onlyUncategorized ? allTxForRules.filter((t) => !t.category) : allTxForRules
-    if (ruleTargets.length > 0) db.applyRulesToTransactions(ruleTargets.map((t) => t.id))
+    if (ruleTargets.length > 0) db.autoCategorize(ruleTargets.map((t) => t.id))
 
-    // Second pass: AI proposals for remaining uncategorized transactions
+    // Seconde passe : propositions IA pour ce qu'il reste, regroupées par
+    // marchand. Un relevé de 300 lignes inconnues ne contient souvent qu'une
+    // quinzaine de marchands distincts — c'est autant d'appels économisés et de
+    // décisions en moins pour l'utilisateur.
     const afterRules = db.getTransactions({})
-    const toProcess = afterRules.filter((t) => !t.category)
-
-    if (toProcess.length === 0) return { proposals: [] }
+    const groups = groupByMerchant(afterRules.filter((t) => !t.category))
+    if (groups.length === 0) return []
 
     const BATCH_SIZE = 30
     const proposals: CategorizationProposal[] = []
-    const batches = Math.ceil(toProcess.length / BATCH_SIZE)
+    const batches = Math.ceil(groups.length / BATCH_SIZE)
 
-    event.sender.send('categorize-progress', { done: 0, total: toProcess.length })
+    onProgress(0, groups.length)
 
     for (let i = 0; i < batches; i++) {
-      const batch = toProcess.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+      const batch = groups.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
 
       try {
         const catPaths = db.getCategoryPaths()
+        // L'index dans le lot sert d'identifiant : le modèle répond par
+        // position, et un groupe n'a pas d'id propre.
         const results = await categorizeBatch(
-          batch.map((t) => ({ id: t.id, description: t.description, amount: t.amount })),
+          batch.map((g, idx) => ({ id: idx, description: g.description, amount: g.amount })),
           settings,
           catPaths.length > 0 ? catPaths : undefined,
           rules,
           true
         )
-        const byId = new Map(batch.map((t) => [t.id, t]))
         for (const r of results) {
-          const t = byId.get(r.id)
-          if (t) proposals.push({ id: t.id, description: t.description, amount: t.amount, category: r.category })
+          const group = batch[r.id]
+          if (!group) continue
+          proposals.push({
+            merchant: group.merchant,
+            category: r.category,
+            confidence: r.confidence,
+            transactionIds: group.transactionIds,
+            description: group.description,
+            total: group.total
+          })
         }
       } catch (err) {
         console.error(`[categorize-ai] batch ${i + 1}/${batches} failed:`, err)
       }
 
-      event.sender.send('categorize-progress', {
-        done: Math.min((i + 1) * BATCH_SIZE, toProcess.length),
-        total: toProcess.length
-      })
+      onProgress(Math.min((i + 1) * BATCH_SIZE, groups.length), groups.length)
     }
 
+    return proposals
+  }
+
+  ipcMain.handle('categorize-ai', async (event, onlyUncategorized: boolean) => {
+    const proposals = await buildProposals(
+      (done, total) => event.sender.send('categorize-progress', { done, total }),
+      onlyUncategorized
+    )
     return { proposals }
+  })
+
+  // Mode automatique : applique d'office ce dont le modèle est sûr, et laisse
+  // le reste en revue. Sans clé API, on ne tente rien plutôt que de faire
+  // remonter une erreur après chaque import.
+  ipcMain.handle('categorize-ai-auto', async (event) => {
+    const settings = store.get('settings')
+    if (!settings.openrouterApiKey) return { applied: 0, pending: [] }
+
+    const proposals = await buildProposals(
+      (done, total) => event.sender.send('categorize-progress', { done, total }),
+      true
+    )
+
+    const sure = proposals.filter((p) => p.confidence >= AUTO_ACCEPT_CONFIDENCE)
+    const updates = sure.flatMap((p) =>
+      p.transactionIds.map((id) => ({ id, category: p.category }))
+    )
+    db.batchUpdateCategories(updates)
+
+    return {
+      applied: updates.length,
+      pending: proposals.filter((p) => p.confidence < AUTO_ACCEPT_CONFIDENCE)
+    }
   })
 
   ipcMain.handle('apply-categorization', (_, updates: { id: number; category: string }[]) => {
@@ -702,7 +770,7 @@ async function importPowens(
   const accountIds = [...accountIdByPowens.values()]
   const targetIds = new Set<number>(insertedIds)
   for (const id of db.getUncategorizedTransactionIds(accountIds)) targetIds.add(id)
-  const categorized = targetIds.size > 0 ? db.applyRulesToTransactions([...targetIds]) : 0
+  const categorized = targetIds.size > 0 ? db.autoCategorize([...targetIds]) : 0
   return { imported, duplicates, accounts: accounts.length, categorized, firstDate }
 }
 

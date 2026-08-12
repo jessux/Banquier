@@ -56,7 +56,9 @@ export async function applyRulesToTransactions(transactionIds: number[]): Promis
       for (const tx of rows) {
         for (const rule of compiled) {
           if (rule.regex.test(tx.description)) {
-            await run('UPDATE transactions SET category = ? WHERE id = ?', [rule.category, tx.id])
+            await run("UPDATE transactions SET category = ?, category_source = 'rule' WHERE id = ?", [
+              rule.category, tx.id
+            ])
             if (rule.category.toLowerCase().includes('intern')) {
               await run('UPDATE transactions SET is_internal = 1 WHERE id = ?', [tx.id])
             }

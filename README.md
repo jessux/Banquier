@@ -38,8 +38,10 @@ Les apps de gestion de budget en ligne sont pratiques — jusqu'au jour où elle
 |---|---|
 | 🚀 **Onboarding** | Assistant pas-à-pas : connexion Powens ou import manuel, transactions, catégorisation, IA |
 | 📥 **Import** | CSV et PDF depuis n'importe quelle banque française — le parsing est 100 % local, aucune donnée envoyée en ligne |
-| 🤖 **Catégorisation IA** | OpenRouter propose une catégorie par transaction (avec recherche web) ; vous cochez/corrigez les propositions avant qu'elles soient écrites en base — rien n'est appliqué automatiquement |
-| 📋 **Règles automatiques** | Motifs regex → catégorie ("AMAZON → Shopping"), appliqués à chaque import et rejouables à la demande |
+| 🧠 **Mémoire marchand** | Chaque catégorie que vous posez est retenue pour ce marchand et rejouée aux imports suivants : la même question ne se repose jamais. Un dictionnaire d'enseignes françaises embarqué couvre le premier import |
+| 🤖 **Catégorisation IA** | OpenRouter propose une catégorie par **marchand** restant (avec recherche web), avec un indice de confiance ; les propositions sûres sont pré-cochées, les douteuses signalées « à vérifier ». Rien n'est écrit sans votre validation, sauf si vous activez le mode automatique |
+| 📋 **Règles automatiques** | "Le libellé contient AMAZON → Shopping" (ou une regex si vous préférez), appliquées à chaque import et rejouables à la demande |
+| 🔄 **Virements internes** | Détection des mouvements entre vos propres comptes, qui gonflent artificiellement dépenses et revenus |
 | 🔍 **Filtres avancés** | Recherche, catégorie, compte, date, montant min/max, tags, virements internes |
 | 📄 **Pagination** | Affichage 75 transactions/page, tri serveur — fluide même sur 10 000+ entrées |
 | 📊 **Dashboard** | Dépenses, revenus, tendances mois par mois, répartition par catégorie, top marchands + aperçu des budgets |

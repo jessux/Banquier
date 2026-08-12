@@ -1,7 +1,7 @@
 import * as accounts from './api/accounts'
 import * as importsApi from './api/imports'
 import * as transactionsApi from './api/transactions'
-import * as rulesApi from './api/rules'
+import * as merchantMemoryApi from './api/merchantMemory'
 import * as notifications from './notifications'
 import {
   getAccounts as getPowensAccounts,
@@ -229,7 +229,7 @@ async function doImportPowens(
   const accountIds = [...accountIdByPowens.values()]
   const targetIds = new Set<number>(insertedIds)
   for (const id of await transactionsApi.getUncategorizedTransactionIds(accountIds)) targetIds.add(id)
-  const categorized = targetIds.size > 0 ? await rulesApi.applyRulesToTransactions([...targetIds]) : 0
+  const categorized = targetIds.size > 0 ? await merchantMemoryApi.autoCategorize([...targetIds]) : 0
 
   emitProgress('done', `${imported} nouvelle(s) transaction(s).`)
 

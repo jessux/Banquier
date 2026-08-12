@@ -39,7 +39,17 @@ const api = {
   deleteTransaction: (id: number) => ipcRenderer.invoke('delete-transaction', id),
   clearAllTransactions: () => ipcRenderer.invoke('clear-all-transactions'),
   findDuplicates: () => ipcRenderer.invoke('find-duplicates'),
+  findInternalTransfers: () => ipcRenderer.invoke('find-internal-transfers'),
+  markTransactionsInternal: (ids: number[]) =>
+    ipcRenderer.invoke('mark-transactions-internal', ids),
   getCategoryRulesAll: () => ipcRenderer.invoke('get-category-rules-all'),
+  getCategorizationStats: () => ipcRenderer.invoke('get-categorization-stats'),
+  getMerchantMemory: () => ipcRenderer.invoke('get-merchant-memory'),
+  forgetMerchantCategory: (merchantKey: string) =>
+    ipcRenderer.invoke('forget-merchant-category', merchantKey),
+  clearMerchantMemory: () => ipcRenderer.invoke('clear-merchant-memory'),
+  clearCategoriesBySource: (source: string) =>
+    ipcRenderer.invoke('clear-categories-by-source', source),
   deleteCategoryRule: (id: number) => ipcRenderer.invoke('delete-category-rule', id),
   updateCategoryRule: (id: number, pattern: string, category: string) =>
     ipcRenderer.invoke('update-category-rule', id, pattern, category),
@@ -79,6 +89,14 @@ const api = {
     const promise = ipcRenderer.invoke('categorize-ai', onlyUncategorized)
     promise.finally(() => ipcRenderer.removeAllListeners('categorize-progress'))
     return promise as Promise<{ proposals: CategorizationProposal[] }>
+  },
+  categorizeAiAuto: (onProgress: (done: number, total: number) => void) => {
+    const listener = (_e: unknown, p: { done: number; total: number }): void =>
+      onProgress(p.done, p.total)
+    ipcRenderer.on('categorize-progress', listener)
+    return ipcRenderer
+      .invoke('categorize-ai-auto')
+      .finally(() => ipcRenderer.removeListener('categorize-progress', listener))
   },
   applyCategorization: (updates: { id: number; category: string }[]) =>
     ipcRenderer.invoke('apply-categorization', updates) as Promise<number>,

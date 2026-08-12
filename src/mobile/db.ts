@@ -1,4 +1,5 @@
 import { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } from '@capacitor-community/sqlite'
+import { normalizeMerchant } from '../shared/merchant'
 
 const DB_NAME = 'banquier'
 
@@ -104,12 +105,18 @@ const SCHEMA_SQL = `
     import_id   INTEGER REFERENCES imports(id),
     is_internal INTEGER NOT NULL DEFAULT 0,
     note        TEXT,
-    tags        TEXT
+    tags        TEXT,
+    -- Libellé réduit au marchand (voir shared/merchant.ts) : clé de
+    -- regroupement pour la mémoire de catégorisation et la dédup LLM.
+    merchant_key TEXT,
+    -- Qui a posé la catégorie (voir CategorySource).
+    category_source TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
   CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
   CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
+  CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key);
 
   CREATE TABLE IF NOT EXISTS categories (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -122,6 +129,14 @@ const SCHEMA_SQL = `
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
     pattern  TEXT NOT NULL UNIQUE,
     category TEXT NOT NULL
+  );
+
+  -- Mémoire de catégorisation : voir src/main/database.ts.
+  CREATE TABLE IF NOT EXISTS merchant_categories (
+    merchant_key TEXT PRIMARY KEY,
+    category     TEXT NOT NULL,
+    count        INTEGER NOT NULL DEFAULT 1,
+    last_used    TEXT NOT NULL
   );
 
   CREATE TABLE IF NOT EXISTS excluded_powens_accounts (
@@ -270,13 +285,82 @@ async function rollbackRulePacksSchema(): Promise<void> {
   `)
 }
 
+/** Miroir de migrate() dans src/main/database.ts. */
+async function migrate(): Promise<void> {
+  const migrations = [
+    'ALTER TABLE transactions ADD COLUMN merchant_key TEXT',
+    'CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key)',
+    'ALTER TABLE transactions ADD COLUMN category_source TEXT'
+  ]
+  for (const sql of migrations) {
+    try { await exec(sql) } catch { /* colonne déjà présente */ }
+  }
+  await backfillMerchantKeys()
+}
+
+/** Miroir de backfillMerchantKeys() dans src/main/database.ts. */
+async function backfillMerchantKeys(): Promise<void> {
+  const rows = await all<{ id: number; description: string }>(
+    'SELECT id, description FROM transactions WHERE merchant_key IS NULL'
+  )
+  if (rows.length === 0) return
+
+  await transaction(async () => {
+    for (const row of rows) {
+      await run('UPDATE transactions SET merchant_key = ? WHERE id = ?', [
+        normalizeMerchant(row.description),
+        row.id
+      ])
+    }
+  })
+}
+
+/** Miroir de bootstrapMerchantMemory() dans src/main/database.ts. */
+async function bootstrapMerchantMemory(): Promise<void> {
+  const rows = await all<{ merchant_key: string; category: string; n: number; last_date: string }>(
+    `SELECT merchant_key, category, COUNT(*) AS n, MAX(date) AS last_date
+     FROM transactions
+     WHERE category IS NOT NULL AND category <> '' AND merchant_key IS NOT NULL AND merchant_key <> ''
+     GROUP BY merchant_key, category`
+  )
+  if (rows.length === 0) return
+
+  const best = new Map<string, { category: string; n: number; last_date: string }>()
+  for (const row of rows) {
+    const current = best.get(row.merchant_key)
+    const wins =
+      !current || row.n > current.n || (row.n === current.n && row.last_date > current.last_date)
+    if (wins) best.set(row.merchant_key, row)
+  }
+
+  await transaction(async () => {
+    for (const [key, entry] of best) {
+      await run(
+        `INSERT INTO merchant_categories (merchant_key, category, count, last_used)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(merchant_key) DO NOTHING`,
+        [key, entry.category, entry.n, entry.last_date]
+      )
+    }
+  })
+}
+
+async function tableExists(name: string): Promise<boolean> {
+  const row = await get("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?", [name])
+  return row != null
+}
+
 export async function initDatabase(): Promise<void> {
   const isConn = (await sqlite.isConnection(DB_NAME, false)).result
   db = isConn
     ? await sqlite.retrieveConnection(DB_NAME, false)
     : await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false)
   await db.open()
+  // Relevé avant la création des tables : la mémoire ne s'amorce qu'une fois.
+  const memoryWasMissing = !(await tableExists('merchant_categories'))
   await exec(SCHEMA_SQL)
   await rollbackRulePacksSchema()
+  await migrate()
   await seedCategories()
+  if (memoryWasMissing) await bootstrapMerchantMemory()
 }

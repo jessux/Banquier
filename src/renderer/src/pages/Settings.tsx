@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import CategorizationPanel from '../components/CategorizationPanel'
 import { dismiss as dismissPowensJob, startConnect, startSync, usePowensJob } from '../utils/powensJob'
 import type { Settings, MobileServerInfo, NotificationsStatus, PowensStatus } from '../../../shared/types'
 import type { Account } from '../../../shared/types'
@@ -617,6 +618,8 @@ export default function SettingsPage(): JSX.Element {
           </button>
         </div>
       </div>
+
+      <CategorizationPanel />
 
       {/* Export / Restauration */}
       <div className="card" style={{ marginBottom: 20 }}>

@@ -25,6 +25,9 @@ export interface Transaction {
   is_internal: number
   note: string | null
   tags: string | null
+  /** Libellé réduit au marchand, dérivé de `description` (voir shared/merchant.ts).
+   *  Calculé à l'insertion : absent des objets construits par les parsers. */
+  merchant_key?: string | null
 }
 
 export interface Import {
@@ -56,6 +59,8 @@ export interface ImportResult {
   duplicates: number
   errors: number
   importId: number
+  /** Catégorisées sans intervention à l'import (règles, mémoire, dictionnaire). */
+  categorized: number
 }
 
 export interface MonthlyStats {
@@ -112,6 +117,10 @@ export interface Settings {
   proxyUrl?: string
   /** Thème de l'interface. Par défaut : sombre. */
   theme?: 'dark' | 'light'
+  /** Lance la catégorisation IA après chaque import et applique d'office les
+   *  propositions sûres. Désactivé par défaut : la fonctionnalité appelle un
+   *  service externe et écrit sans validation ligne à ligne. */
+  autoCategorizeAi?: boolean
   /** Notifications système (Android). Par défaut : activées si la permission est accordée. */
   notificationsEnabled?: boolean
   /** Heure (0-23) du rappel quotidien de synchronisation. null/undefined = pas de rappel. */
@@ -134,7 +143,7 @@ export interface PowensSyncResult {
   imported: number
   duplicates: number
   accounts: number
-  /** Transactions automatiquement catégorisées par les règles lors de l'import. */
+  /** Transactions catégorisées sans intervention lors de l'import. */
   categorized: number
   /** Date la plus ancienne disponible côté Powens/banque (YYYY-MM-DD), null si inconnue. */
   firstDate?: string | null
@@ -369,6 +378,39 @@ export interface ChatMemory {
   created_at: string
 }
 
+/**
+ * Qui a posé la catégorie d'une transaction.
+ * `null` pour celles catégorisées avant l'introduction du suivi.
+ */
+export type CategorySource = 'user' | 'rule' | 'memory' | 'fuzzy' | 'dict' | 'ai'
+
+/** Une décision de catégorisation mémorisée pour un marchand. */
+export interface MerchantMemoryEntry {
+  merchant_key: string
+  category: string
+  /** Nombre de décisions enregistrées pour ce marchand. */
+  count: number
+  last_used: string
+}
+
+/**
+ * Mesure de la pénibilité restante : la part des transactions catégorisées
+ * sans que l'utilisateur ait eu à intervenir.
+ */
+export interface CategorizationStats {
+  total: number
+  categorized: number
+  uncategorized: number
+  /** Posées par les règles, la mémoire, le rattrapage flou ou le dictionnaire. */
+  automatic: number
+  /** Posées à la main, ou via une proposition IA validée une par une. */
+  manual: number
+  /** Catégorisées avant l'introduction du suivi de provenance. */
+  unknownSource: number
+  /** automatic / (automatic + manual), de 0 à 1. null si rien n'est catégorisé. */
+  automaticRate: number | null
+}
+
 export interface MerchantStats {
   merchant: string
   total: number
@@ -396,11 +438,26 @@ export interface UncategorizedSummary {
 }
 
 /** Suggestion de catégorie IA en attente de validation par l'utilisateur. */
+/**
+ * Proposition de catégorie pour un **marchand**, pas pour une transaction.
+ *
+ * Le LLM ne voit qu'un représentant par marchand : un relevé de 300 lignes
+ * inconnues ne contient souvent qu'une quinzaine de marchands distincts. La
+ * proposition s'applique ensuite à toutes les transactions du groupe — ce qui
+ * divise d'autant le coût de l'appel et le nombre de décisions à prendre.
+ */
 export interface CategorizationProposal {
-  id: number
-  description: string
-  amount: number
+  /** Clé marchand (voir shared/merchant.ts). */
+  merchant: string
   category: string
+  /** Confiance déclarée par le modèle, de 0 à 1. */
+  confidence: number
+  /** Transactions auxquelles la proposition s'appliquera. */
+  transactionIds: number[]
+  /** Libellé d'une transaction du groupe, pour reconnaître le marchand. */
+  description: string
+  /** Somme signée des montants concernés — sert aussi à trier par impact. */
+  total: number
 }
 
 export interface NetBalance {

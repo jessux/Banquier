@@ -4,6 +4,9 @@ import type {
   Import,
   Category,
   CategoryRule,
+  CategorizationStats,
+  CategorySource,
+  MerchantMemoryEntry,
   TransactionFilters,
   CsvMapping,
   CsvPreview,
@@ -72,7 +75,16 @@ declare global {
       renameCategory: (id: number, name: string) => Promise<void>
 
       // Category rules
+      findInternalTransfers: () => Promise<{ debit: Transaction; credit: Transaction }[]>
+      markTransactionsInternal: (ids: number[]) => Promise<number>
       getCategoryRulesAll: () => Promise<CategoryRule[]>
+
+      // Mémoire marchand & pilotage de la catégorisation
+      getCategorizationStats: () => Promise<CategorizationStats>
+      getMerchantMemory: () => Promise<MerchantMemoryEntry[]>
+      forgetMerchantCategory: (merchantKey: string) => Promise<void>
+      clearMerchantMemory: () => Promise<void>
+      clearCategoriesBySource: (source: CategorySource) => Promise<number>
       deleteCategoryRule: (id: number) => Promise<void>
       updateCategoryRule: (id: number, pattern: string, category: string) => Promise<void>
       upsertCategoryRule: (pattern: string, category: string) => Promise<void>
@@ -115,6 +127,10 @@ declare global {
         onlyUncategorized: boolean,
         onProgress: (done: number, total: number) => void
       ) => Promise<{ proposals: CategorizationProposal[] }>
+      /** Mode automatique : applique les propositions sûres, renvoie le reste à valider. */
+      categorizeAiAuto: (
+        onProgress: (done: number, total: number) => void
+      ) => Promise<{ applied: number; pending: CategorizationProposal[] }>
       applyCategorization: (updates: { id: number; category: string }[]) => Promise<number>
 
       // Chat threads

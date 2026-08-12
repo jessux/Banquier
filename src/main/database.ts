@@ -16,6 +16,9 @@ import type {
   ChatMemory,
   StoredChatMessage,
   MerchantStats,
+  MerchantMemoryEntry,
+  CategorizationStats,
+  CategorySource,
   PeriodComparison,
   PeriodComparisonRow,
   UncategorizedSummary,
@@ -32,6 +35,9 @@ import type {
   DcaPlan,
   DcaPlanInput
 } from '../shared/types'
+import { normalizeMerchant } from '../shared/merchant'
+import { lookupMerchantDictionary } from '../shared/merchantDictionary'
+import { findFuzzyCategory, type RememberedMerchant } from '../shared/categorization'
 
 let db: Database
 let activeDbPath = ''
@@ -49,11 +55,27 @@ export function initDatabase(dbPath?: string): void {
   }
   activeDbPath = dbPath ?? path.join(app.getPath('userData'), 'banquier.db')
   db = new Database(activeDbPath)
+  prepareSchema()
+}
+
+/** Mise en état du schéma sur une connexion fraîchement ouverte. Partagée par
+ *  initDatabase() et restoreDb(), qui doivent aboutir à une base identique. */
+function prepareSchema(): void {
   db.exec('PRAGMA journal_mode = WAL')
   db.exec('PRAGMA foreign_keys = ON')
+  // La mémoire marchand s'amorce à partir de l'historique déjà catégorisé, mais
+  // une seule fois : si l'utilisateur la vide volontairement ensuite, on ne la
+  // repeuple pas au démarrage suivant. D'où le relevé *avant* createTables().
+  const memoryWasMissing = !tableExists('merchant_categories')
   createTables()
   migrate()
   seedCategories()
+  if (memoryWasMissing) bootstrapMerchantMemory()
+}
+
+function tableExists(name: string): boolean {
+  // `get` renvoie null (pas undefined) quand aucune ligne ne correspond.
+  return db.get("SELECT 1 AS ok FROM sqlite_master WHERE type = 'table' AND name = ?", [name]) != null
 }
 
 export function closeDatabase(): void {
@@ -69,11 +91,42 @@ function migrate(): void {
     'ALTER TABLE transactions ADD COLUMN tags TEXT',
     'ALTER TABLE chat_messages ADD COLUMN reasoning TEXT',
     'ALTER TABLE accounts ADD COLUMN balance REAL',
+    'ALTER TABLE transactions ADD COLUMN merchant_key TEXT',
+    'CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key)',
+    'ALTER TABLE transactions ADD COLUMN category_source TEXT',
   ]
   for (const sql of migrations) {
     try { db.exec(sql) } catch { /* column already exists */ }
   }
   rollbackRulePacksSchema()
+  backfillMerchantKeys()
+}
+
+/**
+ * Renseigne `merchant_key` pour les transactions qui n'en ont pas encore :
+ * celles importées avant l'introduction de la colonne. Idempotent et borné par
+ * le nombre de lignes concernées — il ne reste plus rien à faire une fois la
+ * base à jour, donc le coût au démarrage retombe à une seule requête.
+ */
+function backfillMerchantKeys(): void {
+  const rows = db.all(
+    'SELECT id, description FROM transactions WHERE merchant_key IS NULL'
+  ) as { id: number; description: string }[]
+  if (rows.length === 0) return
+
+  db.exec('BEGIN')
+  try {
+    for (const row of rows) {
+      db.run('UPDATE transactions SET merchant_key = ? WHERE id = ?', [
+        normalizeMerchant(row.description),
+        row.id
+      ])
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
 }
 
 /**
@@ -148,12 +201,20 @@ function createTables(): void {
       description TEXT NOT NULL,
       amount      REAL NOT NULL,
       category    TEXT,
-      import_id   INTEGER REFERENCES imports(id)
+      import_id   INTEGER REFERENCES imports(id),
+      -- Libellé réduit au marchand (voir shared/merchant.ts) : clé de
+      -- regroupement pour la mémoire de catégorisation et la dédup LLM.
+      merchant_key TEXT,
+      -- Qui a posé la catégorie (voir CategorySource) : permet d'afficher le
+      -- taux d'automatisation et d'annuler en bloc une vague mal partie.
+      -- NULL pour les transactions catégorisées avant l'introduction du suivi.
+      category_source TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
     CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
     CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
+    CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key);
 
     CREATE TABLE IF NOT EXISTS categories (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -166,6 +227,16 @@ function createTables(): void {
       id       INTEGER PRIMARY KEY AUTOINCREMENT,
       pattern  TEXT NOT NULL UNIQUE,
       category TEXT NOT NULL
+    );
+
+    -- Mémoire de catégorisation : ce que l'utilisateur a déjà décidé pour un
+    -- marchand donné. Consultée à chaque import pour ne plus reposer la
+    -- question. La dernière décision fait foi (voir rememberMerchantCategory).
+    CREATE TABLE IF NOT EXISTS merchant_categories (
+      merchant_key TEXT PRIMARY KEY,
+      category     TEXT NOT NULL,
+      count        INTEGER NOT NULL DEFAULT 1,
+      last_used    TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS chat_threads (
@@ -398,8 +469,11 @@ export function insertTransactions(
         duplicates++
       } else {
         const result = db.run(
-          'INSERT INTO transactions (account_id, date, description, amount, category, import_id) VALUES (?, ?, ?, ?, ?, ?)',
-          [row.account_id ?? null, row.date, row.description, row.amount, row.category ?? null, importId]
+          'INSERT INTO transactions (account_id, date, description, amount, category, import_id, merchant_key) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          [
+            row.account_id ?? null, row.date, row.description, row.amount,
+            row.category ?? null, importId, normalizeMerchant(row.description)
+          ]
         )
         insertedIds.push(result.lastInsertRowid as number)
         imported++
@@ -422,13 +496,28 @@ export function setTransactionTags(id: number, tags: string | null): void {
   db.run('UPDATE transactions SET tags = ? WHERE id = ?', [tags || null, id])
 }
 
+/**
+ * Pose la catégorie choisie par l'utilisateur, et la mémorise pour le marchand.
+ *
+ * Deux portées distinctes, à ne pas confondre :
+ * - la mémoire agit sur le **futur** (imports suivants), toujours ;
+ * - `applyToSimilar` agit sur le **passé**, sur demande explicite.
+ *
+ * « Similaire » se juge sur la clé marchand et non plus sur l'égalité stricte
+ * du libellé : un libellé réel embarquant date et référence, l'égalité stricte
+ * ne rattrapait quasiment jamais rien.
+ */
 export function updateTransactionCategory(id: number, category: string, applyToSimilar = false): void {
-  db.run('UPDATE transactions SET category = ? WHERE id = ?', [category, id])
-  if (applyToSimilar) {
-    const tx = db.get('SELECT description FROM transactions WHERE id = ?', [id]) as { description: string } | undefined
-    if (tx?.description) {
-      db.run('UPDATE transactions SET category = ? WHERE description = ?', [category, tx.description])
-    }
+  const tx = db.get('SELECT merchant_key FROM transactions WHERE id = ?', [id]) as
+    { merchant_key: string | null } | undefined
+
+  db.run("UPDATE transactions SET category = ?, category_source = 'user' WHERE id = ?", [category, id])
+  rememberMerchantCategory(tx?.merchant_key, category)
+
+  if (applyToSimilar && tx?.merchant_key) {
+    db.run("UPDATE transactions SET category = ?, category_source = 'user' WHERE merchant_key = ?", [
+      category, tx.merchant_key
+    ])
   }
 }
 
@@ -445,13 +534,15 @@ export function countTransactionsByPattern(pattern: string): number {
 export function updateCategoryByPattern(category: string, pattern: string): number {
   try {
     const regex = new RegExp(pattern, 'i')
-    const rows = db.all('SELECT id, description FROM transactions') as { id: number; description: string }[]
+    const rows = db.all('SELECT id, description, merchant_key FROM transactions') as
+      { id: number; description: string; merchant_key: string | null }[]
     const matched = rows.filter((r) => regex.test(r.description))
     if (matched.length === 0) return 0
     db.exec('BEGIN')
     try {
       for (const t of matched) {
-        db.run('UPDATE transactions SET category = ? WHERE id = ?', [category, t.id])
+        db.run("UPDATE transactions SET category = ?, category_source = 'rule' WHERE id = ?", [category, t.id])
+        rememberMerchantCategory(t.merchant_key, category)
       }
       db.exec('COMMIT')
     } catch (e) {
@@ -464,12 +555,18 @@ export function updateCategoryByPattern(category: string, pattern: string): numb
   }
 }
 
+/** Applique un lot de catégories validées (propositions IA acceptées). Chaque
+ *  validation nourrit la mémoire marchand : c'est ce qui évite de refaire
+ *  valider le même marchand au prochain relevé. */
 export function batchUpdateCategories(updates: { id: number; category: string }[]): void {
   if (updates.length === 0) return
   db.exec('BEGIN')
   try {
     for (const u of updates) {
-      db.run('UPDATE transactions SET category = ? WHERE id = ?', [u.category, u.id])
+      const tx = db.get('SELECT merchant_key FROM transactions WHERE id = ?', [u.id]) as
+        { merchant_key: string | null } | undefined
+      db.run("UPDATE transactions SET category = ?, category_source = 'ai' WHERE id = ?", [u.category, u.id])
+      rememberMerchantCategory(tx?.merchant_key, u.category)
     }
     db.exec('COMMIT')
   } catch (e) {
@@ -965,6 +1062,9 @@ export function renameCategory(id: number, name: string): void {
       const escapedOld = old.replace(/[\\%_]/g, '\\$&')
       db.run('UPDATE transactions SET category = ? WHERE category = ?', [newName, old])
       db.run('UPDATE category_rules SET category = ? WHERE category = ?', [newName, old])
+      // Sans cela la mémoire continuerait de désigner l'ancien nom et le
+      // ressusciterait au prochain import.
+      db.run('UPDATE merchant_categories SET category = ? WHERE category = ?', [newName, old])
 
       const subRows = db.all(
         "SELECT id, category FROM transactions WHERE category LIKE ? ESCAPE '\\'",
@@ -984,6 +1084,15 @@ export function renameCategory(id: number, name: string): void {
           newName + row.category.slice(old.length), row.id
         ])
       }
+      const memoryRows = db.all(
+        "SELECT merchant_key, category FROM merchant_categories WHERE category LIKE ? ESCAPE '\\'",
+        [escapedOld + ' > %']
+      ) as { merchant_key: string; category: string }[]
+      for (const row of memoryRows) {
+        db.run('UPDATE merchant_categories SET category = ? WHERE merchant_key = ?', [
+          newName + row.category.slice(old.length), row.merchant_key
+        ])
+      }
     } else {
       // Sub-category rename: update "Parent > OldName"
       const parent = db.get('SELECT name FROM categories WHERE id = ?', [cat.parent_id]) as
@@ -993,6 +1102,7 @@ export function renameCategory(id: number, name: string): void {
         const newPath = `${parent.name} > ${newName}`
         db.run('UPDATE transactions SET category = ? WHERE category = ?', [newPath, oldPath])
         db.run('UPDATE category_rules SET category = ? WHERE category = ?', [newPath, oldPath])
+        db.run('UPDATE merchant_categories SET category = ? WHERE category = ?', [newPath, oldPath])
       }
     }
 
@@ -1015,6 +1125,196 @@ export function setTransactionInternalByCategory(category: string, isInternal: b
     [isInternal ? 1 : 0, category, `${escaped} > %`]
   )
   return result.changes as number
+}
+
+// --- Mémoire marchand ---
+//
+// Ce que l'utilisateur a déjà décidé pour un marchand donné, rejoué
+// automatiquement aux imports suivants. C'est le mécanisme qui fait qu'une
+// correction ne se redemande jamais : sans lui, chaque relevé repose les mêmes
+// questions puisque les libellés bancaires ne se répètent jamais à l'identique.
+
+/**
+ * Enregistre la décision de l'utilisateur pour un marchand.
+ *
+ * La dernière décision fait foi : quand la catégorie diffère de celle en
+ * mémoire, elle la remplace au lieu de voter à la majorité. Un utilisateur qui
+ * vient de corriger attend que sa correction tienne, pas qu'elle soit
+ * minoritaire face à l'historique. `count` reste le nombre de décisions
+ * enregistrées, pour pouvoir présenter les marchands les plus établis.
+ */
+export function rememberMerchantCategory(
+  merchantKey: string | null | undefined,
+  category: string
+): void {
+  const key = (merchantKey ?? '').trim()
+  const cat = category.trim()
+  if (!key || !cat) return
+
+  db.run(
+    `INSERT INTO merchant_categories (merchant_key, category, count, last_used)
+     VALUES (?, ?, 1, ?)
+     ON CONFLICT(merchant_key) DO UPDATE SET
+       category  = excluded.category,
+       count     = merchant_categories.count + 1,
+       last_used = excluded.last_used`,
+    [key, cat, new Date().toISOString()]
+  )
+}
+
+/**
+ * Applique la mémoire aux transactions données. Ne touche que celles sans
+ * catégorie : la mémoire complète le travail, elle ne réécrit jamais par-dessus
+ * un choix déjà posé.
+ */
+export function applyMerchantMemory(transactionIds: number[]): number {
+  if (transactionIds.length === 0) return 0
+
+  const CHUNK = 200
+  let updated = 0
+
+  db.exec('BEGIN')
+  try {
+    for (let offset = 0; offset < transactionIds.length; offset += CHUNK) {
+      const chunk = transactionIds.slice(offset, offset + CHUNK)
+      const placeholders = chunk.map(() => '?').join(',')
+      const rows = db.all(
+        `SELECT t.id, m.category
+         FROM transactions t
+         JOIN merchant_categories m ON m.merchant_key = t.merchant_key
+         WHERE t.id IN (${placeholders}) AND t.category IS NULL`,
+        chunk
+      ) as { id: number; category: string }[]
+
+      for (const row of rows) {
+        db.run("UPDATE transactions SET category = ?, category_source = 'memory' WHERE id = ?", [
+          row.category, row.id
+        ])
+        // Même convention que les règles : une catégorie « interne » marque
+        // aussi la transaction comme virement interne.
+        if (row.category.toLowerCase().includes('intern')) {
+          db.run('UPDATE transactions SET is_internal = 1 WHERE id = ?', [row.id])
+        }
+        updated++
+      }
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
+
+  return updated
+}
+
+export function getMerchantMemory(): MerchantMemoryEntry[] {
+  return db.all(
+    'SELECT merchant_key, category, count, last_used FROM merchant_categories ORDER BY count DESC, merchant_key'
+  ) as MerchantMemoryEntry[]
+}
+
+export function forgetMerchantCategory(merchantKey: string): void {
+  db.run('DELETE FROM merchant_categories WHERE merchant_key = ?', [merchantKey])
+}
+
+export function clearMerchantMemory(): void {
+  db.exec('DELETE FROM merchant_categories')
+}
+
+/** Sources considérées comme automatiques : posées sans intervention. */
+const AUTOMATIC_SOURCES = ['rule', 'memory', 'fuzzy', 'dict']
+
+/**
+ * Taux d'automatisation de la catégorisation — la mesure qui dit si la
+ * pénibilité a réellement baissé, là où la précision d'un modèle ne le dit pas.
+ */
+export function getCategorizationStats(): CategorizationStats {
+  const placeholders = AUTOMATIC_SOURCES.map(() => '?').join(',')
+  const row = db.get(
+    `SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN category IS NOT NULL AND category <> '' THEN 1 ELSE 0 END) AS categorized,
+       SUM(CASE WHEN category IS NOT NULL AND category <> ''
+                 AND category_source IN (${placeholders}) THEN 1 ELSE 0 END) AS automatic,
+       SUM(CASE WHEN category IS NOT NULL AND category <> ''
+                 AND category_source IS NOT NULL
+                 AND category_source NOT IN (${placeholders}) THEN 1 ELSE 0 END) AS manual
+     FROM transactions`,
+    [...AUTOMATIC_SOURCES, ...AUTOMATIC_SOURCES]
+  ) as { total: number; categorized: number; automatic: number; manual: number }
+
+  const total = row.total ?? 0
+  const categorized = row.categorized ?? 0
+  const automatic = row.automatic ?? 0
+  const manual = row.manual ?? 0
+  const decided = automatic + manual
+
+  return {
+    total,
+    categorized,
+    uncategorized: total - categorized,
+    automatic,
+    manual,
+    // Les transactions catégorisées avant le suivi n'ont pas de provenance :
+    // les compter d'un côté ou de l'autre fausserait le taux, on les isole.
+    unknownSource: categorized - decided,
+    automaticRate: decided > 0 ? automatic / decided : null
+  }
+}
+
+/**
+ * Retire les catégories posées par une source donnée, sans toucher aux choix de
+ * l'utilisateur. C'est le filet de sécurité d'une vague automatique mal partie :
+ * un dictionnaire qui se trompe ou une mémoire polluée se défont en un geste.
+ */
+export function clearCategoriesBySource(source: CategorySource): number {
+  const result = db.run(
+    'UPDATE transactions SET category = NULL, category_source = NULL WHERE category_source = ?',
+    [source]
+  )
+  return result.changes as number
+}
+
+/**
+ * Amorce la mémoire à partir de l'historique déjà catégorisé, à la création de
+ * la table. Sans cela, un utilisateur qui a classé 2 000 transactions à la main
+ * repartirait de zéro et se verrait reposer toutes les questions.
+ *
+ * Pour un marchand classé dans plusieurs catégories au fil du temps, la
+ * catégorie la plus fréquente l'emporte ; à égalité, la plus récente.
+ */
+function bootstrapMerchantMemory(): void {
+  const rows = db.all(
+    `SELECT merchant_key, category, COUNT(*) AS n, MAX(date) AS last_date
+     FROM transactions
+     WHERE category IS NOT NULL AND category <> '' AND merchant_key IS NOT NULL AND merchant_key <> ''
+     GROUP BY merchant_key, category`
+  ) as { merchant_key: string; category: string; n: number; last_date: string }[]
+  if (rows.length === 0) return
+
+  const best = new Map<string, { category: string; n: number; last_date: string }>()
+  for (const row of rows) {
+    const current = best.get(row.merchant_key)
+    const wins =
+      !current || row.n > current.n || (row.n === current.n && row.last_date > current.last_date)
+    if (wins) best.set(row.merchant_key, row)
+  }
+
+  db.exec('BEGIN')
+  try {
+    for (const [key, entry] of best) {
+      db.run(
+        `INSERT INTO merchant_categories (merchant_key, category, count, last_used)
+         VALUES (?, ?, ?, ?)
+         ON CONFLICT(merchant_key) DO NOTHING`,
+        [key, entry.category, entry.n, entry.last_date]
+      )
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
 }
 
 // --- Category rules ---
@@ -1052,6 +1352,66 @@ export function findDuplicateTransactions(): Transaction[][] {
       [g.date, g.amount, g.description]
     ) as Transaction[]
   )
+}
+
+/** Écart maximal entre les deux faces d'un virement interne : la banque
+ *  émettrice et la banque réceptrice ne datent pas toujours l'opération du
+ *  même jour. */
+const INTERNAL_TRANSFER_MAX_DAYS = 3
+
+/**
+ * Repère les virements entre comptes de l'utilisateur : un débit sur un compte
+ * et le crédit exactement opposé sur un autre, à quelques jours près.
+ *
+ * Ces opérations gonflent artificiellement dépenses et revenus. Les marquer une
+ * par une est un travail manuel entier, purement mécanique.
+ *
+ * Rien n'est marqué ici : les paires sont rendues pour validation, comme pour
+ * les doublons. Un faux positif — une dépense et un remboursement du même
+ * montant à quelques jours d'écart — sortirait sinon silencieusement des
+ * statistiques.
+ */
+export function findInternalTransferCandidates(): { debit: Transaction; credit: Transaction }[] {
+  const rows = db.all(
+    `SELECT * FROM transactions
+     WHERE is_internal = 0 AND account_id IS NOT NULL
+     ORDER BY date`
+  ) as Transaction[]
+
+  const credits = rows.filter((t) => t.amount > 0)
+  const pairs: { debit: Transaction; credit: Transaction }[] = []
+  const used = new Set<number>()
+
+  for (const debit of rows) {
+    if (debit.amount >= 0 || used.has(debit.id)) continue
+
+    const match = credits.find(
+      (credit) =>
+        !used.has(credit.id) &&
+        credit.account_id !== debit.account_id &&
+        Math.abs(credit.amount + debit.amount) < 0.005 && // montants exactement opposés
+        Math.abs(Date.parse(credit.date) - Date.parse(debit.date)) <=
+          INTERNAL_TRANSFER_MAX_DAYS * 86_400_000
+    )
+    if (!match) continue
+
+    used.add(debit.id)
+    used.add(match.id)
+    pairs.push({ debit, credit: match })
+  }
+
+  return pairs
+}
+
+/** Marque les deux faces des virements confirmés par l'utilisateur. */
+export function markTransactionsInternal(ids: number[]): number {
+  if (ids.length === 0) return 0
+  const placeholders = ids.map(() => '?').join(',')
+  const result = db.run(
+    `UPDATE transactions SET is_internal = 1 WHERE id IN (${placeholders})`,
+    ids
+  )
+  return result.changes as number
 }
 
 export function deleteTransaction(id: number): void {
@@ -1230,11 +1590,7 @@ export function restoreDb(sourcePath: string): void {
   db.close()
   fs.copyFileSync(sourcePath, activeDbPath)
   db = new Database(activeDbPath)
-  db.exec('PRAGMA journal_mode = WAL')
-  db.exec('PRAGMA foreign_keys = ON')
-  createTables()
-  migrate()
-  seedCategories()
+  prepareSchema()
 }
 
 export function exportTransactionsToCsv(): string {
@@ -1259,23 +1615,6 @@ export function exportTransactionsToCsv(): string {
 }
 
 // --- Analyse avancée (outils IA) ---
-
-const MERCHANT_NOISE =
-  /\b(CB|CARTE|PAIEMENT|PAIMT|ACHAT|RETRAIT|DU|LE|FACTURE|FACT|PRLV|PRELEVEMENT|PRELVT|VIR|VIREMENT|SEPA|REF|MANDAT|ID|EUR)\b/g
-
-function normalizeMerchant(desc: string): string {
-  const cleaned = desc
-    .toUpperCase()
-    .replace(/[0-9]+([./-][0-9]+)*/g, ' ') // dates, montants, références numériques
-    .replace(MERCHANT_NOISE, ' ')
-    .replace(/[^A-ZÀ-Ü ]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .split(' ')
-    .slice(0, 4)
-    .join(' ')
-  return cleaned || desc.trim().slice(0, 30).toUpperCase()
-}
 
 export function getTopMerchants(startDate?: string, endDate?: string, limit = 15): MerchantStats[] {
   const conditions = ['amount < 0', 'is_internal = 0']
@@ -1658,6 +1997,139 @@ export function getUncategorizedTransactionIds(accountIds: number[]): number[] {
   return rows.map((r) => r.id)
 }
 
+/**
+ * Cascade de catégorisation automatique, à confiance décroissante.
+ *
+ * Point d'entrée unique de tout ce qui catégorise sans intervention : imports
+ * CSV/PDF, synchro Powens, et première passe avant l'IA. Les couches suivantes
+ * (dictionnaire embarqué, repli flou) viendront s'y ajouter, sans avoir à
+ * retoucher les appelants.
+ *
+ * 1. règles de l'utilisateur — explicites, elles priment et peuvent réécrire ;
+ * 2. mémoire marchand — ses décisions passées, sur les seules non catégorisées.
+ */
+export function autoCategorize(transactionIds: number[]): number {
+  if (transactionIds.length === 0) return 0
+  return (
+    applyRulesToTransactions(transactionIds) +
+    applyMerchantMemory(transactionIds) +
+    applyFuzzyMerchantMemory(transactionIds) +
+    applyMerchantDictionary(transactionIds)
+  )
+}
+
+/**
+ * Rattrape les marchands proches de ceux déjà décidés (voir findFuzzyCategory).
+ *
+ * Passe **avant** le dictionnaire embarqué : un choix de l'utilisateur, même
+ * rapproché de façon approximative, vaut mieux qu'une liste générique livrée
+ * avec l'application. Sinon un utilisateur qui classe volontairement
+ * « CARREFOUR MARKET PARIS » en Shopping verrait le magasin de la ville d'à
+ * côté repartir en Alimentation.
+ */
+export function applyFuzzyMerchantMemory(transactionIds: number[]): number {
+  if (transactionIds.length === 0) return 0
+
+  const memory = db.all(
+    'SELECT merchant_key, category, count FROM merchant_categories'
+  ) as RememberedMerchant[]
+  if (memory.length === 0) return 0
+
+  const CHUNK = 200
+  let updated = 0
+
+  db.exec('BEGIN')
+  try {
+    for (let offset = 0; offset < transactionIds.length; offset += CHUNK) {
+      const chunk = transactionIds.slice(offset, offset + CHUNK)
+      const placeholders = chunk.map(() => '?').join(',')
+      const rows = db.all(
+        `SELECT id, merchant_key FROM transactions
+         WHERE id IN (${placeholders}) AND category IS NULL AND merchant_key IS NOT NULL`,
+        chunk
+      ) as { id: number; merchant_key: string }[]
+
+      for (const row of rows) {
+        const category = findFuzzyCategory(row.merchant_key, memory)
+        if (!category) continue
+        db.run("UPDATE transactions SET category = ?, category_source = 'fuzzy' WHERE id = ?", [
+          category, row.id
+        ])
+        updated++
+      }
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
+
+  return updated
+}
+
+/**
+ * Applique le dictionnaire d'enseignes embarqué aux transactions encore sans
+ * catégorie. Il couvre le premier import, quand la mémoire est vide.
+ *
+ * Le résultat n'est **pas** écrit en mémoire marchand : le dictionnaire est
+ * déterministe et rejoué à chaque import, l'y recopier créerait une seconde
+ * source de vérité qu'une correction ultérieure du dictionnaire ne pourrait
+ * plus rattraper.
+ */
+export function applyMerchantDictionary(transactionIds: number[]): number {
+  if (transactionIds.length === 0) return 0
+
+  const known = new Set(getCategoryPaths())
+  const CHUNK = 200
+  let updated = 0
+
+  db.exec('BEGIN')
+  try {
+    for (let offset = 0; offset < transactionIds.length; offset += CHUNK) {
+      const chunk = transactionIds.slice(offset, offset + CHUNK)
+      const placeholders = chunk.map(() => '?').join(',')
+      const rows = db.all(
+        `SELECT id, merchant_key, amount FROM transactions
+         WHERE id IN (${placeholders}) AND category IS NULL AND merchant_key IS NOT NULL`,
+        chunk
+      ) as { id: number; merchant_key: string; amount: number }[]
+
+      for (const row of rows) {
+        const proposed = lookupMerchantDictionary(row.merchant_key, row.amount)
+        if (!proposed) continue
+        const category = resolveKnownCategory(proposed, known)
+        if (!category) continue
+        db.run("UPDATE transactions SET category = ?, category_source = 'dict' WHERE id = ?", [
+          category, row.id
+        ])
+        updated++
+      }
+    }
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
+
+  return updated
+}
+
+/**
+ * Ramène une catégorie du dictionnaire à celles qui existent réellement chez
+ * l'utilisateur : il a pu supprimer ou renommer une sous-catégorie par défaut.
+ * On retombe alors sur la catégorie parente plutôt que d'inventer une entrée
+ * fantôme qui n'apparaîtrait dans aucun filtre ni budget.
+ */
+function resolveKnownCategory(category: string, known: Set<string>): string | null {
+  if (known.has(category)) return category
+  const sep = category.indexOf(' > ')
+  if (sep !== -1) {
+    const parent = category.slice(0, sep)
+    if (known.has(parent)) return parent
+  }
+  return null
+}
+
 export function applyRulesToTransactions(transactionIds: number[]): number {
   if (transactionIds.length === 0) return 0
   const rules = getCategoryRules()
@@ -1685,7 +2157,9 @@ export function applyRulesToTransactions(transactionIds: number[]): number {
       for (const tx of rows) {
         for (const rule of compiled) {
           if (rule.regex.test(tx.description)) {
-            db.run('UPDATE transactions SET category = ? WHERE id = ?', [rule.category, tx.id])
+            db.run("UPDATE transactions SET category = ?, category_source = 'rule' WHERE id = ?", [
+              rule.category, tx.id
+            ])
             if (rule.category.toLowerCase().includes('intern')) {
               db.run('UPDATE transactions SET is_internal = 1 WHERE id = ?', [tx.id])
             }
