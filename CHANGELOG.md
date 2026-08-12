@@ -6,7 +6,6 @@
 ### Nouvelles fonctionnalités
 
 * **regles:** packs de categories et de regles communautaires ([f8fbc25](https://github.com/jessux/Banquier/commit/f8fbc2516dabcf0858e60dfed856d46ff018c85b))
-* **regles:** packs de categories et de regles communautaires ([44058b5](https://github.com/jessux/Banquier/commit/44058b5c32c9c97f1d516777c088027bc72f3b30))
 
 
 ### Corrections de bugs
