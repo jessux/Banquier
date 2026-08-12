@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.34.2](https://github.com/jessux/Banquier/compare/v1.34.1...v1.34.2) (2026-08-12)
+
+
+### Corrections de bugs
+
+* corrige "no such column: merchant_key" au démarrage sur base existante ([811891f](https://github.com/jessux/Banquier/commit/811891f855b4bdf27c1f07697777a19f131df314))
+* corrige "no such column: merchant_key" au démarrage sur base existante ([bc40e31](https://github.com/jessux/Banquier/commit/bc40e316dc55a3356fb76c9d914f0467b37f2742))
+
 ## [1.34.1](https://github.com/jessux/Banquier/compare/v1.34.0...v1.34.1) (2026-08-12)
 
 
