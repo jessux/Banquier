@@ -7,7 +7,19 @@
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'" />
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Contenu de secours affiché avant le montage de React (initialisation
+         mobile comprise) : sans lui, le fond sombre de styles.css apparaît nu
+         dès le chargement du CSS, indiscernable d'un blocage. Remplacé
+         intégralement dès que React (ou main.tsx en cas d'échec) rend dans
+         #root — aucun nettoyage à faire ici. -->
+    <div id="root">
+      <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#0b0c10">
+        <div style="width:28px;height:28px;border-radius:50%;border:3px solid #2e3147;border-top-color:#6366f1;animation:boot-spin 0.8s linear infinite"></div>
+      </div>
+    </div>
+    <style>
+      @keyframes boot-spin { to { transform: rotate(360deg) } }
+    </style>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

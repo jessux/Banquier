@@ -71,6 +71,35 @@ export function transaction<T>(fn: () => Promise<T>): Promise<T> {
   return result
 }
 
+/** Nombre d'instructions par lot natif. `executeSet` accepte un tableau
+ *  arbitraire, mais des lots trop gros risquent de saturer le pont Capacitor
+ *  sur un très gros historique — on chunke par prudence. */
+const BATCH_CHUNK = 300
+
+/**
+ * Exécute un lot d'instructions en un seul aller-retour natif, au lieu d'un
+ * `run()` par ligne.
+ *
+ * Chaque `run()` traverse le pont JS↔natif Capacitor : sur desktop (SQLite en
+ * process, via node-sqlite3-wasm) une boucle de milliers d'appels est quasi
+ * instantanée, mais sur mobile chaque aller-retour coûte plusieurs
+ * millisecondes. Une migration qui parcourt tout l'historique de transactions
+ * ligne par ligne peut ainsi prendre des dizaines de secondes à plusieurs
+ * minutes — bloquant l'affichage puisque `initDatabase()` est attendu avant le
+ * montage de React (voir `installMobileApi` / `main.tsx`).
+ */
+async function runBatch(statements: { statement: string; values: unknown[] }[]): Promise<void> {
+  if (statements.length === 0) return
+  await transaction(async () => {
+    for (let offset = 0; offset < statements.length; offset += BATCH_CHUNK) {
+      const chunk = statements.slice(offset, offset + BATCH_CHUNK)
+      // `transaction: false` : le lot rejoint la transaction déjà ouverte par
+      // transaction() ci-dessus, pour la même raison que run() (voir plus haut).
+      await getDb().executeSet(chunk, false)
+    }
+  })
+}
+
 const SCHEMA_SQL = `
   CREATE TABLE IF NOT EXISTS budgets (
     id       INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -298,21 +327,21 @@ async function migrate(): Promise<void> {
   await backfillMerchantKeys()
 }
 
-/** Miroir de backfillMerchantKeys() dans src/main/database.ts. */
+/** Miroir de backfillMerchantKeys() dans src/main/database.ts — en lot plutôt
+ *  qu'un UPDATE par ligne (voir runBatch), le premier lancement après mise à
+ *  jour parcourant potentiellement tout l'historique de transactions. */
 async function backfillMerchantKeys(): Promise<void> {
   const rows = await all<{ id: number; description: string }>(
     'SELECT id, description FROM transactions WHERE merchant_key IS NULL'
   )
   if (rows.length === 0) return
 
-  await transaction(async () => {
-    for (const row of rows) {
-      await run('UPDATE transactions SET merchant_key = ? WHERE id = ?', [
-        normalizeMerchant(row.description),
-        row.id
-      ])
-    }
-  })
+  await runBatch(
+    rows.map((row) => ({
+      statement: 'UPDATE transactions SET merchant_key = ? WHERE id = ?',
+      values: [normalizeMerchant(row.description), row.id]
+    }))
+  )
 }
 
 /** Miroir de bootstrapMerchantMemory() dans src/main/database.ts. */
@@ -333,16 +362,14 @@ async function bootstrapMerchantMemory(): Promise<void> {
     if (wins) best.set(row.merchant_key, row)
   }
 
-  await transaction(async () => {
-    for (const [key, entry] of best) {
-      await run(
-        `INSERT INTO merchant_categories (merchant_key, category, count, last_used)
-         VALUES (?, ?, ?, ?)
-         ON CONFLICT(merchant_key) DO NOTHING`,
-        [key, entry.category, entry.n, entry.last_date]
-      )
-    }
-  })
+  await runBatch(
+    Array.from(best.entries()).map(([key, entry]) => ({
+      statement: `INSERT INTO merchant_categories (merchant_key, category, count, last_used)
+                  VALUES (?, ?, ?, ?)
+                  ON CONFLICT(merchant_key) DO NOTHING`,
+      values: [key, entry.category, entry.n, entry.last_date]
+    }))
+  )
 }
 
 async function tableExists(name: string): Promise<boolean> {
