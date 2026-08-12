@@ -204,6 +204,55 @@ export async function findDuplicateTransactions(): Promise<Transaction[][]> {
   return result
 }
 
+/** Miroir de INTERNAL_TRANSFER_MAX_DAYS dans src/main/database.ts. */
+const INTERNAL_TRANSFER_MAX_DAYS = 3
+
+/** Miroir de findInternalTransferCandidates() dans src/main/database.ts. */
+export async function findInternalTransferCandidates(): Promise<
+  { debit: Transaction; credit: Transaction }[]
+> {
+  const rows = await all<Transaction>(
+    `SELECT * FROM transactions
+     WHERE is_internal = 0 AND account_id IS NOT NULL
+     ORDER BY date`
+  )
+
+  const credits = rows.filter((t) => t.amount > 0)
+  const pairs: { debit: Transaction; credit: Transaction }[] = []
+  const used = new Set<number>()
+
+  for (const debit of rows) {
+    if (debit.amount >= 0 || used.has(debit.id)) continue
+
+    const match = credits.find(
+      (credit) =>
+        !used.has(credit.id) &&
+        credit.account_id !== debit.account_id &&
+        Math.abs(credit.amount + debit.amount) < 0.005 &&
+        Math.abs(Date.parse(credit.date) - Date.parse(debit.date)) <=
+          INTERNAL_TRANSFER_MAX_DAYS * 86_400_000
+    )
+    if (!match) continue
+
+    used.add(debit.id)
+    used.add(match.id)
+    pairs.push({ debit, credit: match })
+  }
+
+  return pairs
+}
+
+/** Miroir de markTransactionsInternal() dans src/main/database.ts. */
+export async function markTransactionsInternal(ids: number[]): Promise<number> {
+  if (ids.length === 0) return 0
+  const placeholders = ids.map(() => '?').join(',')
+  const result = await run(
+    `UPDATE transactions SET is_internal = 1 WHERE id IN (${placeholders})`,
+    ids
+  )
+  return result.changes
+}
+
 export async function deleteTransaction(id: number): Promise<void> {
   await run('DELETE FROM transactions WHERE id = ?', [id])
 }

@@ -111,6 +111,10 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('delete-transaction', (_, id: number) => db.deleteTransaction(id))
   ipcMain.handle('clear-all-transactions', () => db.clearAllTransactions())
   ipcMain.handle('find-duplicates', () => db.findDuplicateTransactions())
+  ipcMain.handle('find-internal-transfers', () => db.findInternalTransferCandidates())
+  ipcMain.handle('mark-transactions-internal', (_, ids: number[]) =>
+    db.markTransactionsInternal(ids)
+  )
   ipcMain.handle('get-category-rules-all', () => db.getCategoryRulesWithId())
 
   // --- Mémoire marchand & pilotage de la catégorisation ---

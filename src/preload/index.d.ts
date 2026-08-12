@@ -75,6 +75,8 @@ declare global {
       renameCategory: (id: number, name: string) => Promise<void>
 
       // Category rules
+      findInternalTransfers: () => Promise<{ debit: Transaction; credit: Transaction }[]>
+      markTransactionsInternal: (ids: number[]) => Promise<number>
       getCategoryRulesAll: () => Promise<CategoryRule[]>
 
       // Mémoire marchand & pilotage de la catégorisation

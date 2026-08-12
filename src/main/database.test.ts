@@ -562,3 +562,64 @@ describe('suivi de provenance', () => {
     expect(byId.get(ids[1])).toBe('Autre')
   })
 })
+
+describe('virements internes', () => {
+  const twoAccounts = (): [number, number] => [
+    db.createAccount('Courant', 'Banque A', 'EUR').id,
+    db.createAccount('Épargne', 'Banque A', 'EUR').id
+  ]
+
+  it('apparie un débit et le crédit opposé sur un autre compte', () => {
+    const [courant, epargne] = twoAccounts()
+    insertTx([
+      { account_id: courant, date: '2025-01-05', description: 'VIR VERS LIVRET', amount: -500, category: null, is_internal: 0 },
+      { account_id: epargne, date: '2025-01-06', description: 'VIR DE COMPTE COURANT', amount: 500, category: null, is_internal: 0 }
+    ])
+
+    const pairs = db.findInternalTransferCandidates()
+    expect(pairs).toHaveLength(1)
+    expect(pairs[0].debit.amount).toBe(-500)
+    expect(pairs[0].credit.amount).toBe(500)
+  })
+
+  it("n'apparie pas deux opérations d'un même compte", () => {
+    const [courant] = twoAccounts()
+    insertTx([
+      { account_id: courant, date: '2025-01-05', description: 'ACHAT', amount: -50, category: null, is_internal: 0 },
+      { account_id: courant, date: '2025-01-06', description: 'REMBOURSEMENT', amount: 50, category: null, is_internal: 0 }
+    ])
+    expect(db.findInternalTransferCandidates()).toEqual([])
+  })
+
+  it('ignore les paires trop éloignées dans le temps', () => {
+    const [courant, epargne] = twoAccounts()
+    insertTx([
+      { account_id: courant, date: '2025-01-05', description: 'VIR', amount: -500, category: null, is_internal: 0 },
+      { account_id: epargne, date: '2025-01-20', description: 'VIR', amount: 500, category: null, is_internal: 0 }
+    ])
+    expect(db.findInternalTransferCandidates()).toEqual([])
+  })
+
+  it("n'utilise pas deux fois la même transaction", () => {
+    const [courant, epargne] = twoAccounts()
+    insertTx([
+      { account_id: courant, date: '2025-01-05', description: 'VIR 1', amount: -100, category: null, is_internal: 0 },
+      { account_id: courant, date: '2025-01-05', description: 'VIR 2', amount: -100, category: null, is_internal: 0 },
+      { account_id: epargne, date: '2025-01-05', description: 'RECU', amount: 100, category: null, is_internal: 0 }
+    ])
+    expect(db.findInternalTransferCandidates()).toHaveLength(1)
+  })
+
+  it('marque les deux faces une fois confirmées', () => {
+    const [courant, epargne] = twoAccounts()
+    insertTx([
+      { account_id: courant, date: '2025-01-05', description: 'VIR', amount: -500, category: null, is_internal: 0 },
+      { account_id: epargne, date: '2025-01-06', description: 'VIR', amount: 500, category: null, is_internal: 0 }
+    ])
+    const pairs = db.findInternalTransferCandidates()
+    expect(db.markTransactionsInternal([pairs[0].debit.id, pairs[0].credit.id])).toBe(2)
+    expect(db.getTransactions({}).every((t) => t.is_internal === 1)).toBe(true)
+    // Une fois marquées, elles ne ressortent plus des propositions.
+    expect(db.findInternalTransferCandidates()).toEqual([])
+  })
+})

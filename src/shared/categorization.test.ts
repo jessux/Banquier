@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { findFuzzyCategory, groupByMerchant, parseCategorizationResponse } from './categorization'
+import {
+  findFuzzyCategory,
+  groupByMerchant,
+  literalToRulePattern,
+  parseCategorizationResponse
+} from './categorization'
 import type { Transaction } from './types'
 
 const catList = ['Alimentation', 'Transport', 'Autre']
@@ -171,5 +176,24 @@ describe('findFuzzyCategory', () => {
   it('ne renvoie rien sur une mémoire vide ou une clé vide', () => {
     expect(findFuzzyCategory('CARREFOUR MARKET LYON', [])).toBeNull()
     expect(findFuzzyCategory('', memory)).toBeNull()
+  })
+})
+
+describe('literalToRulePattern', () => {
+  it('laisse un mot simple intact', () => {
+    expect(literalToRulePattern('SNCF')).toBe('SNCF')
+  })
+
+  it('échappe les caractères qui feraient dérailler la regex', () => {
+    // Sans échappement, « E.LECLERC » matcherait « EXLECLERC », et « 100% BIO »
+    // ou « CAFE (LE) » feraient carrément planter la compilation.
+    expect(new RegExp(literalToRulePattern('E.LECLERC'), 'i').test('EXLECLERC')).toBe(false)
+    expect(new RegExp(literalToRulePattern('E.LECLERC'), 'i').test('CB E.LECLERC LYON')).toBe(true)
+    expect(() => new RegExp(literalToRulePattern('CAFE (LE)'), 'i')).not.toThrow()
+    expect(new RegExp(literalToRulePattern('CAFE (LE)'), 'i').test('CB CAFE (LE) PARIS')).toBe(true)
+  })
+
+  it('ignore les espaces de bord', () => {
+    expect(literalToRulePattern('  SNCF  ')).toBe('SNCF')
   })
 })

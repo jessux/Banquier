@@ -154,10 +154,17 @@ score continu serait arbitraire et inexplicable. Le critère retenu — « au mo
 deux mots en commun » — se raisonne directement et écarte le piège principal
 (`BOULANGERIE MARTIN` vs `BOULANGERIE DUPONT` ne partagent que le métier).
 
-### Phase 7 — Gains annexes
-- ☐ Détection des virements internes (montants opposés à ±3 j entre comptes propres)
-- ☐ Règles en mode « le libellé contient X », regex reléguée en avancé
-- ☐ Suggestion de règle après corrections répétées
+### Phase 7 — Gains annexes ☑
+- ☑ Détection des virements internes (montants opposés à ±3 j entre deux comptes de l'utilisateur), proposés à la confirmation comme les doublons
+- ☑ Règles en mode « le libellé contient X » par défaut, regex reléguée en avancé
+- ☑ Tests (8 cas) + parité mobile
+- ~~Suggestion de règle après corrections répétées~~ — **abandonné** : la mémoire
+  marchand (phase 1) traite déjà la répétition, et mieux. Proposer en plus une
+  règle créerait deux sources de vérité pour un même marchand.
+
+Les virements internes ne sont **pas** marqués d'office : un faux positif — une
+dépense et un remboursement du même montant à quelques jours d'écart — sortirait
+silencieusement une vraie dépense des statistiques.
 
 ### Parité mobile
 - ☐ Phases 0-1 portées dans `src/mobile/db.ts` + `src/mobile/api/`

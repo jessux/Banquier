@@ -134,6 +134,8 @@ export function createMobileApi(): Window['api'] {
     setTransactionNote: transactionsApi.setTransactionNote,
     setTransactionTags: transactionsApi.setTransactionTags,
     findDuplicates: transactionsApi.findDuplicateTransactions,
+    findInternalTransfers: transactionsApi.findInternalTransferCandidates,
+    markTransactionsInternal: transactionsApi.markTransactionsInternal,
 
     // Categories
     getCategories: categoriesApi.getDistinctCategories,

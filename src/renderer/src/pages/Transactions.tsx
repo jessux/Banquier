@@ -89,6 +89,8 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
   const [regexPanel, setRegexPanel] = useState<RegexPanel | null>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [duplicates, setDuplicates] = useState<DuplicateGroup[] | null>(null)
+  const [transfers, setTransfers] = useState<{ debit: Transaction; credit: Transaction }[] | null>(null)
+  const [checkingTransfers, setCheckingTransfers] = useState(false)
   const [checkingDuplicates, setCheckingDuplicates] = useState(false)
   const [editingNote, setEditingNote] = useState<{ id: number; note: string; tags: string } | null>(null)
   const editRef = useRef<HTMLInputElement>(null)
@@ -282,6 +284,27 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
     }
   }
 
+  /** Les virements entre comptes gonflent dépenses et revenus. On les propose,
+   *  sans les marquer d'office : un faux positif sortirait sinon silencieusement
+   *  une vraie dépense des statistiques. */
+  const checkInternalTransfers = async (): Promise<void> => {
+    setCheckingTransfers(true)
+    try {
+      setTransfers(await window.api.findInternalTransfers())
+    } finally {
+      setCheckingTransfers(false)
+    }
+  }
+
+  const confirmTransfers = async (): Promise<void> => {
+    if (!transfers || transfers.length === 0) return
+    const ids = transfers.flatMap((p) => [p.debit.id, p.credit.id])
+    const count = await window.api.markTransactionsInternal(ids)
+    setTransfers(null)
+    load()
+    showToast(`${count} transaction(s) marquées comme virements internes`)
+  }
+
   const checkDuplicates = async (): Promise<void> => {
     setCheckingDuplicates(true)
     const groups = await window.api.findDuplicates()
@@ -369,6 +392,14 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
           </button>
           <button className="btn btn-secondary" onClick={checkDuplicates} disabled={checkingDuplicates}>
             {checkingDuplicates ? <span className="spinner" /> : '🔍'} Vérifier doublons
+          </button>
+          <button
+            className="btn btn-secondary"
+            onClick={checkInternalTransfers}
+            disabled={checkingTransfers}
+            title="Repère les virements entre vos propres comptes, qui gonflent dépenses et revenus"
+          >
+            {checkingTransfers ? <span className="spinner" /> : '🔄'} Virements internes
           </button>
           <span className="text-muted">{totalCount} résultat{totalCount > 1 ? 's' : ''}</span>
         </div>
@@ -526,6 +557,45 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
                 </div>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Virements internes détectés — à confirmer */}
+      {transfers !== null && (
+        <div style={{ background: 'var(--bg2)', border: '1px solid var(--accent)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-light)' }}>
+              {transfers.length === 0
+                ? 'Aucun virement interne détecté'
+                : `${transfers.length} virement(s) interne(s) probable(s)`}
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              {transfers.length > 0 && (
+                <button className="btn btn-primary" onClick={confirmTransfers}>
+                  ✓ Marquer comme internes
+                </button>
+              )}
+              <button className="btn btn-secondary" onClick={() => setTransfers(null)}>✕ Fermer</button>
+            </div>
+          </div>
+          <div style={{ maxHeight: 360, overflowY: 'auto' }}>
+            {transfers.map((pair) => (
+              <div key={pair.debit.id} style={{ padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', fontSize: 13 }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {pair.debit.description}
+                  </span>
+                  <span style={{ color: 'var(--red)', whiteSpace: 'nowrap' }}>{formatEur(pair.debit.amount)}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', color: 'var(--text3)' }}>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    ↳ {pair.credit.description}
+                  </span>
+                  <span style={{ color: 'var(--green)', whiteSpace: 'nowrap' }}>{formatEur(pair.credit.amount)}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}

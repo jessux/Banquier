@@ -1354,6 +1354,66 @@ export function findDuplicateTransactions(): Transaction[][] {
   )
 }
 
+/** Écart maximal entre les deux faces d'un virement interne : la banque
+ *  émettrice et la banque réceptrice ne datent pas toujours l'opération du
+ *  même jour. */
+const INTERNAL_TRANSFER_MAX_DAYS = 3
+
+/**
+ * Repère les virements entre comptes de l'utilisateur : un débit sur un compte
+ * et le crédit exactement opposé sur un autre, à quelques jours près.
+ *
+ * Ces opérations gonflent artificiellement dépenses et revenus. Les marquer une
+ * par une est un travail manuel entier, purement mécanique.
+ *
+ * Rien n'est marqué ici : les paires sont rendues pour validation, comme pour
+ * les doublons. Un faux positif — une dépense et un remboursement du même
+ * montant à quelques jours d'écart — sortirait sinon silencieusement des
+ * statistiques.
+ */
+export function findInternalTransferCandidates(): { debit: Transaction; credit: Transaction }[] {
+  const rows = db.all(
+    `SELECT * FROM transactions
+     WHERE is_internal = 0 AND account_id IS NOT NULL
+     ORDER BY date`
+  ) as Transaction[]
+
+  const credits = rows.filter((t) => t.amount > 0)
+  const pairs: { debit: Transaction; credit: Transaction }[] = []
+  const used = new Set<number>()
+
+  for (const debit of rows) {
+    if (debit.amount >= 0 || used.has(debit.id)) continue
+
+    const match = credits.find(
+      (credit) =>
+        !used.has(credit.id) &&
+        credit.account_id !== debit.account_id &&
+        Math.abs(credit.amount + debit.amount) < 0.005 && // montants exactement opposés
+        Math.abs(Date.parse(credit.date) - Date.parse(debit.date)) <=
+          INTERNAL_TRANSFER_MAX_DAYS * 86_400_000
+    )
+    if (!match) continue
+
+    used.add(debit.id)
+    used.add(match.id)
+    pairs.push({ debit, credit: match })
+  }
+
+  return pairs
+}
+
+/** Marque les deux faces des virements confirmés par l'utilisateur. */
+export function markTransactionsInternal(ids: number[]): number {
+  if (ids.length === 0) return 0
+  const placeholders = ids.map(() => '?').join(',')
+  const result = db.run(
+    `UPDATE transactions SET is_internal = 1 WHERE id IN (${placeholders})`,
+    ids
+  )
+  return result.changes as number
+}
+
 export function deleteTransaction(id: number): void {
   db.run('DELETE FROM transactions WHERE id = ?', [id])
 }

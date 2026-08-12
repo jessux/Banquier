@@ -188,3 +188,15 @@ export function findFuzzyCategory(
 
   return best.category
 }
+
+/**
+ * Transforme un texte saisi tel quel en motif de règle.
+ *
+ * Les règles sont stockées en expression régulière, mais l'écrasante majorité
+ * d'entre elles se résume à « le libellé contient ce mot ». Demander une regex
+ * pour cela est une barrière à l'entrée sans contrepartie : on échappe donc les
+ * caractères spéciaux pour l'utilisateur.
+ */
+export function literalToRulePattern(text: string): string {
+  return text.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}

@@ -39,6 +39,9 @@ const api = {
   deleteTransaction: (id: number) => ipcRenderer.invoke('delete-transaction', id),
   clearAllTransactions: () => ipcRenderer.invoke('clear-all-transactions'),
   findDuplicates: () => ipcRenderer.invoke('find-duplicates'),
+  findInternalTransfers: () => ipcRenderer.invoke('find-internal-transfers'),
+  markTransactionsInternal: (ids: number[]) =>
+    ipcRenderer.invoke('mark-transactions-internal', ids),
   getCategoryRulesAll: () => ipcRenderer.invoke('get-category-rules-all'),
   getCategorizationStats: () => ipcRenderer.invoke('get-categorization-stats'),
   getMerchantMemory: () => ipcRenderer.invoke('get-merchant-memory'),
