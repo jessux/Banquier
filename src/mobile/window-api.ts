@@ -55,6 +55,27 @@ async function safeConnectionIds(creds: PowensCreds, token: string): Promise<Set
   }
 }
 
+/** Powens peut mettre nettement plus longtemps que le parcours bancaire lui-même à
+ *  enregistrer la connexion côté serveur (SCA, App2App…). ~1 min d'attente. */
+const NEW_CONNECTION_TRIES = 20
+const NEW_CONNECTION_POLL_MS = 3000
+
+/** Attend qu'une connexion absente de `before` apparaisse côté Powens. Renvoie
+ *  `true` dès qu'une nouvelle connexion est visible, `false` si le délai s'épuise —
+ *  jamais d'exception : l'appelant décide quoi faire de cette information. */
+async function waitForNewConnection(
+  creds: PowensCreds,
+  token: string,
+  before: Set<number>
+): Promise<boolean> {
+  for (let i = 0; i < NEW_CONNECTION_TRIES; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, NEW_CONNECTION_POLL_MS))
+    const after = await safeConnectionIds(creds, token)
+    if ([...after].some((id) => !before.has(id))) return true
+  }
+  return false
+}
+
 /** Native-Android implementation of the same window.api surface the Electron preload
  *  exposes. Phase 1 covers the offline core (accounts, transactions, CSV import,
  *  categories, rules, budgets, dashboard, settings) — everything else is a clearly
@@ -363,36 +384,36 @@ export function createMobileApi(): Window['api'] {
       const tempCode = await getTempCode(creds, token)
       const result = await openConnectWebview(creds, tempCode)
 
-      if (result.error) {
-        await preferences.saveSettings({ powensConnectPending: false })
-        emitProgress('idle', '')
-        throw new Error(result.errorDescription || `Connexion refusée (${result.error}).`)
+      // Le webview peut signaler une erreur ALORS QUE la banque vient bel et bien
+      // d'être rattachée : Powens renvoie un `error` dans la redirection pour tout
+      // ce qui n'est pas un succès net (SCA à revalider, information supplémentaire
+      // demandée, action requise côté banque, session du webview expirée avant
+      // l'écran final…), et la connexion existe pourtant déjà côté serveur.
+      // Traiter ce paramètre comme fatal était la dernière place où le parcours de
+      // connexion transformait un signal ambigu en échec dur — d'où le symptôme
+      // « erreur à la première connexion, puis tout va bien après avoir quitté et
+      // relancé l'app » : le redémarrage passe par powensStartupSync, qui lui n'a
+      // jamais eu de couperet (voir waitForConnections dans powens-sync.ts).
+      const webviewError = result.error
+        ? result.errorDescription || `Connexion refusée (${result.error}).`
+        : undefined
+
+      // Custom Tab fermé sans redirection : même raisonnement. Les parcours App2App
+      // renvoient souvent l'utilisateur au navigateur sans déclencher le deep link,
+      // ET Powens peut mettre nettement plus que quelques secondes à enregistrer la
+      // connexion côté serveur après la fin de l'authentification bancaire.
+      let attached = true
+      if (webviewError || result.dismissed) {
+        emitProgress('waiting', 'Vérification de la connexion auprès de votre banque…')
+        attached = await waitForNewConnection(creds, token, before)
       }
 
-      if (result.dismissed) {
-        // Custom Tab fermé sans redirection : on vérifie auprès de Powens plutôt
-        // que de conclure directement à une annulation. Les parcours App2App
-        // renvoient souvent l'utilisateur au navigateur sans déclencher le deep
-        // link, ET Powens peut mettre nettement plus que quelques secondes à
-        // enregistrer la connexion côté serveur après la fin de l'authentification
-        // bancaire — un délai d'attente limité ici concluait à tort à une
-        // « Connexion annulée » alors que la banque venait tout juste d'être
-        // rattachée. Symptôme observé : le compte n'apparaissait qu'après avoir
-        // quitté et rouvert l'app, ce qui relance powensStartupSync — lequel
-        // fonctionne car il attend, lui, sans jamais transformer l'attente en
-        // erreur (voir waitForConnections dans powens-sync.ts).
-        //
-        // On attend donc ici aussi, mais SANS jamais rejeter sur un simple délai
-        // écoulé : que la connexion soit détectée ou pas d'ici là, on laisse
-        // toujours importPowens() trancher — il sait déjà attendre patiemment
-        // (jusqu'à 4 min) et renvoyer un avertissement clair plutôt qu'une
-        // erreur bloquante si vraiment rien n'est arrivé.
-        emitProgress('waiting', 'Vérification de la connexion auprès de votre banque…')
-        for (let i = 0; i < 20; i++) {
-          if (i > 0) await new Promise((r) => setTimeout(r, 3000))
-          const after = await safeConnectionIds(creds, token)
-          if ([...after].some((id) => !before.has(id))) break
-        }
+      // Seul cas où l'on rejette : le webview a signalé une erreur ET aucune banque
+      // n'est apparue. C'est alors un vrai refus, pas une simple lenteur.
+      if (webviewError && !attached) {
+        await preferences.saveSettings({ powensConnectPending: false })
+        emitProgress('idle', '')
+        throw new Error(webviewError)
       }
 
       // L'utilisateur vient de rattacher une banque de façon explicite : on lève
@@ -400,11 +421,22 @@ export function createMobileApi(): Window['api'] {
       // banque n'y ferait jamais réapparaître ses comptes.
       await accounts.clearExcludedPowensAccounts()
 
-      try {
-        return await importPowens(creds, token, defaultConnectMinDate())
-      } finally {
-        await preferences.saveSettings({ powensConnectPending: false })
-      }
+      // Quoi qu'il arrive au-delà d'ici, c'est importPowens() qui tranche : il sait
+      // attendre patiemment (jusqu'à 4 min) et renvoyer un avertissement lisible
+      // plutôt qu'une erreur bloquante si vraiment rien n'est arrivé.
+      const res = await importPowens(creds, token, defaultConnectMinDate())
+
+      // Le drapeau n'est levé qu'une fois l'import réellement abouti : si celui-ci
+      // échoue (réseau coupé, app tuée en plein import…), le prochain démarrage doit
+      // reprendre un import large et non un simple incrément.
+      await preferences.saveSettings({ powensConnectPending: false })
+
+      // Le message du webview n'est pas perdu pour autant : la banque est rattachée
+      // mais peut demander une action (SCA, information supplémentaire), ce que
+      // l'UI affiche en avertissement non bloquant.
+      if (!webviewError) return res
+      const warning = [webviewError, res.warning].filter(Boolean).join(' · ')
+      return { ...res, warning }
     },
     powensSync: async (minDate, maxDate) => {
       const settings = await preferences.getSettings()
