@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ backup rules. Requis par @capacitor-community/sqlite (voir
+     README, "Android Quirks") : sans exclusion explicite de la base et des
+     sharedpref, Auto Backup peut restaurer un état SQLite obsolète/incompatible
+     au premier lancement d'un build signé, provoquant "CapacitorSQLitePlugin: null". -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>
