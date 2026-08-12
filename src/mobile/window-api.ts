@@ -2,6 +2,7 @@ import * as accounts from './api/accounts'
 import * as transactionsApi from './api/transactions'
 import * as categoriesApi from './api/categories'
 import * as rulesApi from './api/rules'
+import * as merchantMemoryApi from './api/merchantMemory'
 import * as budgetsApi from './api/budgets'
 import * as goalsApi from './api/goals'
 import * as importsApi from './api/imports'
@@ -109,7 +110,7 @@ export function createMobileApi(): Window['api'] {
         parsed,
         importRecord.id
       )
-      if (insertedIds.length > 0) await rulesApi.applyRulesToTransactions(insertedIds)
+      if (insertedIds.length > 0) await merchantMemoryApi.autoCategorize(insertedIds)
       return { imported, duplicates, errors: 0, importId: importRecord.id }
     },
     importPdf: async (handle, accountId) => {
@@ -128,7 +129,7 @@ export function createMobileApi(): Window['api'] {
         txWithImport,
         importRecord.id
       )
-      if (insertedIds.length > 0) await rulesApi.applyRulesToTransactions(insertedIds)
+      if (insertedIds.length > 0) await merchantMemoryApi.autoCategorize(insertedIds)
       return { imported, duplicates, errors: 0, importId: importRecord.id }
     },
     getImports: importsApi.getImports,
@@ -165,7 +166,7 @@ export function createMobileApi(): Window['api'] {
       // First pass: apply pattern rules (deterministic, always takes priority)
       const allTxForRules = await transactionsApi.getTransactions({})
       const ruleTargets = onlyUncategorized ? allTxForRules.filter((t) => !t.category) : allTxForRules
-      if (ruleTargets.length > 0) await rulesApi.applyRulesToTransactions(ruleTargets.map((t) => t.id))
+      if (ruleTargets.length > 0) await merchantMemoryApi.autoCategorize(ruleTargets.map((t) => t.id))
 
       // Second pass: AI proposals for remaining uncategorized transactions
       const afterRules = await transactionsApi.getTransactions({})

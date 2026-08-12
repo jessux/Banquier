@@ -317,3 +317,122 @@ describe('merchant_key', () => {
     expect(tx.merchant_key).toBe('NETFLIX COM PARIS')
   })
 })
+
+describe('mémoire marchand', () => {
+  it('rejoue une correction sur les transactions importées ensuite', () => {
+    const [id] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB BOULANGERIE DUPONT 05/01 LYON', amount: -4.2, category: null, is_internal: 0 }
+    ])
+    db.updateTransactionCategory(id, 'Alimentation')
+
+    // Nouveau relevé : même marchand, libellé différent (date et référence).
+    const [next] = insertTx([
+      { account_id: null, date: '2025-02-11', description: 'CB BOULANGERIE DUPONT 11/02 LYON 8871', amount: -3.8, category: null, is_internal: 0 }
+    ])
+    expect(db.autoCategorize([next])).toBe(1)
+    expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Alimentation')
+  })
+
+  it('ne réécrit pas une catégorie déjà posée', () => {
+    const [id] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB AMAZON 05/01', amount: -30, category: null, is_internal: 0 }
+    ])
+    db.updateTransactionCategory(id, 'Shopping')
+
+    const [next] = insertTx([
+      { account_id: null, date: '2025-02-05', description: 'CB AMAZON 05/02', amount: -20, category: 'Loisirs', is_internal: 0 }
+    ])
+    db.autoCategorize([next])
+    expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Loisirs')
+  })
+
+  it('fait primer la dernière décision de l\'utilisateur', () => {
+    const [first] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB AMAZON 05/01', amount: -30, category: null, is_internal: 0 }
+    ])
+    db.updateTransactionCategory(first, 'Shopping')
+    db.updateTransactionCategory(first, 'Loisirs')
+
+    const [next] = insertTx([
+      { account_id: null, date: '2025-03-05', description: 'CB AMAZON 05/03', amount: -12, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize([next])
+    expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Loisirs')
+  })
+
+  it('propage aux similaires par clé marchand, pas par libellé exact', () => {
+    const ids = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB SNCF 05/01 PARIS 111', amount: -45, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-02-05', description: 'CB SNCF 05/02 PARIS 222', amount: -60, category: null, is_internal: 0 }
+    ])
+    db.updateTransactionCategory(ids[0], 'Transport', true)
+
+    const categories = db.getTransactions({}).map((t) => t.category)
+    expect(categories).toEqual(['Transport', 'Transport'])
+  })
+
+  it('les propositions IA validées nourrissent la mémoire', () => {
+    const [id] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'PRLV SPOTIFY 05/01', amount: -11.99, category: null, is_internal: 0 }
+    ])
+    db.batchUpdateCategories([{ id, category: 'Abonnements > Streaming' }])
+
+    const [next] = insertTx([
+      { account_id: null, date: '2025-02-05', description: 'PRLV SPOTIFY 05/02', amount: -11.99, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize([next])
+    expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Abonnements > Streaming')
+  })
+
+  it('les règles priment sur la mémoire', () => {
+    const [id] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB FNAC 05/01', amount: -30, category: null, is_internal: 0 }
+    ])
+    db.updateTransactionCategory(id, 'Loisirs')
+    db.upsertCategoryRule('FNAC', 'Shopping')
+
+    const [next] = insertTx([
+      { account_id: null, date: '2025-02-05', description: 'CB FNAC 05/02', amount: -25, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize([next])
+    expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Shopping')
+  })
+
+  it('suit le renommage d\'une catégorie', () => {
+    const [id] = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB DECATHLON 05/01', amount: -60, category: null, is_internal: 0 }
+    ])
+    db.updateTransactionCategory(id, 'Loisirs')
+    const loisirs = db.getCategoryTree().find((c) => c.name === 'Loisirs' && c.parent_id === null)!
+    db.renameCategory(loisirs.id, 'Sport & Loisirs')
+
+    const [next] = insertTx([
+      { account_id: null, date: '2025-02-05', description: 'CB DECATHLON 05/02', amount: -20, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize([next])
+    // Sans propagation, la mémoire ressusciterait « Loisirs », catégorie morte.
+    expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Sport & Loisirs')
+  })
+
+  it("s'amorce depuis l'historique déjà catégorisé, la catégorie majoritaire l'emportant", () => {
+    insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB MONOPRIX 05/01', amount: -30, category: 'Alimentation', is_internal: 0 },
+      { account_id: null, date: '2025-01-12', description: 'CB MONOPRIX 12/01', amount: -22, category: 'Alimentation', is_internal: 0 },
+      { account_id: null, date: '2025-01-20', description: 'CB MONOPRIX 20/01', amount: -18, category: 'Shopping', is_internal: 0 }
+    ])
+
+    // Simule une base d'avant l'introduction de la mémoire.
+    const dbPath = db.getActiveDbPath()
+    db.closeDatabase()
+    const raw = new Database(dbPath)
+    raw.exec('DROP TABLE merchant_categories')
+    raw.close()
+    db.initDatabase(dbPath)
+
+    const [next] = insertTx([
+      { account_id: null, date: '2025-02-05', description: 'CB MONOPRIX 05/02', amount: -25, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize([next])
+    expect(db.getTransactions({}).find((t) => t.id === next)?.category).toBe('Alimentation')
+  })
+})

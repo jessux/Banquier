@@ -1,6 +1,7 @@
 import { all, get, run, transaction } from '../db'
 import type { Transaction, TransactionFilters } from '../../shared/types'
 import { normalizeMerchant } from '../../shared/merchant'
+import { rememberMerchantCategory } from './merchantMemory'
 
 function buildTransactionWhere(filters: TransactionFilters): { conditions: string[]; params: unknown[] } {
   const conditions: string[] = []
@@ -115,17 +116,23 @@ export async function setTransactionTags(id: number, tags: string | null): Promi
   await run('UPDATE transactions SET tags = ? WHERE id = ?', [tags || null, id])
 }
 
+/** Miroir de updateTransactionCategory() dans src/main/database.ts : la mémoire
+ *  agit sur le futur, applyToSimilar sur le passé. */
 export async function updateTransactionCategory(
   id: number,
   category: string,
   applyToSimilar = false
 ): Promise<void> {
+  const tx = await get<{ merchant_key: string | null }>(
+    'SELECT merchant_key FROM transactions WHERE id = ?',
+    [id]
+  )
+
   await run('UPDATE transactions SET category = ? WHERE id = ?', [category, id])
-  if (applyToSimilar) {
-    const tx = await get<{ description: string }>('SELECT description FROM transactions WHERE id = ?', [id])
-    if (tx?.description) {
-      await run('UPDATE transactions SET category = ? WHERE description = ?', [category, tx.description])
-    }
+  await rememberMerchantCategory(tx?.merchant_key, category)
+
+  if (applyToSimilar && tx?.merchant_key) {
+    await run('UPDATE transactions SET category = ? WHERE merchant_key = ?', [category, tx.merchant_key])
   }
 }
 
@@ -142,12 +149,15 @@ export async function countTransactionsByPattern(pattern: string): Promise<numbe
 export async function updateCategoryByPattern(category: string, pattern: string): Promise<number> {
   try {
     const regex = new RegExp(pattern, 'i')
-    const rows = await all<{ id: number; description: string }>('SELECT id, description FROM transactions')
+    const rows = await all<{ id: number; description: string; merchant_key: string | null }>(
+      'SELECT id, description, merchant_key FROM transactions'
+    )
     const matched = rows.filter((r) => regex.test(r.description))
     if (matched.length === 0) return 0
     await transaction(async () => {
       for (const t of matched) {
         await run('UPDATE transactions SET category = ? WHERE id = ?', [category, t.id])
+        await rememberMerchantCategory(t.merchant_key, category)
       }
     })
     return matched.length
@@ -160,7 +170,12 @@ export async function batchUpdateCategories(updates: { id: number; category: str
   if (updates.length === 0) return
   await transaction(async () => {
     for (const u of updates) {
+      const tx = await get<{ merchant_key: string | null }>(
+        'SELECT merchant_key FROM transactions WHERE id = ?',
+        [u.id]
+      )
       await run('UPDATE transactions SET category = ? WHERE id = ?', [u.category, u.id])
+      await rememberMerchantCategory(tx?.merchant_key, u.category)
     }
   })
 }

@@ -80,11 +80,24 @@ Effet de bord voulu : « Top marchands » et la détection de récurrences
 utilisent désormais la même normalisation que le reste — les trois
 regroupaient auparavant avec deux implémentations dupliquées.
 
-### Phase 1 — Mémoire marchand *(le gain principal)*
-- ☐ Table `merchant_categories(merchant_key, category, count, last_used)`
-- ☐ Écriture à chaque décision : correction manuelle, proposition IA acceptée, catégorisation en masse
-- ☐ Application automatique à l'import
-- ☐ Tests
+### Phase 1 — Mémoire marchand ☑ *(le gain principal)*
+- ☑ Table `merchant_categories(merchant_key, category, count, last_used)`
+- ☑ Écriture à chaque décision : correction manuelle, proposition IA validée, catégorisation en masse par regex
+- ☑ Application automatique à l'import, via `autoCategorize()` — point d'entrée unique de la cascade, remplaçant les 8 appels dispersés à `applyRulesToTransactions`
+- ☑ Amorçage depuis l'historique déjà catégorisé (une seule fois, à la création de la table)
+- ☑ Propagation des renommages de catégorie à la mémoire
+- ☑ Tests (8 cas) + parité mobile
+
+Décisions au passage :
+- **La dernière décision fait foi** plutôt qu'un vote majoritaire : qui vient de
+  corriger attend que sa correction tienne.
+- **La mémoire ne réécrit jamais une catégorie déjà posée** — elle complète, elle
+  n'écrase pas.
+- **`applyToSimilar` juge désormais sur la clé marchand** et non plus sur
+  l'égalité stricte du libellé, qui ne rattrapait quasiment jamais rien.
+- Les **règles priment sur la mémoire** (explicites, elles peuvent réécrire).
+- Une règle ne nourrit pas la mémoire : elle est déjà rejouée à chaque import,
+  l'y dupliquer créerait deux sources de vérité pour un même marchand.
 
 ### Phase 2 — Dédup LLM par marchand
 - ☐ Regrouper les non-catégorisées par `merchant_key` avant l'appel

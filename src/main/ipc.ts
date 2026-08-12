@@ -129,7 +129,7 @@ export function registerIpcHandlers(): void {
       const importRecord = db.createImport(filename, transactions.length)
       const txWithImport = transactions.map((t) => ({ ...t, import_id: importRecord.id }))
       const { imported, duplicates, insertedIds } = db.insertTransactions(txWithImport, importRecord.id)
-      if (insertedIds.length > 0) db.applyRulesToTransactions(insertedIds)
+      if (insertedIds.length > 0) db.autoCategorize(insertedIds)
       return { imported, duplicates, errors: 0, importId: importRecord.id }
     }
   )
@@ -149,7 +149,7 @@ export function registerIpcHandlers(): void {
     const importRecord = db.createImport(filename, txWithAccount.length)
     const txWithImport = txWithAccount.map((t) => ({ ...t, import_id: importRecord.id }))
     const { imported, duplicates, insertedIds } = db.insertTransactions(txWithImport, importRecord.id)
-    if (insertedIds.length > 0) db.applyRulesToTransactions(insertedIds)
+    if (insertedIds.length > 0) db.autoCategorize(insertedIds)
     return { imported, duplicates, errors: 0, importId: importRecord.id }
   })
 
@@ -186,18 +186,22 @@ export function registerIpcHandlers(): void {
   // --- AI Categorization ---
   // La catégorisation par IA ne fait que proposer : elle s'appuie sur la recherche
   // web (jamais sur ses seules connaissances internes) et renvoie des suggestions
-  // que l'utilisateur valide via `apply-categorization`. Les règles utilisateur,
-  // elles, restent déterministes et s'appliquent directement.
+  // que l'utilisateur valide via `apply-categorization`. Les règles utilisateur
+  // et la mémoire marchand, elles, restent déterministes et s'appliquent
+  // directement.
   ipcMain.handle('categorize-ai', async (event, onlyUncategorized: boolean) => {
     const settings = store.get('settings')
     const rules = db.getCategoryRules()
 
-    // First pass: apply pattern rules (deterministic, always takes priority)
+    // Première passe déterministe et locale : règles puis mémoire marchand.
+    // Elle ne sert pas qu'à gagner du temps — tout ce qu'elle tranche est
+    // autant de transactions qui ne partent pas au LLM et que l'utilisateur
+    // n'aura pas à valider.
     const allTxForRules = db.getTransactions({})
     const ruleTargets = onlyUncategorized ? allTxForRules.filter((t) => !t.category) : allTxForRules
-    if (ruleTargets.length > 0) db.applyRulesToTransactions(ruleTargets.map((t) => t.id))
+    if (ruleTargets.length > 0) db.autoCategorize(ruleTargets.map((t) => t.id))
 
-    // Second pass: AI proposals for remaining uncategorized transactions
+    // Seconde passe : propositions IA pour ce qu'il reste.
     const afterRules = db.getTransactions({})
     const toProcess = afterRules.filter((t) => !t.category)
 
@@ -702,7 +706,7 @@ async function importPowens(
   const accountIds = [...accountIdByPowens.values()]
   const targetIds = new Set<number>(insertedIds)
   for (const id of db.getUncategorizedTransactionIds(accountIds)) targetIds.add(id)
-  const categorized = targetIds.size > 0 ? db.applyRulesToTransactions([...targetIds]) : 0
+  const categorized = targetIds.size > 0 ? db.autoCategorize([...targetIds]) : 0
   return { imported, duplicates, accounts: accounts.length, categorized, firstDate }
 }
 
