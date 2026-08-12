@@ -392,6 +392,21 @@ label {
   margin-bottom: 6px;
 }
 
+.share-row:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Badge du pack d'origine, affiché à côté du pattern dans la table des règles. */
+.pack-badge {
+  font-family: monospace;
+  font-size: 10px;
+  color: var(--text3);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
 .form-group {
   margin-bottom: 16px;
 }

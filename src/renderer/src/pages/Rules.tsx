@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import type { CategoryRule } from '../../../shared/types'
+import { packIdFromSource } from '../../../shared/rulePacks'
 import CategoryPicker from '../components/CategoryPicker'
+import RulePacks from '../components/RulePacks'
+import ShareQueue from '../components/ShareQueue'
 
 const COMMON_CATEGORIES = [
   'Alimentation', 'Logement', 'Transport', 'Restaurants', 'Loisirs',
@@ -29,6 +32,8 @@ export default function Rules(): JSX.Element {
   const [applying, setApplying] = useState(false)
   const [search, setSearch] = useState('')
   const [filterCat, setFilterCat] = useState('')
+  // Incrémenté à chaque rechargement, pour que la file de partage se resynchronise.
+  const [reloadToken, setReloadToken] = useState(0)
   const patternInputRef = useRef<HTMLInputElement>(null)
   const newPatternRef = useRef<HTMLInputElement>(null)
 
@@ -41,6 +46,7 @@ export default function Rules(): JSX.Element {
     ])
     setRules(r)
     setCategories([...new Set([...paths, ...existing])].sort())
+    setReloadToken((t) => t + 1)
     setLoading(false)
   }
 
@@ -68,8 +74,10 @@ export default function Rules(): JSX.Element {
   const saveEdit = async (): Promise<void> => {
     if (!editing || !editing.pattern.trim() || !editing.category.trim()) return
     await window.api.updateCategoryRule(editing.id, editing.pattern.trim(), editing.category.trim())
-    setRules((prev) => prev.map((r) => r.id === editing.id ? { ...r, pattern: editing.pattern.trim(), category: editing.category.trim() } : r))
     setEditing(null)
+    // Modifier une règle de pack la détache (elle devient « perso ») et change
+    // sa priorité : on recharge plutôt que de patcher l'état local.
+    await load()
     showToast('Règle mise à jour')
   }
 
@@ -134,7 +142,11 @@ export default function Rules(): JSX.Element {
 
       <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
         Les règles sont appliquées automatiquement à chaque import. L'ordre est important — la première règle qui correspond est utilisée.
+        Vos règles personnelles passent avant celles des packs.
       </p>
+
+      <RulePacks onChange={load} onToast={showToast} />
+      <ShareQueue onChange={load} onToast={showToast} reloadToken={reloadToken} />
 
       {!loading && rules.length > 0 && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 16, flexWrap: 'wrap' }}>
@@ -256,7 +268,20 @@ export default function Rules(): JSX.Element {
                         onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') setEditing(null) }}
                       />
                     ) : (
-                      <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--accent)' }}>{rule.pattern}</code>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, maxWidth: '100%' }}>
+                        {/* Les patterns des packs sont de longues alternances
+                            sans espace : sans coupure forcée, leur largeur
+                            minimale élargit la table et pousse les actions
+                            hors de la zone visible. */}
+                        <code style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--accent)', overflowWrap: 'anywhere' }}>{rule.pattern}</code>
+                        {/* La provenance tient dans un badge en ligne : une
+                            colonne dédiée poussait les actions hors écran. */}
+                        {packIdFromSource(rule.source) && (
+                          <span className="pack-badge" title={`Fournie par le pack ${packIdFromSource(rule.source)}`}>
+                            {packIdFromSource(rule.source)}
+                          </span>
+                        )}
+                      </span>
                     )}
                   </td>
                   <td>

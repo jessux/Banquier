@@ -32,6 +32,18 @@ import type {
   DcaPlan,
   DcaPlanInput
 } from '../shared/types'
+import type { InstalledPack, RulePack } from '../shared/rulePacks'
+import type { SharePartition } from '../shared/ruleSharing'
+import { partitionForSharing } from '../shared/ruleSharing'
+import {
+  categoryPathsOfPack,
+  DEFAULT_CATEGORY_TREE,
+  FR_BASE_PACK,
+  getBuiltinPack,
+  looksLikeInternalCategory,
+  packSource,
+  USER_RULE_PRIORITY
+} from '../shared/rulePacks'
 
 let db: Database
 let activeDbPath = ''
@@ -69,9 +81,79 @@ function migrate(): void {
     'ALTER TABLE transactions ADD COLUMN tags TEXT',
     'ALTER TABLE chat_messages ADD COLUMN reasoning TEXT',
     'ALTER TABLE accounts ADD COLUMN balance REAL',
+    'ALTER TABLE rule_packs ADD COLUMN categories TEXT',
   ]
   for (const sql of migrations) {
     try { db.exec(sql) } catch { /* column already exists */ }
+  }
+  migrateCategoryRules()
+}
+
+/**
+ * Passe category_rules au schéma « packs » : ajout de source/priority/internal
+ * et remplacement de UNIQUE(pattern) par UNIQUE(pattern, source).
+ *
+ * L'unicité doit devenir composite, sinon un pack communautaire proposant un
+ * pattern que l'utilisateur a déjà écrit ferait échouer son installation.
+ * SQLite ne sait pas modifier une contrainte : on reconstruit la table.
+ */
+function migrateCategoryRules(): void {
+  const columns = db.all('PRAGMA table_info(category_rules)') as { name: string }[]
+  if (columns.length === 0 || columns.some((c) => c.name === 'source')) return
+
+  db.exec('BEGIN')
+  try {
+    db.exec(`
+      CREATE TABLE category_rules_migrated (
+        id       INTEGER PRIMARY KEY AUTOINCREMENT,
+        pattern  TEXT NOT NULL,
+        category TEXT NOT NULL,
+        source   TEXT NOT NULL DEFAULT 'user',
+        priority INTEGER NOT NULL DEFAULT 0,
+        internal INTEGER NOT NULL DEFAULT 0,
+        UNIQUE(pattern, source)
+      );
+      INSERT INTO category_rules_migrated (id, pattern, category, source, priority, internal)
+        SELECT id, pattern, category, 'user', ${USER_RULE_PRIORITY}, 0 FROM category_rules;
+      DROP TABLE category_rules;
+      ALTER TABLE category_rules_migrated RENAME TO category_rules;
+    `)
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
+
+  // Le flag `internal` était auparavant déduit à la volée par une sous-chaîne
+  // « intern » ; on le matérialise avec le test strict (mot entier).
+  const rules = db.all('SELECT id, category FROM category_rules') as { id: number; category: string }[]
+  for (const rule of rules) {
+    if (looksLikeInternalCategory(rule.category)) {
+      db.run('UPDATE category_rules SET internal = 1 WHERE id = ?', [rule.id])
+    }
+  }
+
+  repairInternetFalsePositives()
+}
+
+/**
+ * Répare les transactions sorties à tort des totaux de dépenses.
+ *
+ * L'ancien test `category.includes('intern')` marquait is_internal = 1 sur
+ * « Logement > Internet / Téléphone » : les factures internet disparaissaient
+ * des dépenses. On ne remet à zéro que cette empreinte exacte — une catégorie
+ * contenant « intern » sans être un vrai mouvement interne — pour ne pas
+ * défaire un marquage volontaire de l'utilisateur.
+ */
+function repairInternetFalsePositives(): void {
+  const affected = db.all(
+    "SELECT id, category FROM transactions WHERE is_internal = 1 AND category IS NOT NULL AND LOWER(category) LIKE '%intern%'"
+  ) as { id: number; category: string }[]
+
+  for (const tx of affected) {
+    if (!looksLikeInternalCategory(tx.category)) {
+      db.run('UPDATE transactions SET is_internal = 0 WHERE id = ?', [tx.id])
+    }
   }
 }
 
@@ -121,8 +203,30 @@ function createTables(): void {
 
     CREATE TABLE IF NOT EXISTS category_rules (
       id       INTEGER PRIMARY KEY AUTOINCREMENT,
-      pattern  TEXT NOT NULL UNIQUE,
-      category TEXT NOT NULL
+      pattern  TEXT NOT NULL,
+      category TEXT NOT NULL,
+      source   TEXT NOT NULL DEFAULT 'user',
+      priority INTEGER NOT NULL DEFAULT 0,
+      internal INTEGER NOT NULL DEFAULT 0,
+      UNIQUE(pattern, source)
+    );
+
+    CREATE TABLE IF NOT EXISTS rule_packs (
+      id           TEXT PRIMARY KEY,
+      version      TEXT NOT NULL,
+      name         TEXT NOT NULL,
+      installed_at TEXT NOT NULL,
+      -- Chemins de catégorie du pack, en JSON. Sert de référentiel « catégories
+      -- publiques » à la file de partage : l'arbre de l'utilisateur contient ses
+      -- catégories personnelles et ne peut pas jouer ce rôle.
+      categories   TEXT
+    );
+
+    -- Patterns déjà proposés au dépôt communautaire, pour ne pas les
+    -- represcrire à chaque relecture de la file de partage.
+    CREATE TABLE IF NOT EXISTS shared_rules (
+      pattern   TEXT PRIMARY KEY,
+      shared_at TEXT NOT NULL
     );
 
     CREATE TABLE IF NOT EXISTS chat_threads (
@@ -208,34 +312,31 @@ function createTables(): void {
   `)
 }
 
-const DEFAULT_CATEGORY_TREE: { name: string; children?: string[] }[] = [
-  { name: 'Alimentation', children: ['Épicerie', 'Boulangerie / Traiteur', 'Marchés'] },
-  { name: 'Restaurants', children: ['Fast-food', 'Cafés', 'Livraison repas'] },
-  { name: 'Transport', children: ['Carburant', 'Transports en commun', 'Taxi / VTC', 'Stationnement'] },
-  { name: 'Logement', children: ['Loyer', 'Électricité / Gaz', 'Internet / Téléphone', 'Entretien'] },
-  { name: 'Shopping', children: ['Vêtements', 'Électronique', 'Maison / Déco'] },
-  { name: 'Santé', children: ['Médecin / Dentiste', 'Pharmacie', 'Mutuelle'] },
-  { name: 'Loisirs', children: ['Cinéma / Spectacles', 'Sport', 'Jeux / Hobbies'] },
-  { name: 'Abonnements', children: ['Streaming', 'Presse / Livres', 'Logiciels'] },
-  { name: 'Voyages', children: ['Transports voyage', 'Hébergement', 'Activités touristiques'] },
-  { name: 'Épargne', children: ['Virement épargne', 'Investissements'] },
-  { name: 'Salaire' },
-  { name: 'Revenus', children: ['Freelance / Auto-entrepreneur', 'Aides / CAF', 'Remboursements'] },
-  { name: 'Frais bancaires' },
-  { name: 'Autre' }
-]
-
+/**
+ * Amorce une base vierge avec le pack fr-base complet — catégories ET règles —
+ * pour que le tout premier import arrive déjà catégorisé.
+ *
+ * Sur une base existante on ne fait rien : installer des règles d'office
+ * recatégoriserait des transactions sans que l'utilisateur l'ait demandé. Le
+ * pack lui est proposé dans la page Packs.
+ */
 function seedCategories(): void {
   const { n } = db.get('SELECT COUNT(*) AS n FROM categories') as { n: number }
   if (n > 0) return
-  for (const cat of DEFAULT_CATEGORY_TREE) {
-    try {
-      const result = db.run('INSERT INTO categories (name, parent_id) VALUES (?, NULL)', [cat.name])
-      const parentId = result.lastInsertRowid as number
-      for (const child of cat.children ?? []) {
-        try { db.run('INSERT INTO categories (name, parent_id) VALUES (?, ?)', [child, parentId]) } catch { /* skip */ }
-      }
-    } catch { /* skip */ }
+  try {
+    installRulePack(FR_BASE_PACK)
+  } catch {
+    // Un pack cassé ne doit pas empêcher l'app de démarrer : on retombe sur
+    // l'arbre de catégories seul.
+    for (const cat of DEFAULT_CATEGORY_TREE) {
+      try {
+        const result = db.run('INSERT INTO categories (name, parent_id) VALUES (?, NULL)', [cat.name])
+        const parentId = result.lastInsertRowid as number
+        for (const child of cat.children ?? []) {
+          try { db.run('INSERT INTO categories (name, parent_id) VALUES (?, ?)', [child, parentId]) } catch { /* skip */ }
+        }
+      } catch { /* skip */ }
+    }
   }
 }
 
@@ -976,19 +1077,32 @@ export function setTransactionInternalByCategory(category: string, isInternal: b
 
 // --- Category rules ---
 
+/**
+ * L'ordre EST la priorité : applyRulesToTransactions s'arrête à la première
+ * règle qui correspond. `priority` d'abord (les règles utilisateur sont à 0 et
+ * gagnent donc toujours face aux packs), puis `id` pour rester déterministe.
+ */
+const RULE_ORDER = 'ORDER BY priority, id'
+
 export function upsertCategoryRule(pattern: string, category: string): void {
   db.run(
-    'INSERT INTO category_rules (pattern, category) VALUES (?, ?) ON CONFLICT(pattern) DO UPDATE SET category = excluded.category',
-    [pattern, category]
+    `INSERT INTO category_rules (pattern, category, source, priority, internal)
+     VALUES (?, ?, 'user', ?, ?)
+     ON CONFLICT(pattern, source) DO UPDATE SET category = excluded.category, internal = excluded.internal`,
+    [pattern, category, USER_RULE_PRIORITY, looksLikeInternalCategory(category) ? 1 : 0]
   )
 }
 
-export function getCategoryRules(): { pattern: string; category: string }[] {
-  return db.all('SELECT pattern, category FROM category_rules ORDER BY id') as { pattern: string; category: string }[]
+export function getCategoryRules(): { pattern: string; category: string; internal: number }[] {
+  return db.all(
+    `SELECT pattern, category, internal FROM category_rules ${RULE_ORDER}`
+  ) as { pattern: string; category: string; internal: number }[]
 }
 
-export function getCategoryRulesWithId(): { id: number; pattern: string; category: string }[] {
-  return db.all('SELECT id, pattern, category FROM category_rules ORDER BY id') as { id: number; pattern: string; category: string }[]
+export function getCategoryRulesWithId(): CategoryRule[] {
+  return db.all(
+    `SELECT id, pattern, category, source, priority, internal FROM category_rules ${RULE_ORDER}`
+  ) as CategoryRule[]
 }
 
 export function deleteCategoryRule(id: number): void {
@@ -996,7 +1110,162 @@ export function deleteCategoryRule(id: number): void {
 }
 
 export function updateCategoryRule(id: number, pattern: string, category: string): void {
-  db.run('UPDATE category_rules SET pattern = ?, category = ? WHERE id = ?', [pattern, category, id])
+  // Éditer une règle de pack la détache : elle devient une règle utilisateur,
+  // sinon la prochaine mise à jour du pack écraserait la modification.
+  db.run(
+    `UPDATE category_rules
+        SET pattern = ?, category = ?, source = 'user', priority = ?, internal = ?
+      WHERE id = ?`,
+    [pattern, category, USER_RULE_PRIORITY, looksLikeInternalCategory(category) ? 1 : 0, id]
+  )
+}
+
+// --- Rule packs ---
+
+export function getInstalledPacks(): InstalledPack[] {
+  return db.all(
+    `SELECT p.id, p.version, p.name, p.installed_at,
+            (SELECT COUNT(*) FROM category_rules r WHERE r.source = 'pack:' || p.id) AS rule_count
+       FROM rule_packs p ORDER BY p.name`
+  ) as InstalledPack[]
+}
+
+/**
+ * Installe ou met à jour un pack. Les règles du pack sont intégralement
+ * remplacées ; les règles utilisateur ne sont jamais touchées, y compris
+ * lorsqu'elles portent le même pattern (d'où UNIQUE(pattern, source)).
+ */
+export function installRulePack(pack: RulePack): { rules: number; categories: number } {
+  const source = packSource(pack.id)
+  let categories = 0
+
+  db.exec('BEGIN')
+  try {
+    for (const cat of pack.categories) {
+      const existing = db.get(
+        'SELECT id FROM categories WHERE name = ? AND parent_id IS NULL',
+        [cat.name]
+      ) as { id: number } | undefined
+      let parentId = existing?.id
+      if (!parentId) {
+        parentId = db.run('INSERT INTO categories (name, parent_id) VALUES (?, NULL)', [cat.name])
+          .lastInsertRowid as number
+        categories++
+      }
+      for (const child of cat.children ?? []) {
+        const found = db.get(
+          'SELECT id FROM categories WHERE name = ? AND parent_id = ?',
+          [child, parentId]
+        ) as { id: number } | undefined
+        if (!found) {
+          db.run('INSERT INTO categories (name, parent_id) VALUES (?, ?)', [child, parentId])
+          categories++
+        }
+      }
+    }
+
+    db.run('DELETE FROM category_rules WHERE source = ?', [source])
+    pack.rules.forEach((rule, index) => {
+      db.run(
+        'INSERT INTO category_rules (pattern, category, source, priority, internal) VALUES (?, ?, ?, ?, ?)',
+        [
+          rule.pattern,
+          rule.category,
+          source,
+          // L'ordre du tableau `rules` est la priorité interne du pack : on le
+          // matérialise pour qu'il survive au tri SQL.
+          pack.priority * 1000 + index,
+          rule.internal || looksLikeInternalCategory(rule.category) ? 1 : 0
+        ]
+      )
+    })
+
+    db.run(
+      `INSERT INTO rule_packs (id, version, name, installed_at, categories) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET version = excluded.version, name = excluded.name,
+         installed_at = excluded.installed_at, categories = excluded.categories`,
+      [
+        pack.id,
+        pack.version,
+        pack.name,
+        new Date().toISOString(),
+        JSON.stringify(categoryPathsOfPack(pack))
+      ]
+    )
+    db.exec('COMMIT')
+  } catch (e) {
+    db.exec('ROLLBACK')
+    throw e
+  }
+
+  return { rules: pack.rules.length, categories }
+}
+
+// --- File de partage communautaire ---
+
+/**
+ * Catégories provenant des packs installés — le seul référentiel « public »
+ * dont on dispose.
+ *
+ * Surtout PAS getCategoryPaths(), qui renvoie l'arbre complet de l'utilisateur,
+ * catégories personnelles comprises. S'en servir vidait le garde-fou de son
+ * sens : une règle rangée dans « Enfants > Ecole » était jugée publiable.
+ */
+export function getPackCategoryPaths(): string[] {
+  const rows = db.all('SELECT id, categories FROM rule_packs') as {
+    id: string
+    categories: string | null
+  }[]
+  const paths = new Set<string>()
+
+  for (const row of rows) {
+    if (row.categories) {
+      try {
+        for (const path of JSON.parse(row.categories) as string[]) paths.add(path)
+        continue
+      } catch { /* JSON corrompu : on retombe sur le pack intégré */ }
+    }
+    // Pack installé avant l'ajout de la colonne.
+    const builtin = getBuiltinPack(row.id)
+    if (builtin) for (const path of categoryPathsOfPack(builtin)) paths.add(path)
+  }
+
+  return [...paths]
+}
+
+/**
+ * Répartit les règles utilisateur entre les trois listes de partage.
+ *
+ * Le filtre s'appuie sur les catégories des packs installés : une règle visant
+ * une catégorie personnelle n'a pas vocation à rejoindre un pack.
+ */
+export function getSharePartition(): SharePartition {
+  const rules = getCategoryRulesWithId()
+  const known = new Set(getPackCategoryPaths())
+  const shared = new Set(
+    (db.all('SELECT pattern FROM shared_rules') as { pattern: string }[]).map((r) => r.pattern)
+  )
+  return partitionForSharing(rules, known, shared)
+}
+
+/** Mémorise les patterns envoyés pour qu'ils ne réapparaissent pas dans la file. */
+export function markRulesShared(patterns: string[]): void {
+  const now = new Date().toISOString()
+  for (const pattern of patterns) {
+    db.run(
+      'INSERT INTO shared_rules (pattern, shared_at) VALUES (?, ?) ON CONFLICT(pattern) DO NOTHING',
+      [pattern, now]
+    )
+  }
+}
+
+/** Retire les règles d'un pack. Les catégories créées sont conservées : des
+ *  transactions y sont probablement déjà rattachées. */
+export function uninstallRulePack(packId: string): number {
+  const source = packSource(packId)
+  const result = db.run('DELETE FROM category_rules WHERE source = ?', [source])
+  db.run('DELETE FROM rule_packs WHERE id = ?', [packId])
+  return result.changes as number
 }
 
 export function findDuplicateTransactions(): Transaction[][] {
@@ -1622,8 +1891,8 @@ export function applyRulesToTransactions(transactionIds: number[]): number {
 
   // Pre-compile regexes once
   const compiled = rules.map((r) => {
-    try { return { regex: new RegExp(r.pattern, 'i'), category: r.category } } catch { return null }
-  }).filter(Boolean) as { regex: RegExp; category: string }[]
+    try { return { regex: new RegExp(r.pattern, 'i'), category: r.category, internal: r.internal === 1 } } catch { return null }
+  }).filter(Boolean) as { regex: RegExp; category: string; internal: boolean }[]
   if (compiled.length === 0) return 0
 
   const CHUNK = 200
@@ -1643,7 +1912,7 @@ export function applyRulesToTransactions(transactionIds: number[]): number {
         for (const rule of compiled) {
           if (rule.regex.test(tx.description)) {
             db.run('UPDATE transactions SET category = ? WHERE id = ?', [rule.category, tx.id])
-            if (rule.category.toLowerCase().includes('intern')) {
+            if (rule.internal) {
               db.run('UPDATE transactions SET is_internal = 1 WHERE id = ?', [tx.id])
             }
             updated++

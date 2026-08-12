@@ -1,3 +1,5 @@
+import type { RulePackCatalogResult } from '../shared/rulePacks'
+import type { SharePartition } from '../shared/ruleSharing'
 import type {
   Account,
   Transaction,
@@ -76,6 +78,11 @@ declare global {
       deleteCategoryRule: (id: number) => Promise<void>
       updateCategoryRule: (id: number, pattern: string, category: string) => Promise<void>
       upsertCategoryRule: (pattern: string, category: string) => Promise<void>
+      getRulePackCatalog: () => Promise<RulePackCatalogResult>
+      installRulePack: (packId: string) => Promise<{ rules: number; categories: number }>
+      uninstallRulePack: (packId: string) => Promise<number>
+      getSharePartition: () => Promise<SharePartition>
+      markRulesShared: (patterns: string[]) => Promise<void>
       countPattern: (pattern: string) => Promise<number>
       applyCategoryPattern: (category: string, pattern: string) => Promise<number>
 
