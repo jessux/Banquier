@@ -45,11 +45,6 @@ const api = {
     ipcRenderer.invoke('update-category-rule', id, pattern, category),
   upsertCategoryRule: (pattern: string, category: string) =>
     ipcRenderer.invoke('upsert-category-rule', pattern, category),
-  getRulePackCatalog: () => ipcRenderer.invoke('get-rule-pack-catalog'),
-  installRulePack: (packId: string) => ipcRenderer.invoke('install-rule-pack', packId),
-  uninstallRulePack: (packId: string) => ipcRenderer.invoke('uninstall-rule-pack', packId),
-  getSharePartition: () => ipcRenderer.invoke('get-share-partition'),
-  markRulesShared: (patterns: string[]) => ipcRenderer.invoke('mark-rules-shared', patterns),
 
   // Import
   previewCsv: (filePath: string) => ipcRenderer.invoke('preview-csv', filePath),
