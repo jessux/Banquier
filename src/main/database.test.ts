@@ -316,6 +316,45 @@ describe('merchant_key', () => {
     const [tx] = db.getTransactions({})
     expect(tx.merchant_key).toBe('NETFLIX COM PARIS')
   })
+
+  it("n'échoue pas à l'ouverture d'une base pré-existante sans la colonne merchant_key", () => {
+    // Simule une base créée avant l'introduction de merchant_key : la table
+    // transactions existe déjà, donc CREATE TABLE IF NOT EXISTS ne l'altère
+    // pas. C'est le scénario qui provoquait "no such column: merchant_key"
+    // quand l'index était créé dans le même bloc que CREATE TABLE.
+    db.closeDatabase()
+    const dbPath = path.join(tmpDir, 'legacy.db')
+    const raw = new Database(dbPath)
+    raw.exec(`
+      CREATE TABLE accounts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        bank TEXT,
+        currency TEXT DEFAULT 'EUR'
+      );
+      CREATE TABLE imports (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        filename TEXT,
+        imported_at TEXT NOT NULL,
+        transaction_count INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE transactions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER REFERENCES accounts(id),
+        date TEXT NOT NULL,
+        description TEXT NOT NULL,
+        amount REAL NOT NULL,
+        category TEXT,
+        import_id INTEGER REFERENCES imports(id)
+      );
+      INSERT INTO transactions (date, description, amount) VALUES ('2025-01-05', 'PRLV NETFLIX.COM PARIS', -13.49);
+    `)
+    raw.close()
+
+    expect(() => db.initDatabase(dbPath)).not.toThrow()
+    const [tx] = db.getTransactions({})
+    expect(tx.merchant_key).toBe('NETFLIX COM PARIS')
+  })
 })
 
 describe('mémoire marchand', () => {
