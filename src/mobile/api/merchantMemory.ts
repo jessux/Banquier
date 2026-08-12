@@ -1,4 +1,9 @@
 import { all, get, run, transaction } from '../db'
+import type {
+  CategorizationStats,
+  CategorySource,
+  MerchantMemoryEntry
+} from '../../shared/types'
 import { applyRulesToTransactions } from './rules'
 import { getCategoryPaths } from './categories'
 import { lookupMerchantDictionary } from '../../shared/merchantDictionary'
@@ -59,7 +64,9 @@ export async function applyMerchantMemory(transactionIds: number[]): Promise<num
       )
 
       for (const row of rows) {
-        await run('UPDATE transactions SET category = ? WHERE id = ?', [row.category, row.id])
+        await run("UPDATE transactions SET category = ?, category_source = 'memory' WHERE id = ?", [
+          row.category, row.id
+        ])
         if (row.category.toLowerCase().includes('intern')) {
           await run('UPDATE transactions SET is_internal = 1 WHERE id = ?', [row.id])
         }
@@ -96,7 +103,9 @@ export async function applyFuzzyMerchantMemory(transactionIds: number[]): Promis
       for (const row of rows) {
         const category = findFuzzyCategory(row.merchant_key, memory)
         if (!category) continue
-        await run('UPDATE transactions SET category = ? WHERE id = ?', [category, row.id])
+        await run("UPDATE transactions SET category = ?, category_source = 'fuzzy' WHERE id = ?", [
+          category, row.id
+        ])
         updated++
       }
     }
@@ -128,7 +137,9 @@ export async function applyMerchantDictionary(transactionIds: number[]): Promise
         if (!proposed) continue
         const category = resolveKnownCategory(proposed, known)
         if (!category) continue
-        await run('UPDATE transactions SET category = ? WHERE id = ?', [category, row.id])
+        await run("UPDATE transactions SET category = ?, category_source = 'dict' WHERE id = ?", [
+          category, row.id
+        ])
         updated++
       }
     }
@@ -146,6 +157,65 @@ function resolveKnownCategory(category: string, known: Set<string>): string | nu
     if (known.has(parent)) return parent
   }
   return null
+}
+
+export async function getMerchantMemory(): Promise<MerchantMemoryEntry[]> {
+  return all<MerchantMemoryEntry>(
+    'SELECT merchant_key, category, count, last_used FROM merchant_categories ORDER BY count DESC, merchant_key'
+  )
+}
+
+export async function forgetMerchantCategory(merchantKey: string): Promise<void> {
+  await run('DELETE FROM merchant_categories WHERE merchant_key = ?', [merchantKey])
+}
+
+export async function clearMerchantMemory(): Promise<void> {
+  await run('DELETE FROM merchant_categories')
+}
+
+/** Miroir de AUTOMATIC_SOURCES dans src/main/database.ts. */
+const AUTOMATIC_SOURCES = ['rule', 'memory', 'fuzzy', 'dict']
+
+/** Miroir de getCategorizationStats() dans src/main/database.ts. */
+export async function getCategorizationStats(): Promise<CategorizationStats> {
+  const placeholders = AUTOMATIC_SOURCES.map(() => '?').join(',')
+  const row = await get<{ total: number; categorized: number; automatic: number; manual: number }>(
+    `SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN category IS NOT NULL AND category <> '' THEN 1 ELSE 0 END) AS categorized,
+       SUM(CASE WHEN category IS NOT NULL AND category <> ''
+                 AND category_source IN (${placeholders}) THEN 1 ELSE 0 END) AS automatic,
+       SUM(CASE WHEN category IS NOT NULL AND category <> ''
+                 AND category_source IS NOT NULL
+                 AND category_source NOT IN (${placeholders}) THEN 1 ELSE 0 END) AS manual
+     FROM transactions`,
+    [...AUTOMATIC_SOURCES, ...AUTOMATIC_SOURCES]
+  )
+
+  const total = row?.total ?? 0
+  const categorized = row?.categorized ?? 0
+  const automatic = row?.automatic ?? 0
+  const manual = row?.manual ?? 0
+  const decided = automatic + manual
+
+  return {
+    total,
+    categorized,
+    uncategorized: total - categorized,
+    automatic,
+    manual,
+    unknownSource: categorized - decided,
+    automaticRate: decided > 0 ? automatic / decided : null
+  }
+}
+
+/** Miroir de clearCategoriesBySource() dans src/main/database.ts. */
+export async function clearCategoriesBySource(source: CategorySource): Promise<number> {
+  const result = await run(
+    'UPDATE transactions SET category = NULL, category_source = NULL WHERE category_source = ?',
+    [source]
+  )
+  return result.changes
 }
 
 /** Miroir de autoCategorize() dans src/main/database.ts. */

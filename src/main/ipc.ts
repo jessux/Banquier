@@ -45,7 +45,8 @@ import type {
   DcaPlan,
   PowensStatus,
   PowensSyncResult,
-  CategorizationProposal
+  CategorizationProposal,
+  CategorySource
 } from '../shared/types'
 
 
@@ -111,6 +112,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('clear-all-transactions', () => db.clearAllTransactions())
   ipcMain.handle('find-duplicates', () => db.findDuplicateTransactions())
   ipcMain.handle('get-category-rules-all', () => db.getCategoryRulesWithId())
+
+  // --- Mémoire marchand & pilotage de la catégorisation ---
+  ipcMain.handle('get-categorization-stats', () => db.getCategorizationStats())
+  ipcMain.handle('get-merchant-memory', () => db.getMerchantMemory())
+  ipcMain.handle('forget-merchant-category', (_, merchantKey: string) =>
+    db.forgetMerchantCategory(merchantKey)
+  )
+  ipcMain.handle('clear-merchant-memory', () => db.clearMerchantMemory())
+  ipcMain.handle('clear-categories-by-source', (_, source: CategorySource) =>
+    db.clearCategoriesBySource(source)
+  )
   ipcMain.handle('delete-category-rule', (_, id: number) => db.deleteCategoryRule(id))
   ipcMain.handle('update-category-rule', (_, id: number, pattern: string, category: string) =>
     db.updateCategoryRule(id, pattern, category)

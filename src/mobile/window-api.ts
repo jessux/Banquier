@@ -92,6 +92,11 @@ export function createMobileApi(): Window['api'] {
 
     // Category rules
     getCategoryRulesAll: rulesApi.getCategoryRulesWithId,
+    getCategorizationStats: merchantMemoryApi.getCategorizationStats,
+    getMerchantMemory: merchantMemoryApi.getMerchantMemory,
+    forgetMerchantCategory: merchantMemoryApi.forgetMerchantCategory,
+    clearMerchantMemory: merchantMemoryApi.clearMerchantMemory,
+    clearCategoriesBySource: merchantMemoryApi.clearCategoriesBySource,
     deleteCategoryRule: rulesApi.deleteCategoryRule,
     updateCategoryRule: rulesApi.updateCategoryRule,
     upsertCategoryRule: rulesApi.upsertCategoryRule,

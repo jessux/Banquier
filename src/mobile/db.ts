@@ -108,7 +108,9 @@ const SCHEMA_SQL = `
     tags        TEXT,
     -- Libellé réduit au marchand (voir shared/merchant.ts) : clé de
     -- regroupement pour la mémoire de catégorisation et la dédup LLM.
-    merchant_key TEXT
+    merchant_key TEXT,
+    -- Qui a posé la catégorie (voir CategorySource).
+    category_source TEXT
   );
 
   CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
@@ -287,7 +289,8 @@ async function rollbackRulePacksSchema(): Promise<void> {
 async function migrate(): Promise<void> {
   const migrations = [
     'ALTER TABLE transactions ADD COLUMN merchant_key TEXT',
-    'CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key)'
+    'CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key)',
+    'ALTER TABLE transactions ADD COLUMN category_source TEXT'
   ]
   for (const sql of migrations) {
     try { await exec(sql) } catch { /* colonne déjà présente */ }

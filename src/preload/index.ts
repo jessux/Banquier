@@ -40,6 +40,13 @@ const api = {
   clearAllTransactions: () => ipcRenderer.invoke('clear-all-transactions'),
   findDuplicates: () => ipcRenderer.invoke('find-duplicates'),
   getCategoryRulesAll: () => ipcRenderer.invoke('get-category-rules-all'),
+  getCategorizationStats: () => ipcRenderer.invoke('get-categorization-stats'),
+  getMerchantMemory: () => ipcRenderer.invoke('get-merchant-memory'),
+  forgetMerchantCategory: (merchantKey: string) =>
+    ipcRenderer.invoke('forget-merchant-category', merchantKey),
+  clearMerchantMemory: () => ipcRenderer.invoke('clear-merchant-memory'),
+  clearCategoriesBySource: (source: string) =>
+    ipcRenderer.invoke('clear-categories-by-source', source),
   deleteCategoryRule: (id: number) => ipcRenderer.invoke('delete-category-rule', id),
   updateCategoryRule: (id: number, pattern: string, category: string) =>
     ipcRenderer.invoke('update-category-rule', id, pattern, category),

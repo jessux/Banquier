@@ -372,6 +372,39 @@ export interface ChatMemory {
   created_at: string
 }
 
+/**
+ * Qui a posé la catégorie d'une transaction.
+ * `null` pour celles catégorisées avant l'introduction du suivi.
+ */
+export type CategorySource = 'user' | 'rule' | 'memory' | 'fuzzy' | 'dict' | 'ai'
+
+/** Une décision de catégorisation mémorisée pour un marchand. */
+export interface MerchantMemoryEntry {
+  merchant_key: string
+  category: string
+  /** Nombre de décisions enregistrées pour ce marchand. */
+  count: number
+  last_used: string
+}
+
+/**
+ * Mesure de la pénibilité restante : la part des transactions catégorisées
+ * sans que l'utilisateur ait eu à intervenir.
+ */
+export interface CategorizationStats {
+  total: number
+  categorized: number
+  uncategorized: number
+  /** Posées par les règles, la mémoire, le rattrapage flou ou le dictionnaire. */
+  automatic: number
+  /** Posées à la main, ou via une proposition IA validée une par une. */
+  manual: number
+  /** Catégorisées avant l'introduction du suivi de provenance. */
+  unknownSource: number
+  /** automatic / (automatic + manual), de 0 à 1. null si rien n'est catégorisé. */
+  automaticRate: number | null
+}
+
 export interface MerchantStats {
   merchant: string
   total: number

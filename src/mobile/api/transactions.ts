@@ -128,11 +128,13 @@ export async function updateTransactionCategory(
     [id]
   )
 
-  await run('UPDATE transactions SET category = ? WHERE id = ?', [category, id])
+  await run("UPDATE transactions SET category = ?, category_source = 'user' WHERE id = ?", [category, id])
   await rememberMerchantCategory(tx?.merchant_key, category)
 
   if (applyToSimilar && tx?.merchant_key) {
-    await run('UPDATE transactions SET category = ? WHERE merchant_key = ?', [category, tx.merchant_key])
+    await run("UPDATE transactions SET category = ?, category_source = 'user' WHERE merchant_key = ?", [
+      category, tx.merchant_key
+    ])
   }
 }
 
@@ -156,7 +158,7 @@ export async function updateCategoryByPattern(category: string, pattern: string)
     if (matched.length === 0) return 0
     await transaction(async () => {
       for (const t of matched) {
-        await run('UPDATE transactions SET category = ? WHERE id = ?', [category, t.id])
+        await run("UPDATE transactions SET category = ?, category_source = 'rule' WHERE id = ?", [category, t.id])
         await rememberMerchantCategory(t.merchant_key, category)
       }
     })
@@ -174,7 +176,7 @@ export async function batchUpdateCategories(updates: { id: number; category: str
         'SELECT merchant_key FROM transactions WHERE id = ?',
         [u.id]
       )
-      await run('UPDATE transactions SET category = ? WHERE id = ?', [u.category, u.id])
+      await run("UPDATE transactions SET category = ?, category_source = 'ai' WHERE id = ?", [u.category, u.id])
       await rememberMerchantCategory(tx?.merchant_key, u.category)
     }
   })

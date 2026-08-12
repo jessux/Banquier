@@ -4,6 +4,9 @@ import type {
   Import,
   Category,
   CategoryRule,
+  CategorizationStats,
+  CategorySource,
+  MerchantMemoryEntry,
   TransactionFilters,
   CsvMapping,
   CsvPreview,
@@ -73,6 +76,13 @@ declare global {
 
       // Category rules
       getCategoryRulesAll: () => Promise<CategoryRule[]>
+
+      // Mémoire marchand & pilotage de la catégorisation
+      getCategorizationStats: () => Promise<CategorizationStats>
+      getMerchantMemory: () => Promise<MerchantMemoryEntry[]>
+      forgetMerchantCategory: (merchantKey: string) => Promise<void>
+      clearMerchantMemory: () => Promise<void>
+      clearCategoriesBySource: (source: CategorySource) => Promise<number>
       deleteCategoryRule: (id: number) => Promise<void>
       updateCategoryRule: (id: number, pattern: string, category: string) => Promise<void>
       upsertCategoryRule: (pattern: string, category: string) => Promise<void>

@@ -518,3 +518,47 @@ describe('rattrapage flou de la mémoire', () => {
     )
   })
 })
+
+describe('suivi de provenance', () => {
+  it('distingue ce qui est automatique de ce qui a demandé une intervention', () => {
+    const ids = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB CARREFOUR MARKET 05/01', amount: -42, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-01-06', description: 'CB ETS MARTIN 06/01', amount: -20, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-01-07', description: 'CB INCONNU XYZ 07/01', amount: -10, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize(ids)          // le dictionnaire attrape Carrefour
+    db.updateTransactionCategory(ids[1], 'Autre') // intervention manuelle
+
+    const stats = db.getCategorizationStats()
+    expect(stats.total).toBe(3)
+    expect(stats.automatic).toBe(1)
+    expect(stats.manual).toBe(1)
+    expect(stats.uncategorized).toBe(1)
+    expect(stats.automaticRate).toBeCloseTo(0.5)
+  })
+
+  it('isole les transactions catégorisées avant le suivi', () => {
+    insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB ANCIEN 05/01', amount: -10, category: 'Autre', is_internal: 0 }
+    ])
+    const stats = db.getCategorizationStats()
+    expect(stats.unknownSource).toBe(1)
+    // Les compter d'un côté ou de l'autre fausserait le taux.
+    expect(stats.automaticRate).toBeNull()
+  })
+
+  it('annule en bloc une source sans toucher aux choix manuels', () => {
+    const ids = insertTx([
+      { account_id: null, date: '2025-01-05', description: 'CB CARREFOUR MARKET 05/01', amount: -42, category: null, is_internal: 0 },
+      { account_id: null, date: '2025-01-06', description: 'CB ETS MARTIN 06/01', amount: -20, category: null, is_internal: 0 }
+    ])
+    db.autoCategorize(ids)
+    db.updateTransactionCategory(ids[1], 'Autre')
+
+    expect(db.clearCategoriesBySource('dict')).toBe(1)
+
+    const byId = new Map(db.getTransactions({}).map((t) => [t.id, t.category]))
+    expect(byId.get(ids[0])).toBeNull()
+    expect(byId.get(ids[1])).toBe('Autre')
+  })
+})

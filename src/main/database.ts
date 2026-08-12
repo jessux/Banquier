@@ -16,6 +16,9 @@ import type {
   ChatMemory,
   StoredChatMessage,
   MerchantStats,
+  MerchantMemoryEntry,
+  CategorizationStats,
+  CategorySource,
   PeriodComparison,
   PeriodComparisonRow,
   UncategorizedSummary,
@@ -90,6 +93,7 @@ function migrate(): void {
     'ALTER TABLE accounts ADD COLUMN balance REAL',
     'ALTER TABLE transactions ADD COLUMN merchant_key TEXT',
     'CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key)',
+    'ALTER TABLE transactions ADD COLUMN category_source TEXT',
   ]
   for (const sql of migrations) {
     try { db.exec(sql) } catch { /* column already exists */ }
@@ -200,7 +204,11 @@ function createTables(): void {
       import_id   INTEGER REFERENCES imports(id),
       -- Libellé réduit au marchand (voir shared/merchant.ts) : clé de
       -- regroupement pour la mémoire de catégorisation et la dédup LLM.
-      merchant_key TEXT
+      merchant_key TEXT,
+      -- Qui a posé la catégorie (voir CategorySource) : permet d'afficher le
+      -- taux d'automatisation et d'annuler en bloc une vague mal partie.
+      -- NULL pour les transactions catégorisées avant l'introduction du suivi.
+      category_source TEXT
     );
 
     CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
@@ -503,11 +511,13 @@ export function updateTransactionCategory(id: number, category: string, applyToS
   const tx = db.get('SELECT merchant_key FROM transactions WHERE id = ?', [id]) as
     { merchant_key: string | null } | undefined
 
-  db.run('UPDATE transactions SET category = ? WHERE id = ?', [category, id])
+  db.run("UPDATE transactions SET category = ?, category_source = 'user' WHERE id = ?", [category, id])
   rememberMerchantCategory(tx?.merchant_key, category)
 
   if (applyToSimilar && tx?.merchant_key) {
-    db.run('UPDATE transactions SET category = ? WHERE merchant_key = ?', [category, tx.merchant_key])
+    db.run("UPDATE transactions SET category = ?, category_source = 'user' WHERE merchant_key = ?", [
+      category, tx.merchant_key
+    ])
   }
 }
 
@@ -531,7 +541,7 @@ export function updateCategoryByPattern(category: string, pattern: string): numb
     db.exec('BEGIN')
     try {
       for (const t of matched) {
-        db.run('UPDATE transactions SET category = ? WHERE id = ?', [category, t.id])
+        db.run("UPDATE transactions SET category = ?, category_source = 'rule' WHERE id = ?", [category, t.id])
         rememberMerchantCategory(t.merchant_key, category)
       }
       db.exec('COMMIT')
@@ -555,7 +565,7 @@ export function batchUpdateCategories(updates: { id: number; category: string }[
     for (const u of updates) {
       const tx = db.get('SELECT merchant_key FROM transactions WHERE id = ?', [u.id]) as
         { merchant_key: string | null } | undefined
-      db.run('UPDATE transactions SET category = ? WHERE id = ?', [u.category, u.id])
+      db.run("UPDATE transactions SET category = ?, category_source = 'ai' WHERE id = ?", [u.category, u.id])
       rememberMerchantCategory(tx?.merchant_key, u.category)
     }
     db.exec('COMMIT')
@@ -1177,7 +1187,9 @@ export function applyMerchantMemory(transactionIds: number[]): number {
       ) as { id: number; category: string }[]
 
       for (const row of rows) {
-        db.run('UPDATE transactions SET category = ? WHERE id = ?', [row.category, row.id])
+        db.run("UPDATE transactions SET category = ?, category_source = 'memory' WHERE id = ?", [
+          row.category, row.id
+        ])
         // Même convention que les règles : une catégorie « interne » marque
         // aussi la transaction comme virement interne.
         if (row.category.toLowerCase().includes('intern')) {
@@ -1193,6 +1205,74 @@ export function applyMerchantMemory(transactionIds: number[]): number {
   }
 
   return updated
+}
+
+export function getMerchantMemory(): MerchantMemoryEntry[] {
+  return db.all(
+    'SELECT merchant_key, category, count, last_used FROM merchant_categories ORDER BY count DESC, merchant_key'
+  ) as MerchantMemoryEntry[]
+}
+
+export function forgetMerchantCategory(merchantKey: string): void {
+  db.run('DELETE FROM merchant_categories WHERE merchant_key = ?', [merchantKey])
+}
+
+export function clearMerchantMemory(): void {
+  db.exec('DELETE FROM merchant_categories')
+}
+
+/** Sources considérées comme automatiques : posées sans intervention. */
+const AUTOMATIC_SOURCES = ['rule', 'memory', 'fuzzy', 'dict']
+
+/**
+ * Taux d'automatisation de la catégorisation — la mesure qui dit si la
+ * pénibilité a réellement baissé, là où la précision d'un modèle ne le dit pas.
+ */
+export function getCategorizationStats(): CategorizationStats {
+  const placeholders = AUTOMATIC_SOURCES.map(() => '?').join(',')
+  const row = db.get(
+    `SELECT
+       COUNT(*) AS total,
+       SUM(CASE WHEN category IS NOT NULL AND category <> '' THEN 1 ELSE 0 END) AS categorized,
+       SUM(CASE WHEN category IS NOT NULL AND category <> ''
+                 AND category_source IN (${placeholders}) THEN 1 ELSE 0 END) AS automatic,
+       SUM(CASE WHEN category IS NOT NULL AND category <> ''
+                 AND category_source IS NOT NULL
+                 AND category_source NOT IN (${placeholders}) THEN 1 ELSE 0 END) AS manual
+     FROM transactions`,
+    [...AUTOMATIC_SOURCES, ...AUTOMATIC_SOURCES]
+  ) as { total: number; categorized: number; automatic: number; manual: number }
+
+  const total = row.total ?? 0
+  const categorized = row.categorized ?? 0
+  const automatic = row.automatic ?? 0
+  const manual = row.manual ?? 0
+  const decided = automatic + manual
+
+  return {
+    total,
+    categorized,
+    uncategorized: total - categorized,
+    automatic,
+    manual,
+    // Les transactions catégorisées avant le suivi n'ont pas de provenance :
+    // les compter d'un côté ou de l'autre fausserait le taux, on les isole.
+    unknownSource: categorized - decided,
+    automaticRate: decided > 0 ? automatic / decided : null
+  }
+}
+
+/**
+ * Retire les catégories posées par une source donnée, sans toucher aux choix de
+ * l'utilisateur. C'est le filet de sécurité d'une vague automatique mal partie :
+ * un dictionnaire qui se trompe ou une mémoire polluée se défont en un geste.
+ */
+export function clearCategoriesBySource(source: CategorySource): number {
+  const result = db.run(
+    'UPDATE transactions SET category = NULL, category_source = NULL WHERE category_source = ?',
+    [source]
+  )
+  return result.changes as number
 }
 
 /**
@@ -1912,7 +1992,9 @@ export function applyFuzzyMerchantMemory(transactionIds: number[]): number {
       for (const row of rows) {
         const category = findFuzzyCategory(row.merchant_key, memory)
         if (!category) continue
-        db.run('UPDATE transactions SET category = ? WHERE id = ?', [category, row.id])
+        db.run("UPDATE transactions SET category = ?, category_source = 'fuzzy' WHERE id = ?", [
+          category, row.id
+        ])
         updated++
       }
     }
@@ -1957,7 +2039,9 @@ export function applyMerchantDictionary(transactionIds: number[]): number {
         if (!proposed) continue
         const category = resolveKnownCategory(proposed, known)
         if (!category) continue
-        db.run('UPDATE transactions SET category = ? WHERE id = ?', [category, row.id])
+        db.run("UPDATE transactions SET category = ?, category_source = 'dict' WHERE id = ?", [
+          category, row.id
+        ])
         updated++
       }
     }
@@ -2013,7 +2097,9 @@ export function applyRulesToTransactions(transactionIds: number[]): number {
       for (const tx of rows) {
         for (const rule of compiled) {
           if (rule.regex.test(tx.description)) {
-            db.run('UPDATE transactions SET category = ? WHERE id = ?', [rule.category, tx.id])
+            db.run("UPDATE transactions SET category = ?, category_source = 'rule' WHERE id = ?", [
+              rule.category, tx.id
+            ])
             if (rule.category.toLowerCase().includes('intern')) {
               db.run('UPDATE transactions SET is_internal = 1 WHERE id = ?', [tx.id])
             }
