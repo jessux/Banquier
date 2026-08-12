@@ -84,6 +84,7 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
   const [catProgress, setCatProgress] = useState<{ done: number; total: number } | null>(null)
   const [proposals, setProposals] = useState<(CategorizationProposal & { accepted: boolean })[] | null>(null)
   const [applyingProposals, setApplyingProposals] = useState(false)
+  const [hilitedProposal, setHilitedProposal] = useState(0)
   const [editing, setEditing] = useState<EditingCell | null>(null)
   const [newCategory, setNewCategory] = useState('')
   const [regexPanel, setRegexPanel] = useState<RegexPanel | null>(null)
@@ -257,6 +258,7 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
         setProposals(
           result.proposals.map((p) => ({ ...p, accepted: p.confidence >= AUTO_ACCEPT_CONFIDENCE }))
         )
+        setHilitedProposal(0)
       }
     } catch (e) {
       alert(`Erreur : ${String(e)}`)
@@ -265,6 +267,49 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
       setCatProgress(null)
     }
   }
+
+  // Revue au clavier : la liste peut compter plusieurs dizaines de marchands,
+  // et la parcourir à la souris case après case est exactement la pénibilité
+  // qu'on cherche à supprimer.
+  useEffect(() => {
+    if (proposals === null) return
+
+    const handler = (e: KeyboardEvent): void => {
+      // Le sélecteur de catégorie a ses propres flèches et son propre Entrée.
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return
+
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setHilitedProposal((i) => Math.min(i + 1, proposals.length - 1))
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setHilitedProposal((i) => Math.max(i - 1, 0))
+      } else if (e.key === ' ') {
+        e.preventDefault()
+        setProposals((prev) =>
+          prev?.map((p, i) => (i === hilitedProposal ? { ...p, accepted: !p.accepted } : p)) ?? null
+        )
+      } else if (e.key === 'Enter') {
+        e.preventDefault()
+        applyProposals()
+      } else if (e.key === 'Escape') {
+        e.preventDefault()
+        setProposals(null)
+      }
+    }
+
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [proposals, hilitedProposal])
+
+  // Garde la ligne survolée au clavier dans le champ de vision.
+  useEffect(() => {
+    if (proposals === null) return
+    document
+      .querySelector(`[data-proposal="${hilitedProposal}"]`)
+      ?.scrollIntoView({ block: 'nearest' })
+  }, [hilitedProposal, proposals])
 
   const applyProposals = async (): Promise<void> => {
     if (!proposals) return
@@ -510,22 +555,30 @@ export default function Transactions({ onImport, initialUncategorized }: { onImp
               <button className="btn btn-secondary" onClick={() => setProposals(null)}>✕ Annuler</button>
             </div>
           </div>
-          {proposals.some((p) => p.confidence < AUTO_ACCEPT_CONFIDENCE) && (
-            <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
-              Les marchands sûrs sont déjà cochés. Seuls les
-              {' '}{proposals.filter((p) => p.confidence < AUTO_ACCEPT_CONFIDENCE).length} marqués
-              {' '}<span style={{ color: 'var(--yellow)' }}>à vérifier</span> demandent votre attention.
-            </div>
-          )}
+          <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 10 }}>
+            {proposals.some((p) => p.confidence < AUTO_ACCEPT_CONFIDENCE) && (
+              <>
+                Les marchands sûrs sont déjà cochés. Seuls les
+                {' '}{proposals.filter((p) => p.confidence < AUTO_ACCEPT_CONFIDENCE).length} marqués
+                {' '}<span style={{ color: 'var(--yellow)' }}>à vérifier</span> demandent votre attention.
+                {' · '}
+              </>
+            )}
+            <span style={{ whiteSpace: 'nowrap' }}>↑↓ naviguer · Espace cocher · Entrée appliquer · Échap annuler</span>
+          </div>
           <div style={{ maxHeight: 420, overflowY: 'auto' }}>
             {proposals.map((p, idx) => {
               const uncertain = p.confidence < AUTO_ACCEPT_CONFIDENCE
               return (
                 <div
                   key={p.merchant}
+                  data-proposal={idx}
+                  onMouseEnter={() => setHilitedProposal(idx)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0',
-                    borderBottom: '1px solid rgba(255,255,255,0.04)'
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px',
+                    borderBottom: '1px solid rgba(255,255,255,0.04)',
+                    background: idx === hilitedProposal ? 'rgba(99,102,241,0.10)' : undefined,
+                    borderRadius: idx === hilitedProposal ? 6 : undefined
                   }}
                 >
                   <input

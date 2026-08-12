@@ -124,7 +124,7 @@ ultérieure du dictionnaire de prendre effet.
 ### Phase 4 — Revue groupée par marchand ☑ *(livrée avec la phase 2)*
 - ☑ Lignes « MARCHAND — n tx — total € — catégorie », triées par impact décroissant
 - ☑ Auto-acceptation au-dessus du seuil de confiance (0,8), les autres marqués « à vérifier »
-- ☐ Navigation clavier *(reste à faire — la souris suffit tant que la liste tient en quelques lignes)*
+- ☑ Navigation clavier : ↑↓ naviguer, Espace cocher, Entrée appliquer, Échap annuler — rappelée dans le panneau, sinon personne ne la découvre
 
 ### Phase 5 — Traçabilité et pilotage ☑
 - ☑ Colonne `category_source` (`user`/`rule`/`memory`/`fuzzy`/`dict`/`ai`) renseignée sur tous les chemins d'écriture
