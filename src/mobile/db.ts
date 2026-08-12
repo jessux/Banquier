@@ -145,7 +145,10 @@ const SCHEMA_SQL = `
   CREATE INDEX IF NOT EXISTS idx_transactions_date ON transactions(date);
   CREATE INDEX IF NOT EXISTS idx_transactions_category ON transactions(category);
   CREATE INDEX IF NOT EXISTS idx_transactions_account ON transactions(account_id);
-  CREATE INDEX IF NOT EXISTS idx_transactions_merchant ON transactions(merchant_key);
+  -- idx_transactions_merchant est créé dans migrate(), après l'ALTER TABLE qui
+  -- garantit la présence de la colonne merchant_key : sur une base existante
+  -- créée avant son introduction, CREATE TABLE IF NOT EXISTS ci-dessus est un
+  -- no-op et cet index planterait ici avec "no such column: merchant_key".
 
   CREATE TABLE IF NOT EXISTS categories (
     id        INTEGER PRIMARY KEY AUTOINCREMENT,
