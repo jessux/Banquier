@@ -94,7 +94,8 @@ async function buildProposals(
   if (ruleTargets.length > 0) await merchantMemoryApi.autoCategorize(ruleTargets.map((t) => t.id))
 
   const afterRules = await transactionsApi.getTransactions({})
-  const groups = groupByMerchant(afterRules.filter((t) => !t.category))
+  const aiTargets = onlyUncategorized ? afterRules.filter((t) => !t.category) : afterRules
+  const groups = groupByMerchant(aiTargets)
   if (groups.length === 0) return []
 
   const BATCH_SIZE = 30

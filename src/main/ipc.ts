@@ -233,12 +233,14 @@ export function registerIpcHandlers(): void {
     const ruleTargets = onlyUncategorized ? allTxForRules.filter((t) => !t.category) : allTxForRules
     if (ruleTargets.length > 0) db.autoCategorize(ruleTargets.map((t) => t.id))
 
-    // Seconde passe : propositions IA pour ce qu'il reste, regroupées par
-    // marchand. Un relevé de 300 lignes inconnues ne contient souvent qu'une
-    // quinzaine de marchands distincts — c'est autant d'appels économisés et de
-    // décisions en moins pour l'utilisateur.
+    // Seconde passe : propositions IA pour ce qu'il reste (ou pour tout, en
+    // mode « recatégoriser »), regroupées par marchand. Un relevé de 300
+    // lignes inconnues ne contient souvent qu'une quinzaine de marchands
+    // distincts — c'est autant d'appels économisés et de décisions en moins
+    // pour l'utilisateur.
     const afterRules = db.getTransactions({})
-    const groups = groupByMerchant(afterRules.filter((t) => !t.category))
+    const aiTargets = onlyUncategorized ? afterRules.filter((t) => !t.category) : afterRules
+    const groups = groupByMerchant(aiTargets)
     if (groups.length === 0) return []
 
     const BATCH_SIZE = 30
