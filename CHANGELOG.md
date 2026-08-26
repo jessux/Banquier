@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.36.0](https://github.com/jessux/Banquier/compare/v1.35.0...v1.36.0) (2026-08-26)
+
+
+### Nouvelles fonctionnalités
+
+* **mobile:** surveillance Powens en arrière-plan, app fermée ([2cbb50c](https://github.com/jessux/Banquier/commit/2cbb50cfd5920574e894ccfc77b4febceacbf0d6))
+* **mobile:** surveillance Powens en arrière-plan, app fermée ([cdf4f22](https://github.com/jessux/Banquier/commit/cdf4f22b3271b1d2684ef1b931af600fd3a11e33))
+
 ## [1.35.0](https://github.com/jessux/Banquier/compare/v1.34.4...v1.35.0) (2026-08-12)
 
 
