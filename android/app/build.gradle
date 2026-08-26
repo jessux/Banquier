@@ -60,9 +60,14 @@ android {
     }
 }
 
+// La seconde entrée `dirs` ci-dessous est ajoutée automatiquement par le postinstall
+// de @capacitor/background-runner (scripts/install_libs.js) : le moteur JS du runner
+// de fond est livré en .aar dans node_modules, pas sur un dépôt Maven. Ne pas la
+// reformater — le script la reconnaît au caractère près et la ré-insérerait sinon.
 repositories {
     flatDir{
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+		dirs '../../node_modules/@capacitor/background-runner/android/src/main/libs', 'libs'
     }
 }
 

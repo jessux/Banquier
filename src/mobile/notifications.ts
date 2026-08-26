@@ -39,7 +39,13 @@ const ID_DAILY = 1004
 
 let channelsReady = false
 
-async function ensureChannels(): Promise<void> {
+/**
+ * Crée les canaux de notification Android. Exporté parce que le runner de fond
+ * (src/renderer/public/runners/background.js) publie sur ces mêmes canaux sans
+ * pouvoir les créer : Android ignore purement et simplement une notification
+ * adressée à un canal inexistant, donc l'app doit les avoir posés au préalable.
+ */
+export async function ensureChannels(): Promise<void> {
   if (channelsReady) return
   try {
     await LocalNotifications.createChannel({

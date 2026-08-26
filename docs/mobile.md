@@ -87,7 +87,9 @@ Powens interroge la banque de façon asynchrone : les transactions n'existent pa
 - il traduit les états d'erreur Powens (`wrongpass`, `SCARequired`, `actionNeeded`, `websiteUnavailable`…) en messages actionnables, remontés dans `PowensSyncResult.warning` et affichés dans l'app ;
 - il publie son étape courante, consommée par `window.api.onPowensProgress`.
 
-### Synchronisation en tâche de fond
+### Synchronisation non bloquante (job hors React)
+
+*(à ne pas confondre avec la surveillance en arrière-plan décrite plus bas, qui tourne app fermée)*
 
 `src/renderer/src/utils/powensJob.ts` pilote toutes les synchronisations depuis un état unique vivant **hors de React**. L'UI ne fait plus qu'afficher cet état, ce qui règle plusieurs problèmes d'un coup : l'écran reste utilisable pendant la synchro, l'avancement est visible partout (onboarding, paramètres, toast global), une synchro survit au changement de page ou à la fermeture de l'onboarding, et deux synchronisations concurrentes ne peuvent plus démarrer.
 
@@ -157,6 +159,39 @@ Les alertes de Banquier étaient jusqu'ici de simples toasts HTML : invisibles d
 La permission `POST_NOTIFICATIONS` (obligatoire depuis Android 13) est demandée à l'étape « Notifications » de l'onboarding, et réactivable dans Paramètres → Notifications. L'icône de la barre de statut est un drawable monochrome dédié (`res/drawable/ic_stat_banquier.xml`) : Android n'affiche que la silhouette du small icon, réutiliser `ic_launcher` produirait un carré blanc.
 
 **Pourquoi des notifications locales et pas du push FCM.** Le push FCM suppose un serveur qui pousse les messages. Banquier n'en a pas — toutes les données vivent dans le SQLite du téléphone, et chacun des événements ci-dessus est produit par l'app elle-même. Les notifications locales couvrent donc l'intégralité des cas, avec le même rendu système qu'un push (bannière, son, barre de statut, persistance app fermée pour le rappel programmé). Un vrai push FCM ne deviendra pertinent que le jour où un backend Banquier recevra les webhooks Powens.
+
+## Surveillance bancaire en arrière-plan (app fermée)
+
+Le rappel quotidien ci-dessus ne fait que *rappeler d'ouvrir l'app*. La surveillance en arrière-plan, elle, va interroger Powens toute seule : `@capacitor/background-runner` exécute `src/renderer/public/runners/background.js` toutes les ~60 min via WorkManager (Android) ou BGTaskScheduler (iOS), même Banquier fermé.
+
+### Ce qu'elle fait, et ce qu'elle ne peut pas faire
+
+Le runner tourne dans un **moteur JS distinct du webview** (QuickJS sur Android, JavaScriptCore sur iOS). Il y dispose de `fetch`, `console`, `setTimeout`, `crypto`, et des API `CapacitorKV` / `CapacitorNotifications` / `CapacitorDevice` — et de rien d'autre. En particulier **pas d'accès à SQLite** : `@capacitor-community/sqlite` est un plugin du webview, injoignable depuis ce contexte.
+
+Le partage du travail en découle directement :
+
+| Où | Quoi |
+|---|---|
+| Runner de fond, app fermée | Interroge `/users/me/transactions` sur les 15 derniers jours, compare les ids à son curseur, **notifie** « N nouvelles transactions ». Vérifie aussi `/users/me/connections` et alerte « Banque à reconnecter ». |
+| App, à la réouverture | `powensStartupSync` fait l'import réel en base, puis remet le compteur d'attente à zéro. |
+
+Le gain concret n'est donc pas un import sans ouvrir l'app — c'est impossible sans écrire un plugin natif — mais **être prévenu dans l'heure**, l'import étant ensuite immédiat puisque Powens a déjà tout rapatrié de son côté.
+
+### État partagé entre les deux mondes
+
+`CapacitorKV` (SharedPreferences / UserDefaults nommés d'après le `label` du runner) est un magasin **distinct** des Preferences Capacitor de l'app, et le runner ne sait pas lire ces dernières. `src/mobile/background-sync.ts` est le seul pont : il pousse domaine Powens, token, interrupteur et symbole monétaire via l'événement `configure`, et relit l'état via `status`. Ce transfert est refait à chaque lancement de l'app (`entry.ts`), après un rattachement de banque et après une déconnexion — cette dernière effaçant le token copié et remettant le curseur à blanc.
+
+Le curseur, justement : le runner retient le plus grand id de transaction déjà vu. Au tout premier passage il se contente de le poser **sans notifier**, sinon activer la surveillance annoncerait d'un coup tout l'historique déjà en base.
+
+### Points d'attention
+
+- **Les canaux de notification doivent exister avant.** Android jette silencieusement toute notification adressée à un canal inconnu, et le runner n'a pas de quoi en créer : `entry.ts` appelle donc `ensureChannels()` à chaque lancement.
+- **La cadence appartient à l'OS.** 60 min est une demande, pas une garantie : Doze, l'optimisation batterie et les surcouches constructeur ([dontkillmyapp.com](https://dontkillmyapp.com)) peuvent l'étirer largement. Android impose de toute façon 15 min minimum, et iOS ne déclenche rien dans le simulateur.
+- **Désactivée par défaut.** Elle réveille l'app et consomme données et batterie : Paramètres → Surveillance en arrière-plan, avec un bouton « Vérifier maintenant » pour ne pas avoir à attendre une heure pour tester.
+- **Une erreur de fond ne notifie pas.** L'utilisateur n'y peut rien et le réveil suivant réessaie ; elle est simplement conservée et affichée dans les Paramètres.
+- **Config native.** Le `label` (`com.banquier.app.background.sync`) est répété dans `capacitor.config.ts`, dans `BGTaskSchedulerPermittedIdentifiers` de `ios/App/App/Info.plist` et dans `background-sync.ts` — les trois doivent rester alignés. iOS exige en plus `UIBackgroundModes` (`fetch`, `processing`) et l'enregistrement de la tâche dans `AppDelegate.didFinishLaunchingWithOptions`. Sur Android, le postinstall du plugin ajoute tout seul une ligne `dirs` dans `android/app/build.gradle` (le moteur JS est livré en `.aar`) : ne pas la reformater, le script la reconnaît au caractère près.
+
+Le runner est testé tel qu'embarqué (`src/mobile/background-runner.test.ts`) : le fichier est évalué dans un `new Function` avec des globales simulées, faute de pouvoir l'importer.
 
 ## Pas encore disponible sur mobile (roadmap)
 
