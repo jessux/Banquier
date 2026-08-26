@@ -31,6 +31,7 @@ import type {
   PowensSyncResult,
   PowensProgress,
   NotificationsStatus,
+  BackgroundSyncStatus,
   Budget,
   BudgetWithSpent,
   ProfilesState,
@@ -188,6 +189,16 @@ declare global {
         setDailyHour: (hour: number | null) => Promise<NotificationsStatus>
         budgetAlert: (categories: string[], overCount: number) => Promise<void>
         test: () => Promise<void>
+      }
+
+      /** Surveillance Powens en arrière-plan, app fermée. Mobile uniquement : sur
+       *  desktop la propriété est absente et l'UI masque la section correspondante.
+       *  Voir src/mobile/background-sync.ts. */
+      backgroundSync?: {
+        status: () => Promise<BackgroundSyncStatus>
+        setEnabled: (enabled: boolean) => Promise<BackgroundSyncStatus>
+        /** Déclenche une vérification immédiate au lieu d'attendre le réveil de l'OS. */
+        checkNow: () => Promise<BackgroundSyncStatus>
       }
 
       // Patrimoine

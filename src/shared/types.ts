@@ -130,6 +130,35 @@ export interface Settings {
    *  ce drapeau permet de reprendre l'import au redémarrage au lieu de perdre la banque
    *  tout juste rattachée. */
   powensConnectPending?: boolean
+  /** Surveillance Powens en arrière-plan (Android/iOS). Désactivée par défaut :
+   *  elle réveille l'app périodiquement et consomme donc un peu de batterie et de
+   *  données, ce qui doit rester un choix explicite. */
+  backgroundSyncEnabled?: boolean
+}
+
+/**
+ * État de la surveillance Powens en arrière-plan (src/mobile/background-sync.ts).
+ *
+ * À ne pas confondre avec une synchronisation complète : la tâche de fond tourne
+ * hors du webview, sans accès à SQLite. Elle repère les nouvelles transactions
+ * côté Powens et notifie ; l'import en base a lieu à la réouverture de l'app.
+ */
+export interface BackgroundSyncStatus {
+  /** false hors mobile, ou si le runner de fond est injoignable. La section
+   *  correspondante des Paramètres est alors masquée. */
+  supported: boolean
+  enabled: boolean
+  /** Une banque est rattachée : sans token Powens, il n'y a rien à surveiller. */
+  configured: boolean
+  /** Horodatage ISO du dernier réveil, null tant que l'OS n'en a déclenché aucun. */
+  lastCheckAt: string | null
+  /** Dernière erreur rencontrée en fond (réseau coupé, Powens indisponible…). */
+  lastError: string | null
+  /** Transactions repérées en fond et pas encore importées en base. */
+  pendingCount: number
+  /** Intervalle demandé à l'OS, en minutes. Indicatif : Doze et les optimisations
+   *  constructeur peuvent l'étirer largement. */
+  intervalMinutes: number
 }
 
 /** État de la connexion Powens. */

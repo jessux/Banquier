@@ -17,6 +17,7 @@ import { openFileDialog as pickFile } from './file-picker'
 import { runFinancialChat, buildFinancialSystemPrompt, buildChatMessages, categorizeBatch, type ToolExecutors } from './llm'
 import { retrieveRelevantMemories } from '../main/memory'
 import * as notifications from './notifications'
+import * as backgroundSync from './background-sync'
 import { checkForUpdates } from './updater'
 import { POWENS_CREDS, initAuth, getTempCode, getConnections, type PowensCreds } from './powens'
 import { openConnectWebview } from './powens-webview'
@@ -466,6 +467,9 @@ export function createMobileApi(): Window['api'] {
       // reprendre un import large et non un simple incrément.
       await preferences.saveSettings({ powensConnectPending: false })
 
+      // Le runner de fond ne connaît pas encore le token tout juste obtenu.
+      void backgroundSync.refresh().catch(() => {})
+
       // Le message du webview n'est pas perdu pour autant : la banque est rattachée
       // mais peut demander une action (SCA, information supplémentaire), ce que
       // l'UI affiche en avertissement non bloquant.
@@ -478,7 +482,10 @@ export function createMobileApi(): Window['api'] {
       const token = settings.powensToken
       if (!token) throw new Error("Aucune connexion Powens. Connectez d'abord une banque.")
       try {
-        return await importPowens(POWENS_CREDS, token, minDate, maxDate)
+        const res = await importPowens(POWENS_CREDS, token, minDate, maxDate)
+        // Comme au démarrage : ce que la tâche de fond avait repéré est en base.
+        void backgroundSync.clearPending().catch(() => {})
+        return res
       } catch (err) {
         emitProgress('error', err instanceof Error ? err.message : String(err))
         void notifications.syncFailed(err instanceof Error ? err.message : String(err))
@@ -487,6 +494,10 @@ export function createMobileApi(): Window['api'] {
     },
     powensDisconnect: async () => {
       await preferences.saveSettings({ powensToken: undefined, powensConnectPending: false })
+      // Efface le token copié dans le magasin du runner et remet son curseur à
+      // blanc : sans ça, il continuerait d'interroger Powens pour une banque que
+      // l'utilisateur vient de détacher.
+      await backgroundSync.refresh().catch(() => {})
     },
     powensStartupSync: async () => {
       const settings = await preferences.getSettings()
@@ -514,6 +525,9 @@ export function createMobileApi(): Window['api'] {
 
         const res = await importPowens(POWENS_CREDS, token, minDate)
         if (pending) await preferences.saveSettings({ powensConnectPending: false })
+        // Ce que la tâche de fond avait repéré vient d'entrer en base : son compteur
+        // de transactions en attente n'a plus lieu d'être.
+        void backgroundSync.clearPending().catch(() => {})
         return res
       } catch (err) {
         console.error('[powens-startup-sync]', err)
@@ -533,6 +547,13 @@ export function createMobileApi(): Window['api'] {
       setDailyHour: notifications.setDailyHour,
       budgetAlert: notifications.budgetAlert,
       test: notifications.test
+    },
+
+    // Surveillance Powens en arrière-plan (app fermée)
+    backgroundSync: {
+      status: backgroundSync.status,
+      setEnabled: backgroundSync.setEnabled,
+      checkNow: backgroundSync.checkNow
     },
 
     // Patrimoine

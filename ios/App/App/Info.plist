@@ -47,6 +47,19 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- Surveillance Powens en arrière-plan (@capacitor/background-runner).
+	     `fetch` et `processing` autorisent iOS à réveiller l'app pour la tâche ;
+	     l'identifiant doit correspondre au `label` déclaré dans capacitor.config.ts,
+	     sans quoi BGTaskScheduler refuse l'enregistrement au lancement. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+		<string>processing</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.banquier.app.background.sync</string>
+	</array>
 	<!-- Redirection Powens (connexion bancaire) : voir src/mobile/powens-webview.ts -->
 	<key>CFBundleURLTypes</key>
 	<array>

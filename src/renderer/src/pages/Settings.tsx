@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import CategorizationPanel from '../components/CategorizationPanel'
 import { dismiss as dismissPowensJob, startConnect, startSync, usePowensJob } from '../utils/powensJob'
-import type { Settings, MobileServerInfo, NotificationsStatus, PowensStatus } from '../../../shared/types'
+import type {
+  Settings,
+  MobileServerInfo,
+  NotificationsStatus,
+  BackgroundSyncStatus,
+  PowensStatus
+} from '../../../shared/types'
 import type { Account } from '../../../shared/types'
 
 const CURRENCIES = ['EUR', 'USD', 'CHF', 'GBP', 'CAD']
@@ -47,6 +53,10 @@ export default function SettingsPage(): JSX.Element {
   // window.api.notifications est absent (la section entière est alors masquée).
   const [notif, setNotif] = useState<NotificationsStatus | null>(null)
   const [notifBusy, setNotifBusy] = useState(false)
+
+  // Surveillance en arrière-plan — même logique : null hors mobile, section masquée.
+  const [bgSync, setBgSync] = useState<BackgroundSyncStatus | null>(null)
+  const [bgSyncBusy, setBgSyncBusy] = useState(false)
   const [syncMinDate, setSyncMinDate] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().slice(0, 10)
   })
@@ -59,6 +69,10 @@ export default function SettingsPage(): JSX.Element {
     window.api.powensStatus().then(setPowens)
     window.api.getAppVersion().then(setAppVersion)
     window.api.notifications?.status().then(setNotif).catch(() => {})
+    window.api.backgroundSync
+      ?.status()
+      .then((s) => setBgSync(s.supported ? s : null))
+      .catch(() => {})
   }, [])
 
   const updateNotifications = async (action: () => Promise<NotificationsStatus>): Promise<void> => {
@@ -69,6 +83,22 @@ export default function SettingsPage(): JSX.Element {
       console.error('[notifications]', err)
     } finally {
       setNotifBusy(false)
+    }
+  }
+
+  const updateBackgroundSync = async (
+    action: () => Promise<BackgroundSyncStatus>
+  ): Promise<void> => {
+    setBgSyncBusy(true)
+    try {
+      const next = await action()
+      // Runner devenu injoignable : on masque la section plutôt que d'afficher un
+      // état dont plus rien ne garantit qu'il reflète la réalité.
+      setBgSync(next.supported ? next : null)
+    } catch (err) {
+      console.error('[background-sync]', err)
+    } finally {
+      setBgSyncBusy(false)
     }
   }
 
@@ -96,6 +126,12 @@ export default function SettingsPage(): JSX.Element {
     if (powensJob.phase !== 'done' || !powensJob.result) return
     window.api.powensStatus().then(setPowens)
     window.api.getAccounts().then(setAccounts)
+    // La banque vient peut-être d'être rattachée : la surveillance de fond passe
+    // alors de « rien à observer » à configurable, et son compteur d'attente à zéro.
+    window.api.backgroundSync
+      ?.status()
+      .then((st) => setBgSync(st.supported ? st : null))
+      .catch(() => {})
     if (powensJob.result.firstDate) {
       setPowensFirstDate(powensJob.result.firstDate)
       setSyncMinDate(powensJob.result.firstDate)
@@ -105,6 +141,13 @@ export default function SettingsPage(): JSX.Element {
   const disconnectPowens = async (): Promise<void> => {
     await window.api.powensDisconnect()
     window.api.powensStatus().then(setPowens)
+    // La surveillance de fond vient d'être coupée côté runner : la section doit
+    // repasser sur « rattachez d'abord une banque » au lieu d'afficher un
+    // interrupteur qui n'agit plus sur rien.
+    window.api.backgroundSync
+      ?.status()
+      .then((st) => setBgSync(st.supported ? st : null))
+      .catch(() => {})
     dismissPowensJob()
   }
 
@@ -375,6 +418,76 @@ export default function SettingsPage(): JSX.Element {
               >
                 Envoyer une notification de test
               </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Surveillance bancaire en arrière-plan — mobile uniquement */}
+      {bgSync && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 style={{ marginBottom: 4 }}>Surveillance en arrière-plan</h3>
+          <p className="text-muted text-sm" style={{ marginBottom: 16 }}>
+            Banquier interroge Powens environ toutes les {bgSync.intervalMinutes} minutes,
+            même fermé, et vous notifie dès qu’une nouvelle transaction apparaît.
+            L’import dans vos comptes, lui, se fait à l’ouverture suivante de l’app :
+            la tâche de fond tourne hors de l’application et n’a pas accès à sa base de
+            données.
+          </p>
+
+          {!bgSync.configured ? (
+            <div className="text-muted text-sm">
+              Rattachez d’abord une banque (« Agrégation Powens », dans « Comptes bancaires » ci-dessous).
+            </div>
+          ) : (
+            <>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', marginBottom: 14 }}>
+                <input
+                  type="checkbox"
+                  checked={bgSync.enabled}
+                  disabled={bgSyncBusy}
+                  onChange={(e) =>
+                    updateBackgroundSync(() => window.api.backgroundSync!.setEnabled(e.target.checked))
+                  }
+                />
+                <span className="text-sm">Surveiller mes comptes en arrière-plan</span>
+              </label>
+
+              {bgSync.enabled && (
+                <div className="text-muted text-sm" style={{ marginBottom: 14, lineHeight: 1.7 }}>
+                  <div>
+                    Dernière vérification :{' '}
+                    {bgSync.lastCheckAt
+                      ? new Date(bgSync.lastCheckAt).toLocaleString(settings.locale || 'fr-FR')
+                      : 'aucune pour l’instant'}
+                  </div>
+                  {bgSync.pendingCount > 0 && (
+                    <div>
+                      {bgSync.pendingCount} transaction{bgSync.pendingCount > 1 ? 's' : ''} en attente
+                      d’import.
+                    </div>
+                  )}
+                  {bgSync.lastError && <div>Dernière erreur : {bgSync.lastError}</div>}
+                </div>
+              )}
+
+              <button
+                className="btn btn-secondary"
+                style={{ fontSize: 13 }}
+                disabled={bgSyncBusy || !bgSync.enabled}
+                onClick={() => updateBackgroundSync(() => window.api.backgroundSync!.checkNow())}
+              >
+                {bgSyncBusy ? 'Vérification…' : 'Vérifier maintenant'}
+              </button>
+
+              {bgSync.enabled && (
+                <p className="text-muted text-sm" style={{ marginTop: 14, marginBottom: 0 }}>
+                  Android et iOS restent maîtres de la cadence réelle : économie de batterie,
+                  mode Doze et surcouches constructeur peuvent l’espacer nettement. Si rien ne
+                  se déclenche jamais, retirez Banquier des applications « optimisées » dans les
+                  réglages batterie du téléphone.
+                </p>
+              )}
             </>
           )}
         </div>
