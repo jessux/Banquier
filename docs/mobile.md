@@ -193,6 +193,29 @@ Le curseur, justement : le runner retient le plus grand id de transaction déjà
 
 Le runner est testé tel qu'embarqué (`src/mobile/background-runner.test.ts`) : le fichier est évalué dans un `new Function` avec des globales simulées, faute de pouvoir l'importer.
 
+### Autorisation explicite du fonctionnement en arrière-plan (Android)
+
+Enregistrer la tâche périodique ne suffit pas. Android place par défaut **toutes** les applications dans sa liste « optimisées », où le mode Doze regroupe et repousse les réveils WorkManager : l'intervalle d'une heure demandé devient facilement plusieurs heures, et sur un téléphone peu utilisé la tâche peut ne pas se déclencher du tout avant qu'il soit rebranché. Une surveillance « activée » qui ne surveille rien est pire que pas de surveillance — d'où une demande d'autorisation explicite.
+
+L'exemption d'optimisation de batterie est la seule autorisation qu'Android expose pour ça, et seul l'utilisateur peut l'accorder, dans une boîte de dialogue système.
+
+| Pièce | Rôle |
+|---|---|
+| `android/app/src/main/java/com/banquier/app/BatteryOptimizationPlugin.java` | Plugin Capacitor local : `status`, `request` (boîte de dialogue), `openSettings` (liste système) |
+| `MainActivity.onCreate()` | `registerPlugin(...)` — les plugins du module applicatif ne sont pas découverts automatiquement, et l'enregistrement doit précéder `super.onCreate()` |
+| `AndroidManifest.xml` | `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` — donne seulement le droit d'AFFICHER la boîte de dialogue |
+| `src/mobile/battery-optimization.ts` | Pont TypeScript, tolérant à l'absence du plugin (iOS, desktop, navigateur) |
+
+Un plugin local plutôt qu'une dépendance de la communauté : trois méthodes suffisent, et c'est autant de surface d'attaque et de maintenance en moins pour une app qui manipule des données bancaires.
+
+Points de détail qui comptent :
+
+- **Le code de retour de la boîte de dialogue ne veut rien dire.** Plusieurs versions d'Android renvoient `RESULT_CANCELED` alors même que l'exemption vient d'être accordée. On relit donc l'état réel via `PowerManager.isIgnoringBatteryOptimizations()` au lieu de l'interpréter.
+- **L'état est relu à chaque affichage**, jamais mémorisé : l'utilisateur peut révoquer l'autorisation depuis les réglages Android sans que l'app en soit informée.
+- **La demande part à l'activation de l'interrupteur**, seul moment où l'utilisateur a le contexte pour comprendre ce qu'on lui demande. Un refus n'annule pas l'activation : la tâche tourne, plus rarement, et l'écran des Paramètres l'affiche en avertissement avec un bouton pour y revenir.
+- **Repli** sur l'écran système listant les applications optimisées quand la boîte de dialogue directe n'existe pas (ROMs sans Google Play, certaines surcouches).
+- **Play Store** : cette permission fait partie de celles dont Google exige une justification. Banquier étant distribué en APK via les releases GitHub, la question ne se pose pas aujourd'hui — elle se posera au moment d'une publication sur le store (cf. Phase 7).
+
 ## Pas encore disponible sur mobile (roadmap)
 
 - **Phase 7** — Publication sur le Play Store (le debug est désormais signé de façon stable, cf. « Signature de l'APK » ci-dessous — reste la signature de *release*, le compte développeur et la fiche store)

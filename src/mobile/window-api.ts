@@ -553,7 +553,9 @@ export function createMobileApi(): Window['api'] {
     backgroundSync: {
       status: backgroundSync.status,
       setEnabled: backgroundSync.setEnabled,
-      checkNow: backgroundSync.checkNow
+      checkNow: backgroundSync.checkNow,
+      requestBatteryExemption: backgroundSync.requestBatteryExemption,
+      openBatterySettings: backgroundSync.openBatterySettings
     },
 
     // Patrimoine

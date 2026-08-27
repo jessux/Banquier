@@ -56,4 +56,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Permet au rappel quotidien de se déclencher à l'heure voulue malgré le Doze. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Autorisation explicite du fonctionnement en arrière-plan : sans exemption
+         d'optimisation de batterie, le Doze repousse les réveils WorkManager de la
+         surveillance Powens (voir BatteryOptimizationPlugin.java). La permission ne
+         donne que le droit d'AFFICHER la boîte de dialogue système — c'est
+         l'utilisateur qui accorde ou refuse. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>

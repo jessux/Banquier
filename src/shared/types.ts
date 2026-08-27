@@ -159,6 +159,11 @@ export interface BackgroundSyncStatus {
   /** Intervalle demandé à l'OS, en minutes. Indicatif : Doze et les optimisations
    *  constructeur peuvent l'étirer largement. */
   intervalMinutes: number
+  /** Android : l'utilisateur a-t-il explicitement autorisé le fonctionnement en
+   *  arrière-plan (exemption d'optimisation de batterie) ? Sans elle, le Doze
+   *  repousse les réveils bien au-delà de `intervalMinutes`. null quand la notion
+   *  n'existe pas : iOS et desktop. */
+  batteryExempt: boolean | null
 }
 
 /** État de la connexion Powens. */
