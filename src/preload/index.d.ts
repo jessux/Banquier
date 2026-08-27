@@ -199,6 +199,13 @@ declare global {
         setEnabled: (enabled: boolean) => Promise<BackgroundSyncStatus>
         /** Déclenche une vérification immédiate au lieu d'attendre le réveil de l'OS. */
         checkNow: () => Promise<BackgroundSyncStatus>
+        /** Ouvre la boîte de dialogue Android d'autorisation du fonctionnement en
+         *  arrière-plan (exemption d'optimisation de batterie). Sans elle, le Doze
+         *  repousse les réveils bien au-delà de l'intervalle demandé. */
+        requestBatteryExemption: () => Promise<BackgroundSyncStatus>
+        /** Écran système des applications optimisées : recours quand la boîte de
+         *  dialogue n'existe pas, et seul moyen de révoquer l'autorisation. */
+        openBatterySettings: () => Promise<BackgroundSyncStatus>
       }
 
       // Patrimoine

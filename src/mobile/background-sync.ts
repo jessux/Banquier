@@ -2,6 +2,7 @@ import { BackgroundRunner } from '@capacitor/background-runner'
 import * as preferences from './preferences'
 import { ensureChannels } from './notifications'
 import { POWENS_CREDS } from './powens'
+import * as battery from './battery-optimization'
 import type { BackgroundSyncStatus } from '../shared/types'
 
 /**
@@ -54,7 +55,8 @@ const UNSUPPORTED: BackgroundSyncStatus = {
   lastCheckAt: null,
   lastError: null,
   pendingCount: 0,
-  intervalMinutes: INTERVAL_MINUTES
+  intervalMinutes: INTERVAL_MINUTES,
+  batteryExempt: null
 }
 
 /** Le plugin n'existe ni sur desktop ni dans un simple navigateur (npm run dev) :
@@ -126,8 +128,17 @@ async function configure(details: Record<string, unknown>): Promise<RunnerStatus
   return result
 }
 
-function toStatus(runner: RunnerStatus | null): BackgroundSyncStatus {
-  if (!runner) return { ...UNSUPPORTED }
+/**
+ * L'exemption de batterie est lue à chaque fois plutôt que mémorisée : l'utilisateur
+ * peut la révoquer depuis les réglages Android sans que l'app en soit informée, et
+ * afficher « autorisé » alors qu'Android bride de nouveau les réveils serait le pire
+ * des mensonges pour cet écran.
+ */
+async function toStatus(runner: RunnerStatus | null): Promise<BackgroundSyncStatus> {
+  const exemption = await battery.status()
+  const batteryExempt = exemption.supported ? exemption.granted : null
+
+  if (!runner) return { ...UNSUPPORTED, batteryExempt }
   return {
     supported: true,
     enabled: runner.enabled === true,
@@ -135,7 +146,8 @@ function toStatus(runner: RunnerStatus | null): BackgroundSyncStatus {
     lastCheckAt: runner.lastCheckAt || null,
     lastError: runner.lastError || null,
     pendingCount: runner.pendingCount ?? 0,
-    intervalMinutes: INTERVAL_MINUTES
+    intervalMinutes: INTERVAL_MINUTES,
+    batteryExempt
   }
 }
 
@@ -186,7 +198,16 @@ export async function setEnabled(enabled: boolean): Promise<BackgroundSyncStatus
     // dont l'app a déjà importé la plus grande partie au fil de ses démarrages.
     return toStatus(await configure({ enabled: false, reset: true }))
   }
-  return refresh()
+
+  const next = await refresh()
+
+  // Activer la surveillance sans l'exemption de batterie donne une fonctionnalité
+  // qui a l'air active et ne se déclenche presque jamais. On enchaîne donc tout de
+  // suite sur la demande d'autorisation, au seul moment où l'utilisateur a le
+  // contexte pour comprendre ce qu'on lui demande. Un refus n'annule pas
+  // l'activation : la tâche tournera, plus rarement, et l'écran le dit.
+  if (next.batteryExempt === false) return requestBatteryExemption()
+  return next
 }
 
 /** Remet le compteur à zéro après un import réussi : ces transactions ne sont plus
@@ -200,5 +221,28 @@ export async function clearPending(): Promise<void> {
  *  demanderait d'attendre une heure app fermée. */
 export async function checkNow(): Promise<BackgroundSyncStatus> {
   await dispatch('checkTransactions')
+  return status()
+}
+
+/**
+ * Ouvre la boîte de dialogue Android « Autoriser l'application à s'exécuter en
+ * arrière-plan ? ».
+ *
+ * Sans cette exemption, la tâche périodique est bien enregistrée mais le Doze la
+ * regroupe avec les autres réveils du système : l'intervalle d'une heure demandé
+ * devient facilement plusieurs heures, et sur un téléphone peu utilisé elle peut ne
+ * pas se déclencher du tout avant qu'il soit rebranché. C'est donc l'autorisation
+ * qui fait la différence entre « surveillance activée » et « surveillance qui
+ * fonctionne vraiment ».
+ */
+export async function requestBatteryExemption(): Promise<BackgroundSyncStatus> {
+  await battery.request()
+  return status()
+}
+
+/** Écran système des applications optimisées : recours quand la boîte de dialogue
+ *  n'existe pas sur l'appareil, et seul moyen de revenir sur l'autorisation. */
+export async function openBatterySettings(): Promise<BackgroundSyncStatus> {
+  await battery.openSettings()
   return status()
 }

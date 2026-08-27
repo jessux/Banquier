@@ -480,12 +480,53 @@ export default function SettingsPage(): JSX.Element {
                 {bgSyncBusy ? 'Vérification…' : 'Vérifier maintenant'}
               </button>
 
-              {bgSync.enabled && (
+              {/* Autorisation d'arrière-plan Android. Sans exemption d'optimisation de
+                  batterie, la tâche est bien enregistrée mais le Doze la repousse au point
+                  qu'elle peut ne jamais se déclencher : c'est donc un avertissement, pas une
+                  option de confort. */}
+              {bgSync.enabled && bgSync.batteryExempt === false && (
+                <div style={{ marginTop: 14, padding: '10px 14px', background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 8 }}>
+                  <div style={{ fontSize: 13, marginBottom: 10, color: 'var(--text2)' }}>
+                    Android n’autorise pas encore Banquier à s’exécuter en arrière-plan. La
+                    surveillance est active, mais le mode Doze peut repousser les vérifications
+                    de plusieurs heures — voire les empêcher tant que le téléphone n’est pas
+                    rebranché.
+                  </div>
+                  <button
+                    className="btn btn-primary"
+                    style={{ fontSize: 13 }}
+                    disabled={bgSyncBusy}
+                    onClick={() =>
+                      updateBackgroundSync(() => window.api.backgroundSync!.requestBatteryExemption())
+                    }
+                  >
+                    Autoriser le fonctionnement en arrière-plan
+                  </button>
+                </div>
+              )}
+
+              {bgSync.enabled && bgSync.batteryExempt === true && (
                 <p className="text-muted text-sm" style={{ marginTop: 14, marginBottom: 0 }}>
-                  Android et iOS restent maîtres de la cadence réelle : économie de batterie,
-                  mode Doze et surcouches constructeur peuvent l’espacer nettement. Si rien ne
-                  se déclenche jamais, retirez Banquier des applications « optimisées » dans les
-                  réglages batterie du téléphone.
+                  Fonctionnement en arrière-plan autorisé.{' '}
+                  <a
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      void updateBackgroundSync(() => window.api.backgroundSync!.openBatterySettings())
+                    }}
+                  >
+                    Revenir sur cette autorisation
+                  </a>
+                  . Android reste malgré tout maître de la cadence réelle, et certaines
+                  surcouches constructeur ajoutent leurs propres restrictions
+                  (voir dontkillmyapp.com).
+                </p>
+              )}
+
+              {bgSync.enabled && bgSync.batteryExempt === null && (
+                <p className="text-muted text-sm" style={{ marginTop: 14, marginBottom: 0 }}>
+                  L’OS reste maître de la cadence réelle : économie d’énergie et regroupement
+                  des réveils peuvent l’espacer nettement.
                 </p>
               )}
             </>
