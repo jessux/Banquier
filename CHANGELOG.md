@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.0](https://github.com/jessux/Banquier/compare/v1.36.0...v1.37.0) (2026-08-27)
+
+
+### Nouvelles fonctionnalités
+
+* **mobile:** autorisation explicite du fonctionnement en arrière-plan (Android) ([#111](https://github.com/jessux/Banquier/issues/111)) ([d64ccc9](https://github.com/jessux/Banquier/commit/d64ccc976591a0a34ad6540000521a8523b8e3ee))
+
 ## [1.36.0](https://github.com/jessux/Banquier/compare/v1.35.0...v1.36.0) (2026-08-26)
 
 
